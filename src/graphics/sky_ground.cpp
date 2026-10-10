@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cmath>
 #include <stdexcept>
 #include "graphics/screen_layout.h"
 #include "maths/angle.h"
@@ -15,6 +16,42 @@ void draw_sky_ground(framework::render::indexed_surface target, camera_angles co
   std::array<int, 16> constexpr offsets{74, 56, 42, 30, 20, 12, 6, 2, -2, -6, -12, -20, -30, -42, -56, -74};
   auto pitch{maths::view_angle_phase(angles.pitch)};
   auto roll{maths::view_angle_phase(angles.roll)};
+  // The native shortcuts assume a narrow viewport. For other projections,
+  // classify view rays against the horizon plane instead: no pitch cutoff or
+  // tangent singularity, even when looking past straight up/down or banking.
+  bool const native_projection{target.width <= 320 && bottom <= 240 && focal_length == render_geometry::focal_length};
+  if(!native_projection) {
+    double constexpr sine_scale{32768.0};
+    double const pitch_sine{maths::original_sine[pitch] / sine_scale};
+    double const pitch_cosine{maths::phase_cosine(pitch) / sine_scale};
+    double const horizontal{pitch_cosine * maths::original_sine[roll] / sine_scale};
+    double const vertical{pitch_cosine * maths::phase_cosine(roll) / sine_scale};
+    std::array<double, offsets.size()> boundaries{};
+    for(unsigned int i{0}; i < offsets.size(); ++i) boundaries[i] = -offsets[i] * focal_length / (2 * render_geometry::focal_length);
+    for(int y{0}; y < bottom; ++y) {
+      double const start{(y - origin.y) * vertical - origin.x * horizontal - focal_length * pitch_sine};
+      std::array<int, offsets.size() + 2> cuts{};
+      unsigned int count{0};
+      cuts[count++] = 0;
+      if(horizontal != 0) {
+        for(double const boundary : boundaries) {
+          double const crossing{(boundary - start) / horizontal};
+          double const cut{horizontal > 0 ? std::ceil(crossing) : std::floor(crossing) + 1};
+          if(cut > 0 && cut < target.width) cuts[count++] = static_cast<int>(cut);
+        }
+      }
+      cuts[count++] = target.width;
+      std::sort(cuts.begin(), cuts.begin() + count);
+      auto pixels{target.row(y)};
+      for(unsigned int i{1}; i < count; ++i) {
+        int const left{cuts[i - 1]}, right{cuts[i]};
+        double const coordinate{start + (left + (right - left - 1) / 2.0) * horizontal};
+        auto const band{std::upper_bound(boundaries.begin(), boundaries.end(), coordinate) - boundaries.begin()};
+        std::fill(pixels.begin() + left, pixels.begin() + right, colours[band]);
+      }
+    }
+    return;
+  }
   if(((pitch >> 7) & 3) == 1 || ((pitch >> 7) & 3) == 2) {
     for(int y{0}; y < bottom; ++y) std::ranges::fill(target.row(y), pitch < 512 ? colours.front() : colours.back());
     return;

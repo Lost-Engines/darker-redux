@@ -41,3 +41,27 @@ TEST_CASE("Sky rendering respects runtime dimensions and padded row stride", "[g
     for(int x{0}; x < stride; ++x) REQUIRE(pixels[height * stride + x] == untouched);
   }
 }
+
+TEST_CASE("Wide views retain the horizon beyond the native pitch cutoffs", "[graphics][background]") {
+  int constexpr width{960}, height{540};
+  std::vector<uint8_t> pixels(width * height);
+  framework::render::indexed_surface const surface{pixels, width, height, width};
+  for(auto const pitch : {8192u, 12288u, 53248u, 57344u}) {
+    for(auto const roll : {0u, 16384u, 32768u, 49152u}) {
+      CAPTURE(pitch, roll);
+      darker::graphics::draw_sky_ground(surface, {
+        .pitch{static_cast<uint16_t>(pitch)},
+        .roll{static_cast<uint16_t>(roll)},
+      }, {width / 2, height / 2}, height, 80);
+      CHECK(std::ranges::find(pixels, uint8_t{28}) != pixels.end());
+      CHECK(std::ranges::find(pixels, uint8_t{127}) != pixels.end());
+    }
+  }
+  for(auto const pitch : {16384u, 49152u}) {
+    darker::graphics::draw_sky_ground(surface, {
+      .pitch{static_cast<uint16_t>(pitch)},
+    }, {width / 2, height / 2}, height, 80);
+    uint8_t const expected{pitch == 16384 ? uint8_t{28} : uint8_t{127}};
+    CHECK(std::ranges::all_of(pixels, [expected](uint8_t value) { return value == expected; }));
+  }
+}
