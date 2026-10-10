@@ -74,6 +74,28 @@ still has native word arithmetic: a wider screen does not imply a wider palette
 accumulator. Native reference tests compare the unaliased close-range domain;
 separate tests cover distant placement, fog and traversal across the world seam.
 
+## Software rendering cost
+
+Large city views made polygon housekeeping dominate the renderer. The initial
+Redux implementation cleared maximum-sized face buffers for every polygon and
+swapped entire 260-vertex clipping arrays after each viewport plane, including
+when a triangle was wholly inside the screen.
+
+The renderer now owns reusable `model_workspace` storage. Each model resets its
+vertex-validity flags, while drawing instructions overwrite only the prefixes
+they consume. Standalone `draw_model` callers can still use a local workspace.
+Flat and Gouraud polygons wholly inside the viewport bypass clipping; clipped
+polygons alternate buffer references without copying the unused capacity.
+Faces with no vertical pixel span return before clipping. Edge rounding, shade
+interpolation, painter order and palette selection remain unchanged.
+
+A fixed Delphi view on 10 October 2026 (cell 64,127; camera altitude 1500;
+heading/pitch/roll zero; 320×240 viewport) measured approximately 30 → 5 ms at
+radius 64 and 109 → 15 ms at radius 182 in the GCC 16 Release build. The latter
+drew 4,175 models. These are local sky/city render timings, not whole-game FPS;
+both distances retained exactly the same indexed-frame hashes. Original model,
+clipping and city-frame reference tests also cover the optimised paths.
+
 ## Changing internal resolution
 
 `display_layout` describes the 320×240 output; `source_sheet_layout` describes
