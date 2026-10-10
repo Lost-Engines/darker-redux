@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include "graphics/model_projection.h"
 
 namespace darker::graphics {
@@ -13,6 +14,9 @@ struct camera_position {
   render_geometry::coordinate_bits row{0};
   render_geometry::coordinate altitude{0};
 };
+
+// Offsets in complete world periods, applied before camera transformation.
+using world_image = maths::map_coordinates<int>;
 
 struct model_origin {
   maths::world_format::position_component column{0};                                                          // 1/256 cell, including the type record's fractional placement
@@ -32,6 +36,6 @@ using camera_basis = maths::view_basis;                                        /
 camera_basis orient_model(camera_basis const &camera, camera_angles angles) noexcept;
 
 camera_basis make_camera_basis(camera_angles angles) noexcept;
-model_placement place_model(camera_basis const &basis, camera_position camera, model_origin origin) noexcept;
+model_placement place_model(camera_basis const &basis, camera_position camera, model_origin origin, std::optional<world_image> image = std::nullopt) noexcept;
 
 } // namespace darker::graphics

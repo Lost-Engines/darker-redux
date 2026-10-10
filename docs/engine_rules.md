@@ -53,12 +53,16 @@ positions by four and doubles the relative horizontal displacement again before
 transformation. The runtime whole coordinate now uses 32 bits and products use
 64 bits; cached projections retain 32 whole bits and eight fractional bits.
 This removes the original 16-bit displacement and 24-bit projection overflow.
-The nearest image is chosen in the full 256-cell wrapping world, whose occupied
-city map is 128×128. A radius of 182 covers its maximum nearest-image diagonal.
+The world repeats every 256 cells; its occupied city map is 128×128. A radius
+of 182 covers the maximum nearest-image diagonal, but additional copies can also
+fall inside that circle. `visit_world_images` selects every in-range copy from
+the current world and its eight neighbours. Explicit image offsets survive
+projection instead of being folded back to the nearest copy.
 
 The native scanner remains available for radii up to 15. Larger radii enumerate
-each occupied map cell once, test its circular range and let model extent culling
-select the visible geometry. Sorting distances are also widened to 32 bits.
+each occupied map cell once as a candidate, then place every in-range image and
+let model extent culling select the visible geometry. Moving objects and particle
+emitters use the same image selection, without duplicating gameplay state. Sorting distances are also widened to 32 bits.
 Underground visibility and resource/gameplay word formats are unchanged.
 
 The transform-product shift is independent of coordinate storage width. The

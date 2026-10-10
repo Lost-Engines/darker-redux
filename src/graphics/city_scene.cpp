@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include "game/beacon_light.h"
 #include "graphics/near_clip.h"
+#include "graphics/world_images.h"
 #include "graphics/particles.h"
 #include "graphics/screen_layout.h"
 #include "graphics/tunnel_visibility.h"
@@ -47,7 +48,7 @@ std::optional<city_draw_item> classify_model(model_placement const placement, re
 } // anonymous namespace
 
 std::optional<city_draw_item> place_city_cell(resources::geometry_bank const &bank, game::city_cell const cell, uint16_t const index,
-  uint8_t const damage_mask, camera_basis const &basis, camera_position const camera) {
+  uint8_t const damage_mask, camera_basis const &basis, camera_position const camera, std::optional<world_image> const image) {
   /// 2A1A selects the linked model, places its origin, chooses its drawing path and applies the extent cull
   if(!cell.type) return std::nullopt;
   if(index >= game::city_map_cell_count) throw std::invalid_argument{"City model position exceeds the map"};
@@ -59,7 +60,7 @@ std::optional<city_draw_item> place_city_cell(resources::geometry_bank const &ba
     .column{static_cast<uint16_t>((index % game::city_map_size.column) * maths::world_format::units_per_cell + type.column_fraction)},
     .row{static_cast<uint16_t>((index / game::city_map_size.column) * maths::world_format::units_per_cell + type.row_fraction)},
     .height{std::bit_cast<int16_t>(static_cast<uint16_t>(header.height - (background ? 0 : type.collision_marker * 256)))},
-  })};
+  }, image)};
   if(!background) placement.sorting_distance = static_cast<render_geometry::sorting_distance>(placement.sorting_distance + header.extent);
   auto item{classify_model(placement, header)};
   if(item) {
@@ -79,7 +80,7 @@ bool within_object_window(city_view const &view, maths::world_position const &po
 }
 
 std::optional<city_draw_item> place_scene_object(resources::geometry_bank const &bank, scene_object const &object,
-  camera_basis const &basis, camera_position camera, bool const underground) {
+  camera_basis const &basis, camera_position camera, bool const underground, std::optional<world_image> const image) {
   /// 2F35 preserves the object's fractional origin before the same model extent cull as city geometry
   // retain two sub-word bits in projection units; subtracting from the camera adds the object's fractional displacement
   camera.column = static_cast<render_geometry::coordinate_bits>(camera.column - (object.pose.fractions.column >> render_geometry::camera_fraction_shift));
@@ -88,7 +89,7 @@ std::optional<city_draw_item> place_scene_object(resources::geometry_bank const 
     .column{object.pose.position.column},
     .row{object.pose.position.row},
     .height{std::bit_cast<int16_t>(static_cast<uint16_t>(-object.pose.position.height))}
-  })};
+  }, image)};
   auto const header{bank.header_at(object.model_offset)};
   // BC94 patches 2EDC from ADD to SUB for underground moving objects
   placement.sorting_distance = static_cast<render_geometry::sorting_distance>(placement.sorting_distance + (underground ? -header.extent : header.extent));
@@ -167,7 +168,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   auto const basis{make_camera_basis(view.angles)};
   // position words hold 1/256-cell units; the extra fraction byte subdivides those units by another 256
   // projection needs 1/1024-cell units: multiply the word by four and retain the fraction's top two bits
-  // retain the full scaled world position; placement chooses the nearest wrapping world image
+  // Retain the full scaled world position for placement of each visible world image.
   camera_position const camera{
     .column{static_cast<render_geometry::coordinate_bits>(view.column * render_geometry::world_to_camera_scale + (view.column_fraction >> render_geometry::camera_fraction_shift))},
     .row{static_cast<render_geometry::coordinate_bits>(view.row * render_geometry::world_to_camera_scale + (view.row_fraction >> render_geometry::camera_fraction_shift))},
@@ -189,7 +190,17 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   } else {
     tunnel_visibility.fill(0);
     collect_city_cells(cells, camera_column, camera_row, view.angles, view.radius, candidates);
-    for(auto const index : candidates) place(index);
+    for(auto const index : candidates) {
+      if(view.radius <= scene_limits::native_surface_radius_cells) {
+        place(index);
+        continue;
+      }
+      visit_world_images(camera_column, camera_row,
+        index % game::city_map_size.column, index / game::city_map_size.column, view.radius,
+        [&](world_image const image) {
+          if(auto item{place_city_cell(bank, cells[index], index, damage_mask, basis, camera, image)}) items.push_back(*item);
+        });
+    }
   }
   if(particles) {
     auto const append{[&](auto const &emitters){
@@ -198,16 +209,22 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
         if(!phase) continue;
         // 2F35 admits effects through the same wrapping coordinate window as moving objects
         if(!within_object_window(view, emitter.position)) continue;
-        auto const placement{place_model(basis, camera, {
-          .column{emitter.position.column},
-          .row{emitter.position.row},
-          .height{std::bit_cast<int16_t>(static_cast<uint16_t>(-emitter.position.height))}
-        })};
-        items.push_back({
-          .placement{placement},
-          .emitter{&emitter},
-          .phase{*phase}
-        });
+        auto const place_emitter{[&](std::optional<world_image> const image) {
+          auto const placement{place_model(basis, camera, {
+            .column{emitter.position.column},
+            .row{emitter.position.row},
+            .height{std::bit_cast<int16_t>(static_cast<uint16_t>(-emitter.position.height))}
+          }, image)};
+          items.push_back({
+            .placement{placement},
+            .emitter{&emitter},
+            .phase{*phase}
+          });
+        }};
+        if(view.radius <= scene_limits::native_surface_radius_cells || (view.underground && !view.unrestricted_visibility)) place_emitter(std::nullopt);
+        else visit_world_images(camera_column, camera_row,
+          emitter.position.column >> maths::world_format::cell_fraction_bits,
+          emitter.position.row >> maths::world_format::cell_fraction_bits, view.radius, place_emitter);
       }
     }};
     append(particles->effects.trails);
@@ -216,7 +233,13 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   // 2BC1 scans the city, 6BF3 adds particles, then 2BD0/2BEA adds craft and projectiles
   for(auto const &object : objects) {
     if(!within_object_window(view, object.pose.position)) continue;
-    if(auto item{place_scene_object(bank, object, basis, camera, view.underground)}) items.push_back(*item);
+    auto const place_object{[&](std::optional<world_image> const image) {
+      if(auto item{place_scene_object(bank, object, basis, camera, view.underground, image)}) items.push_back(*item);
+    }};
+    if(view.radius <= scene_limits::native_surface_radius_cells || (view.underground && !view.unrestricted_visibility)) place_object(std::nullopt);
+    else visit_world_images(camera_column, camera_row,
+      object.pose.position.column >> maths::world_format::cell_fraction_bits,
+      object.pose.position.row >> maths::world_format::cell_fraction_bits, view.radius, place_object);
   }
   order_city_models(items);
   for(auto const &item : items) {

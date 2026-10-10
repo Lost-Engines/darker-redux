@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <bit>
 #include "graphics/city_scene.h"
+#include "graphics/world_images.h"
 #include "maths/world_coordinates.h"
 #include "reference/city_scan_samples.h"
 #include "reference/distant_points_samples.h"
@@ -138,4 +139,72 @@ TEST_CASE("Distant objects with shade code 31 render without a preceding mesh", 
   framework::render::indexed_cockpit_framebuffer frame{};
   CHECK(renderer.draw(frame, bank, cells, view, 0x60, darker::graphics::distance_shading{}, {}, objects) == 1);
   CHECK(frame.pixels[120 * 320 + 160] == 224);
+}
+
+TEST_CASE("Wide views include farther world copies within the visible circle", "[graphics][city]") {
+  using namespace darker::graphics;
+  std::vector<world_image> images;
+  auto const collect{[&](world_image const image) { images.push_back(image); }};
+  visit_world_images(100, 0, 0, 0, 182, collect);
+  REQUIRE(images.size() == 2);
+  CHECK(images[0] == world_image{});
+  CHECK(images[1] == world_image{
+    .column{1},
+  });
+  images.clear();
+  visit_world_images(100, 0, 0, 0, 128, collect);
+  REQUIRE(images.size() == 1);
+  CHECK(images.front() == world_image{});
+  images.clear();
+  visit_world_images(128, 128, 0, 0, 182, collect);
+  CHECK(images.size() == 4);
+  images.clear();
+  visit_world_images(255, 255, 0, 0, 15, collect);
+  REQUIRE(images.size() == 1);
+  CHECK(images.front() == world_image{
+    .column{1},
+    .row{1},
+  });
+}
+
+TEST_CASE("Buildings and moving objects remain visible in the farther forward world copy", "[graphics][city]") {
+  using namespace darker::graphics;
+  // One city model, also used by the moving object. The mesh is empty but has
+  // a complete header and return opcode; at distance the object becomes a dot.
+  std::vector<std::byte> bytes(24);
+  bytes[0] = std::byte{1};
+  bytes[10] = std::byte{12};
+  bytes[17] = std::byte{255};
+  bytes[23] = std::byte{13};
+  darker::resources::geometry_bank const bank{std::move(bytes)};
+  darker::game::city_map cells{};
+  cells[0].type = 1;
+  city_renderer renderer;
+  city_view view{
+    .row{100 * 256},
+    .angles{
+      .heading{32768},
+    },
+    .origin{160, 120},
+    .radius{182},
+  };
+  std::array<scene_object, 1> const objects{{{
+    .model_offset{0},
+    .pose{},
+  }}};
+  framework::render::indexed_cockpit_framebuffer frame{};
+  distance_shading const lighting{};
+  // Nearest copy is 100 cells behind; the visible copy is 156 cells ahead.
+  CHECK(renderer.draw(frame, bank, cells, view, 0x60, lighting, {}, objects) == 2);
+  darker::game::effect_system effects;
+  effects.emitters.push_back({});
+  particle_scene const particles{
+    .effects{effects},
+    .sheet{{}, 0, 0, 0},
+    .clock{0},
+  };
+  // Effects are admitted for both images; projection rejects the one behind.
+  CHECK(renderer.draw(frame, bank, cells, view, 0x60, lighting, {}, objects, &particles) == 4);
+  view.radius = 128;
+  CHECK(renderer.draw(frame, bank, cells, view, 0x60, lighting, {}, objects) == 0);
 }
