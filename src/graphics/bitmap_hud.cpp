@@ -6,6 +6,21 @@
 #include "maths/sine_table.h"
 
 namespace darker::graphics {
+namespace {
+
+// The retail mask includes a blue source pixel at (42,42), outside the last
+// bearing symbol. Omit it in Redux; retain the recovered tables unchanged.
+inline constexpr auto right_bearing_rows{[] {
+  auto rows{bearing_rows_6};
+  --rows.back().width;
+  return rows;
+}()};
+inline hud_strip constexpr right_bearing_strip{
+  .y_offset{bearing_strips.back().y_offset},
+  .rows{right_bearing_rows}
+};
+
+} // anonymous namespace
 
 void draw_weapon_icon(framework::render::indexed_cockpit_framebuffer const &cache,
   framework::render::indexed_cockpit_framebuffer &target, weapon_icon_slot const slot, uint8_t const selection) {
@@ -69,8 +84,11 @@ void update_skimma_bitmaps(framework::render::indexed_cockpit_framebuffer const 
       {destination.x, destination.y + strip.y_offset}, strip.rows);
   }};
   if(previous.bearing != current.bearing) {
-    if(previous.bearing != 0) draw_strip(bearing_strips[previous.bearing - 1], bearing_destination, bearing_destination);
-    if(current.bearing != 0) draw_strip(bearing_strips[current.bearing - 1], {8, 32}, bearing_destination);
+    auto const bearing_strip{[](uint8_t const bearing) -> hud_strip const & {
+      return bearing == bearing_strips.size() ? right_bearing_strip : bearing_strips[bearing - 1];
+    }};
+    if(previous.bearing != 0) draw_strip(bearing_strip(previous.bearing), bearing_destination, bearing_destination);
+    if(current.bearing != 0) draw_strip(bearing_strip(current.bearing), {8, 32}, bearing_destination);
   }
   size_t const weapon_count{type == craft::skimma ? 2u : 3u};
   for(size_t i{0}; i < weapon_count; ++i) {

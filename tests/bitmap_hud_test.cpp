@@ -158,6 +158,9 @@ TEST_CASE("Skimma bearing changes restore previous pixels and ordinary craft rej
       darker::graphics::update_skimma_bitmaps(cache, target, darker::graphics::craft::skimma, old_state, new_state);
       darker::graphics::update_skimma_bitmaps(cache, fresh, darker::graphics::craft::skimma, {}, new_state);
       REQUIRE(target.pixels == fresh.pixels);
+      // The original rightmost symbol copies a stray blue pixel to (154,208).
+      REQUIRE(target.pixels[208 * 320 + 154] == cache.pixels[208 * 320 + 154]);
+      if(second == 7) REQUIRE(target.pixels[208 * 320 + 153] == cache.pixels[42 * 320 + 41]);
       darker::graphics::update_skimma_bitmaps(cache, target, darker::graphics::craft::skimma, new_state, {});
       REQUIRE(target.pixels == cache.pixels);
     }
