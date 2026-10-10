@@ -59,11 +59,17 @@ void check_text_resources(darker::resources::archive_set const &archives) {
       .ink{2},
       .edge{1}
     })};
-    auto const replacement{darker::graphics::draw_glyph(expected, fonts, darker::resources::font_face::wide, '?', position, {
+    auto const replacement{darker::graphics::draw_glyph(expected, fonts, darker::resources::font_face::wide, 'O', position, {
       .ink{2},
       .edge{1}
     })};
-    if(advance != replacement || actual.pixels != expected.pixels) throw std::runtime_error{"Undefined German glyph does not use a stable replacement"};
+    auto const body_start{static_cast<size_t>(position.y * 320)};
+    if(advance != replacement || !std::ranges::equal(std::span{actual.pixels}.subspan(body_start), std::span{expected.pixels}.subspan(body_start))) {
+      throw std::runtime_error{"German capital O umlaut changed the original letter's baseline or spacing"};
+    }
+    if(std::ranges::equal(std::span{actual.pixels}.first(body_start), std::span{expected.pixels}.first(body_start))) {
+      throw std::runtime_error{"German capital O umlaut has no accent"};
+    }
   }
   // this exception must not hide a damaged bitmap belonging to a declared glyph
   auto truncated{archives.load({0, 29})};

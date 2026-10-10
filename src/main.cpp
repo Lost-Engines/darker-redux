@@ -954,10 +954,20 @@ auto main(int const argc, char const *const argv[])->int {
         auto const rom_directory{arguments.contains("mt32-rom-dir") ? std::filesystem::path{arguments["mt32-rom-dir"].as<std::string>()} : data_directory};
         auto const percussion_font{percussion_fallback ? find_soundfont() : std::filesystem::path{}};
         if(percussion_fallback && percussion_font.empty()) return startup_failure("Roland percussion fallback needs a SoundFont: supply --soundfont=path/to/bank.sf2");
-        audio.configure_roland_music(rom_directory, archives.load({0, 35}), std::move(songs), percussion_font, percussion_bank_enabled ? std::filesystem::path{arguments["roland-gm-percussion-bank"].as<std::string>()} : std::filesystem::path{},
+        auto percussion_bank{percussion_bank_enabled ? std::filesystem::path{arguments["roland-gm-percussion-bank"].as<std::string>()} : std::filesystem::path{}};
+        if(!full_roland_bank && !percussion_fallback && !percussion_bank_enabled) {
+          for(auto const &candidate : {data_directory / "MTGM.MID", rom_directory / "MTGM.MID"}) {
+            if(std::filesystem::is_regular_file(candidate)) {
+              percussion_bank = candidate;
+              break;
+            }
+          }
+          if(percussion_bank.empty()) std::cerr << "Roland percussion bank MTGM.MID is missing; run scripts/fetch-assets.sh (or fetch-assets.bat) to restore the missing rhythm instruments.\n";
+        }
+        audio.configure_roland_music(rom_directory, archives.load({0, 35}), std::move(songs), percussion_font, percussion_bank,
           full_roland_bank ? std::filesystem::path{arguments["roland-gm-bank"].as<std::string>()} : std::filesystem::path{});
         if(full_roland_bank) std::cout << "Roland setup: full GM bank followed by Darker custom instruments on one device" << std::endl;
-        if(percussion_bank_enabled) std::cout << "Unmapped Roland percussion: separate Munt device using " << arguments["roland-gm-percussion-bank"].as<std::string>() << std::endl;
+        if(!percussion_bank.empty()) std::cout << "Roland percussion: separate Munt device using " << percussion_bank << std::endl;
         if(percussion_fallback) std::cout << "Unmapped Roland percussion: General MIDI fallback using " << percussion_font << std::endl;
         std::cout << "Music: LAPC-I arrangement, Munt emulation with original custom Roland timbres" << std::endl;
       } else {
@@ -1162,6 +1172,7 @@ auto main(int const argc, char const *const argv[])->int {
           darker::game::weapon_ammunition second_weapon;
           darker::game::refill_skimma_weapon(second_weapon, 1);
           auto groups{darker::game::make_scenario_actors(mission, *scenario, bank, host.player, second_weapon, 0, tunnels)};
+          if(pilot.stage == 80) darker::game::repair_level_80_convoy(groups, scenario->bytes(mission.shared));
           initial_actors = std::move(groups.active);
           initial_player = host.player;
           initial_cells = cells;

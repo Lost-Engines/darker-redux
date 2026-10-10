@@ -23,11 +23,10 @@ of individual comparisons.
 
 ## Recorded exceptions and deferred testing
 
-The German level 76 briefing contains an undefined glyph. Retail displays
-flickering corruption; the reconstruction substitutes `?` where the lookup
-would leave the font resource. A proper Ö is deferred to the expanded version.
-Mission 80's convoy passing through buildings is confirmed original behaviour
-and is retained.
+Redux supplies the missing Ö in German level 76 and corrects mission 80's
+staggered convoy approaches. Both defects remain preserved in the faithful
+project. The [Redux README](../README.md#redux-improvements) describes these
+repairs and the inferred Roland music corrections.
 
 Save/load playtesting has been successful. Natural endgame and Nightmare
 completion comparisons are deferred: neither has yet been completed in the

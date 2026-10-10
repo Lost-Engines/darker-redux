@@ -3,6 +3,23 @@
 
 namespace darker::audio {
 
+void repair_roland_opening(std::span<std::byte> const song) {
+  // 00/40, part 10: move the intro 384 ticks earlier (1584 -> 1200),
+  // then add those ticks to the silence after its loop marker (2688 -> 3072).
+  // All parts now mark at 3504 and loop every 9168 ticks, with no accumulated drift.
+  // Guard the known resource layout so unrelated/custom sequences remain intact.
+  size_t constexpr opening_resource_size{13170};
+  size_t constexpr delayed_setup{9262};
+  size_t constexpr loop_pause{9407};
+  if(song.size() != opening_resource_size || song[delayed_setup - 1] != std::byte{0x87}
+    || song[delayed_setup] != std::byte{0x8c} || song[delayed_setup + 1] != std::byte{0x30}
+    || song[loop_pause - 1] != std::byte{0x9c} || song[loop_pause] != std::byte{0x95}
+    || song[loop_pause + 1] != std::byte{0}) return;
+  song[delayed_setup] = std::byte{0x89};
+  song[loop_pause] = std::byte{0x98};
+}
+
+
 midi_music::midi_music(music_variant const selected) : variant{selected} {
   /// Sampled drivers share the sequence grammar, but SCC-1 restricts last-note release to channels 0–11
   if(selected == music_variant::soundblaster) throw std::invalid_argument{"Sound Blaster music requires the OPL sequencer"};

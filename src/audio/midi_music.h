@@ -15,6 +15,9 @@ struct midi_message {
 };
 using midi_sink = std::function<void(midi_message)>;
 
+// Correct the known LAPC-I opening-part timing error without changing the sequencer.
+void repair_roland_opening(std::span<std::byte> song);
+
 class midi_music {
 private:
   struct track {

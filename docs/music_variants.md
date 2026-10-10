@@ -1,5 +1,11 @@
 # Music arrangements and synthesis
 
+**Redux:** LAPC-I playback corrects the opening part's timing and automatically
+uses `MTGM.MID` beside the packs or ROMs for missing percussion. The fetch helpers
+now obtain this bank. The historical comparisons and opt-in experiment descriptions
+below describe the faithful project; see [Redux improvements](../README.md#redux-improvements)
+for the current defaults. Supplemented notes no longer reach unmapped main-device keys.
+
 `--music=none|soundblaster_fm|midi|roland-lapc|roland-sc55|roland-scc1a|gravis|soundblaster_awe32` disables music or selects one of the five original
 arrangements for all six music groups. Selection applies to startup, menus,
 briefings and films; it does not change procedural flight sound effects.

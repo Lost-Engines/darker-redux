@@ -349,6 +349,11 @@ reconstruction, late radio shutdown and a clean restart at level one.
 
 ## Undefined German briefing glyph
 
+Redux supplies code 153 (Ö) by combining the original capital O with the
+capital Ü's accent rows. The accent extends above the letter without moving
+its baseline or changing its advance. The faithful project's handling below
+remains the reference for unmodified data.
+
 German level 76 contains code 153 in a wide-font page. Retail reads beyond the
 font resource and produces flickering, overlapping pixels. The reconstruction
 uses that font's question mark when an undefined code's bitmap would leave the

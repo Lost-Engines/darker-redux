@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -12,7 +13,7 @@ enum class font_face { interface, compact, wide };
 struct font_glyph {
   uint8_t width{0};
   uint8_t height{0};
-  uint8_t top{0};
+  int16_t top{0};
   uint16_t advance{0};
   unsigned int stride{0};
   std::span<std::byte const> planes;
@@ -21,6 +22,7 @@ struct font_glyph {
 class font_resource {
 private:
   std::vector<std::byte> data;
+  std::array<std::vector<std::byte>, 4> wide_o_umlaut;
 
 public:
   explicit font_resource(std::vector<std::byte> resource);

@@ -52,6 +52,19 @@ while read -r url; do
     fi
   fi
 done < "$script_dir/roland_rom_urls.txt"
+# Roland's GM bank supplies the otherwise missing rhythm instruments.
+if [ ! -e MTGM.MID ]; then
+  while read -r url; do
+    [ -z "$url" ] && continue
+    file=$(basename "$url")
+    if curl --fail --location --output "$file" "$url" && unzip -jo "$file" MTGM.MID; then
+      rm -- "$file"
+      echo 'Roland percussion bank ready.'
+    else
+      echo 'Warning: please extract MTGM.MID from Roland MT2GM.EXE yourself. Roland will play without the missing percussion.'
+    fi
+  done < "$script_dir/roland_bank_urls.txt"
+fi
 # 4. Fetch missing SC-55 v1.21 ROMs for --music=roland-sc55.
 while read -r url; do
   [ -z "$url" ] && continue

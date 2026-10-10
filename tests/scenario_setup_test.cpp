@@ -88,3 +88,40 @@ TEST_CASE("Embedded scenario setup matches original player and actor mutations",
     CHECK(std::ranges::equal(actual, output));
   }
 }
+
+TEST_CASE("Level 80 staggered vehicles join the same route at the same location", "[game][scenario]") {
+  std::array<uint8_t, 12> constexpr commands{0xc1, 0xb1, 0xa1, 0x71, 0x61, 0x51, 0x41, 0x31, 0x21, 0x11, 0x01, 0xf1};
+  std::array<unsigned int, 12> constexpr rows{62, 63, 64, 67, 68, 69, 70, 71, 72, 73, 74, 75};
+  std::vector<std::byte> program;
+  for(auto const command : commands) program.push_back(static_cast<std::byte>(command));
+  program.push_back(std::byte{3}); // common left turn after the sixteen-cell run
+  program.push_back(std::byte{0});
+  darker::game::scenario_actor_groups groups;
+  for(unsigned int i{0}; i < rows.size(); ++i) {
+    darker::game::scenario_actor actor;
+    actor.index = static_cast<uint8_t>(6 + i);
+    actor.route.emplace();
+    actor.route->cursor = i;
+    actor.pose.position.column = 22 * 256 + 128;
+    actor.pose.position.row = static_cast<uint16_t>(rows[i] * 256 + 128);
+    actor.pose.angles.heading = 0x8000;
+    groups.active.push_back(std::move(actor));
+  }
+  darker::game::repair_level_80_convoy(groups, program);
+  for(auto &actor : groups.active) {
+    CAPTURE(actor.index);
+    uint16_t random{0};
+    bool reached_turn{false};
+    for(unsigned int tick{0}; tick < 30 * 4096; tick += 256) {
+      darker::game::advance_vehicle_route(*actor.route, actor.pose, actor.flags, program,
+        static_cast<uint16_t>(tick), 0, random);
+      if(actor.route->command == 3) {
+        REQUIRE(actor.pose.position.column / 256 == 22);
+        REQUIRE(actor.pose.position.row / 256 == 91);
+        reached_turn = true;
+        break;
+      }
+    }
+    REQUIRE(reached_turn);
+  }
+}

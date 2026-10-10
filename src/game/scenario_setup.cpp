@@ -105,6 +105,30 @@ void apply_actor_scenario_setup(scenario_setup_kind const kind, scenario_actor &
   }
 }
 
+void repair_level_80_convoy(scenario_actor_groups &groups, std::span<std::byte const> const program) {
+  // Each staggered approach should join F1's shared southbound run, rather
+  // than executing every following vehicle's approach count as well.
+  std::array<uint8_t, 12> constexpr approaches{0xc1, 0xb1, 0xa1, 0x71, 0x61, 0x51, 0x41, 0x31, 0x21, 0x11, 0x01, 0xf1};
+  uint8_t constexpr first_vehicle{6};
+  auto const first{std::ranges::find(groups.active, first_vehicle, &scenario_actor::index)};
+  if(first == groups.active.end() || !first->route) return;
+  auto const start{first->route->cursor};
+  if(start > program.size() || approaches.size() > program.size() - start) return;
+  for(unsigned int i{0}; i < approaches.size(); ++i) {
+    if(std::to_integer<uint8_t>(program[start + i]) != approaches[i]) return;
+  }
+  for(auto &actor : groups.active) {
+    if(actor.index < first_vehicle || actor.index >= first_vehicle + approaches.size() - 1 || !actor.route) continue;
+    auto &route{*actor.route};
+    auto const approach{static_cast<unsigned int>(actor.index - first_vehicle)};
+    if(route.cursor != start + approach || route.command != 0 || route.origin != 0xf000) continue;
+    // The first callback subtracts one repeat unit before moving. Prime that
+    // counter and leave its next fetch at the shared run, preserving timing.
+    route.command = static_cast<uint8_t>(approaches[approach] + 16);
+    route.cursor = start + approaches.size() - 1;
+  }
+}
+
 scenario_actor_groups make_scenario_actors(resources::scenario_record const &record,
   resources::scenario_resource const &resource, resources::geometry_bank const &bank, player_flight &player,
   weapon_ammunition &second_weapon, clock_tick const clock, std::optional<tunnel_setup> const tunnel) {

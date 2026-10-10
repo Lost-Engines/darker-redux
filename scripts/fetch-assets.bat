@@ -41,6 +41,21 @@ for /f "usebackq delims=" %%U in ("%script_dir%roland_rom_urls.txt") do (
   call :fetch
 )
 
+rem Roland's GM bank supplies the otherwise missing rhythm instruments.
+if not exist MTGM.MID (
+  set "warning=Please extract MTGM.MID from Roland MT2GM.EXE yourself."
+  for /f "usebackq delims=" %%U in ("%script_dir%roland_bank_urls.txt") do (
+    set "url=%%U"
+    call :fetch
+  )
+  tar.exe -xf MT2GM.EXE MTGM.MID
+  if errorlevel 1 (
+    echo Warning: Roland will play without the missing percussion. Please supply MTGM.MID.
+  ) else (
+    del MT2GM.EXE
+  )
+)
+
 rem 4. Fetch missing SC-55 v1.21 ROMs.
 set "warning=SC-55 emulation needs all five ROMs; other music options remain available."
 for /f "usebackq delims=" %%U in ("%script_dir%sc55_rom_urls.txt") do (

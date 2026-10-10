@@ -1,5 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <array>
+#include <filesystem>
+#include <string_view>
+#include "resources/archive_set.h"
 #include <cstddef>
 #include <stdexcept>
 #include <vector>
@@ -84,5 +88,21 @@ TEST_CASE("Text formatter rejects truncated controls and stops at a page boundar
   for(unsigned int const code : {1, 2, 5, 6, 8, 31}) {
     std::array<std::byte, 1> const text{static_cast<std::byte>(code)};
     CHECK_THROWS_AS(darker::graphics::lay_out_text(text, font, darker::resources::font_face::interface), std::invalid_argument);
+  }
+}
+
+TEST_CASE("German briefing capital O umlaut retains the original letter and accent artwork", "[graphics][font]") {
+  if(std::string_view{DARKER_TEST_RESOURCE_DIR}.empty()) SKIP("Requires retail font resources");
+  darker::resources::font_resource const font{darker::resources::read_binary_file(
+    std::filesystem::path{DARKER_TEST_RESOURCE_DIR} / "00_029.bin", 65536)};
+  for(unsigned int phase{0}; phase < 4; ++phase) {
+    auto const letter{font.glyph(darker::resources::font_face::wide, 'O', phase)};
+    auto const accent{font.glyph(darker::resources::font_face::wide, 123, phase)};
+    auto const combined{font.glyph(darker::resources::font_face::wide, 153, phase)};
+    REQUIRE(combined.advance == letter.advance);
+    REQUIRE(combined.height == letter.height + 3);
+    REQUIRE(combined.top + 3 == letter.top);
+    REQUIRE(std::ranges::equal(combined.planes.first(2 * combined.stride), accent.planes.first(2 * accent.stride)));
+    REQUIRE(std::ranges::equal(combined.planes.subspan(3 * combined.stride), letter.planes));
   }
 }

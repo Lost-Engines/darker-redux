@@ -7,6 +7,11 @@
 namespace darker::resources {
 namespace {
 
+uint8_t constexpr capital_o_umlaut{153};
+uint8_t constexpr capital_u_umlaut{123};
+unsigned int constexpr accent_rows{2};
+unsigned int constexpr accent_spacing{accent_rows + 1};
+
 struct font_directory {
   size_t offset;
   unsigned int count;
@@ -24,12 +29,30 @@ font_resource::font_resource(std::vector<std::byte> resource) : data{std::move(r
       for(unsigned int phase{0}; phase < 4; ++phase) glyph(static_cast<font_face>(face), static_cast<uint8_t>(code), phase);
     }
   }
+  // German "Örtlichkeiten" uses CP437 code 153, absent from the retail font.
+  // Compose its capital O with the existing capital Ü's two accent rows.
+  for(unsigned int phase{0}; phase < 4; ++phase) {
+    auto const body{glyph(font_face::wide, 'O', phase)};
+    auto const accent{glyph(font_face::wide, capital_u_umlaut, phase)};
+    if(body.width == 0 || body.width != accent.width || accent.height < accent_rows) continue;
+    auto &planes{wide_o_umlaut[phase]};
+    planes.insert(planes.end(), accent.planes.begin(), accent.planes.begin() + accent_rows * accent.stride);
+    planes.insert(planes.end(), body.stride, std::byte{});
+    planes.insert(planes.end(), body.planes.begin(), body.planes.end());
+  }
 }
 
 font_glyph font_resource::glyph(font_face const face, uint8_t const code, unsigned int const alignment) const {
   /// E1FE uses a phase-relative offset table; low/high nibbles select coverage and the two-colour pattern
   auto const &font{directories.at(static_cast<size_t>(face))};
   if(alignment > 3) throw std::out_of_range{"Font alignment must be between zero and three"};
+  if(face == font_face::wide && code == capital_o_umlaut && !wide_o_umlaut[alignment].empty()) {
+    auto result{glyph(face, 'O', alignment)};
+    result.height += accent_spacing;
+    result.top -= accent_spacing;
+    result.planes = wide_o_umlaut[alignment];
+    return result;
+  }
   if(code < 33) return {
     .advance{4}
   };

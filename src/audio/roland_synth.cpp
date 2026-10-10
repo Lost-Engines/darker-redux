@@ -83,10 +83,13 @@ void roland_synth::reset() noexcept {
 void roland_synth::send(midi_message const message) noexcept {
   if(state->percussion && (message.status & 15) == 9) {
     auto const command{message.status & 0xf0};
-    if(((command == 0x80 || command == 0x90) && message.first < state->unmapped.size() && state->unmapped[message.first])
-      || command == 0xb0 || command == 0xe0) state->percussion->send(message);
+    if((command == 0x80 || command == 0x90) && message.first < state->unmapped.size() && state->unmapped[message.first]) {
+      state->percussion->send(message);
+      return; // This note belongs to the supplementary bank, not an unmapped main-device key.
+    }
+    if(command == 0xb0 || command == 0xe0) state->percussion->send(message);
   }
-  // still send every event to Munt, preserving its unmapped-key diagnostics
+  // Preserve all mapped notes and the main device's controller state.
   uint32_t const packed{message.status | (static_cast<uint32_t>(message.first) << 8) | (static_cast<uint32_t>(message.second) << 16)};
   if(mt32emu_play_msg(state->context, packed) != MT32EMU_RC_OK) std::terminate();
 }
