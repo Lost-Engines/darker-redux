@@ -171,6 +171,8 @@ auto main(int const argc, char const *const argv[])->int {
     ("level", boost::program_options::value<int>(), "start at campaign level 1..116 with accumulated setup changes, without assumed combat damage; do not write saves")
     ("skip-intro", "start at game selection, skipping the startup presentation and title")
     ("scale", boost::program_options::value<int>(), "initial window scale: positive integer multiple of 320 x 240 (default: fit available screen)")
+    ("draw-distance", boost::program_options::value<unsigned int>()->default_value(darker::graphics::scene_limits::surface_radius_cells), "surface draw radius in map cells, 2..182 (182 includes the whole city)")
+    ("fog-start", boost::program_options::value<double>()->default_value(0), "surface fog start in map cells, 0..draw-distance; fog reaches full strength at the draw distance")
     ("music", boost::program_options::value<std::string>()->default_value("soundblaster_awe32"), "music arrangement: none, soundblaster_fm, midi, roland-lapc, roland-sc55, roland-scc1a, gravis or soundblaster_awe32")
     ("roland-gm-bank", boost::program_options::value<std::string>(), "load the whole Roland MTGM.MID bank before Darker custom instruments on the same device")
     ("roland-gm-percussion-bank", boost::program_options::value<std::string>(), "supplement unmapped Roland percussion using Roland MTGM.MID on a separate emulated device")
@@ -204,6 +206,14 @@ auto main(int const argc, char const *const argv[])->int {
   if(language_name != "english" && language_name != "french" && language_name != "german") return startup_failure("--language must be english, french or german");
   auto const language{language_name == "english"  ? darker::resources::scenario_language::english
     : language_name == "french" ? darker::resources::scenario_language::french : darker::resources::scenario_language::german};
+  auto const draw_distance{arguments["draw-distance"].as<unsigned int>()};
+  auto const fog_start{arguments["fog-start"].as<double>()};
+  if(draw_distance < darker::graphics::scene_limits::minimum_scan_radius_cells || draw_distance > darker::graphics::scene_limits::maximum_scan_radius_cells) {
+    return startup_failure("--draw-distance must be between 2 and 182 map cells");
+  }
+  if(!std::isfinite(fog_start) || fog_start < 0 || fog_start > draw_distance) {
+    return startup_failure("--fog-start must be a finite distance between zero and --draw-distance");
+  }
   bool const automatic_scale{!arguments.contains("scale")};
   auto const scale{automatic_scale ? 1 : arguments["scale"].as<int>()};
   auto const music_name{arguments["music"].as<std::string>()};
@@ -407,7 +417,11 @@ auto main(int const argc, char const *const argv[])->int {
   auto initial_player{host.player};
   auto initial_cells{cells};
   darker::graphics::city_renderer scene;
-  darker::graphics::distance_shading const lighting;
+  darker::graphics::distance_shading const surface_lighting{darker::graphics::fog_range{
+    .start_cells{fog_start},
+    .end_cells{static_cast<double>(draw_distance)},
+  }};
+  darker::graphics::distance_shading const tunnel_lighting;
   framework::render::indexed_cockpit_framebuffer display{}, world{};
   framework::render::cockpit_framebuffer output;
   auto const render{[&](uint16_t const clock, bool const enlarged, uint16_t const frame_step = 0){
@@ -473,7 +487,7 @@ auto main(int const argc, char const *const argv[])->int {
     combat->targeting_basis = darker::maths::make_view_basis(view.angles);
     view.underground = host.player.tunnel.has_value();
     view.unrestricted_visibility = host.player.noclip;
-    view.radius = view.underground ? darker::graphics::scene_limits::tunnel_radius_cells : darker::graphics::scene_limits::surface_radius_cells;
+    view.radius = view.underground ? darker::graphics::scene_limits::tunnel_radius_cells : draw_distance;
     view.beacon_lighting = darker::resources::profile(world_mode).beacon_lighting;
     view.gouraud = host.gouraud;
     darker::graphics::model_animation animation;
@@ -526,7 +540,7 @@ auto main(int const argc, char const *const argv[])->int {
       .sheet{cache},
       .clock{clock}
     };
-    auto const count{scene.draw(world, bank, cells, view, darker::resources::profile(world_mode).damage_mask, lighting, animation, objects, &particles)};
+    auto const count{scene.draw(world, bank, cells, view, darker::resources::profile(world_mode).damage_mask, view.underground ? tunnel_lighting : surface_lighting, animation, objects, &particles)};
     display = cockpit;
     auto const components{darker::graphics::cockpit_components(type)};
     std::array<uint8_t, 9> instruments{};

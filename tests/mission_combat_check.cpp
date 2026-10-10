@@ -848,7 +848,8 @@ void check_mission_combat(darker::resources::archive_set const &archives) {
         .altitude{500},
         .angles{
           .heading{static_cast<uint16_t>(heading)}
-        }
+        },
+        .radius{darker::graphics::scene_limits::native_surface_radius_cells},
       };
       if(renderer.draw(frame, bank, empty_city, view, 0x20, lighting, {}, objects) != 0
         || std::ranges::any_of(frame.pixels, [](auto pixel){

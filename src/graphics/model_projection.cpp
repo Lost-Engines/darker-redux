@@ -14,13 +14,13 @@ projection_term product(int16_t const value, int16_t const coefficient) noexcept
 }
 
 void negate(projection_term &term) noexcept {
-  /// Negate the cached 24-bit contribution rather than recomputing an unrounded product
+  /// Negate the cached fixed-point contribution rather than recomputing an unrounded product
   term.whole = static_cast<render_geometry::coordinate_bits>(-term.whole - (term.fraction != 0 ? 1 : 0));
   term.fraction = static_cast<render_geometry::fraction>(-term.fraction);
 }
 
 render_geometry::accumulator_bits bits(projection_term const term) noexcept {
-  /// Join the original coordinate word and fractional byte
+  /// Join the wide coordinate and original fractional byte
   return static_cast<render_geometry::accumulator_bits>(term.whole) * render_geometry::fraction_scale + term.fraction;
 }
 

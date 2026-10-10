@@ -205,7 +205,23 @@ Use `--craft skimma` or `--craft upgraded` for the other craft. Controls:
 
 The old W/A/S/D, R/F and drag-to-look inspection controls have been removed. Mouse capture requests raw motion where GLFW supports it; the original steering filter consumes wrapping relative counters. Caero altitude, damage, boost cells, recharge and incoming-power displays now follow live state, as do compass/grid coordinates and Skimma engine-output strips. The Caero primary icon follows Pinner Direct selection.
 
-The world view now draws the original 17 sky/ground colour bands, moving with pitch and bank. Halon’s distant grey building shades blend into its grey horizon; Delphi uses its own purple night palette. The original model distance-shading tables and draw radius are unchanged.
+The world view now draws the original 17 sky/ground colour bands, moving with pitch and bank. Halon’s distant grey building shades blend into its grey horizon; Delphi uses its own purple night palette. The palette ramps remain original, with configurable surface visibility and fog.
+
+`--draw-distance=64` is the default surface radius, measured in map cells; accepted
+values are 2–182. `--fog-start=0` sets where distance fog begins, independently of
+the radius. Fog reaches full strength at the draw distance. For a clear view of
+the entire city, try:
+
+```sh
+./build/darker --skip-intro --draw-distance=182 --fog-start=182
+```
+
+A smaller fog start, such as `--fog-start=40`, leaves the nearby city clear and
+fades the horizon. Fractional fog-start distances are accepted. Beacon lighting
+and outages still apply; these options do not change tunnel visibility or gameplay
+activation distances. Larger draw distances increase software rendering work.
+Runtime camera coordinates and sorting distances are widened to keep distant
+geometry from wrapping, while resource formats and gameplay coordinates stay unchanged.
 
 Debug builds provide two developer options: `--screenshot=/tmp/frame.ppm` saves a screenshot of the initial scene as a PPM image, then exits without opening a window; `--seconds=10` closes a normal windowed run after ten seconds (zero disables the time limit). The screenshot captures startup for Caero or flight for Skimma; it does not wait for `--seconds`. Both options are excluded from builds that define `NDEBUG`, including Release builds.
 
@@ -264,8 +280,10 @@ See [FM audio](docs/fm_audio.md) for the measured differences and verification.
 
 [Release status](docs/release_readiness.md) records implemented scope and deferred
 playtesting. [Build and release CI](.github/workflows/build.yml) produces Debug
-and Release packages for Linux, Windows and macOS; code-changing pushes to
-`master` publish only the three Release packages after all six build/test jobs pass.
+and Release packages for Linux, Windows and macOS. During Redux development it
+runs only through **Run workflow**; enable its **release** input to publish the
+three Release packages after all six build/test jobs pass. Pushes and pull requests
+do not start CI.
 
 See [binary packaging](docs/binary_packaging.md) for a clean installation of the
 single executable and platform-specific `scripts/` directory.

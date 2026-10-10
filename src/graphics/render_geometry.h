@@ -11,19 +11,19 @@ namespace darker::graphics {
 
 // runtime rendering arithmetic, deliberately separate from model-file words and gameplay positions
 struct render_geometry {
-  using coordinate = int16_t;
+  using coordinate = int32_t;
   using coordinate_bits = std::make_unsigned_t<coordinate>;
   using fraction = uint8_t;
-  using accumulator = int32_t;
+  using accumulator = int64_t;
   using accumulator_bits = std::make_unsigned_t<accumulator>;
   using screen_coordinate = int16_t;                                        // raster coordinates need not widen with camera coordinates
   using screen_coordinate_bits = std::make_unsigned_t<screen_coordinate>;
-  using sorting_distance = uint16_t;                                        // painter ordering has its own unsigned range
+  using sorting_distance = uint32_t;                                        // painter ordering has its own unsigned range
 
   static unsigned int constexpr whole_bits{std::numeric_limits<coordinate_bits>::digits};
   static unsigned int constexpr fraction_bits{std::numeric_limits<fraction>::digits};
   static unsigned int constexpr accumulator_width{std::numeric_limits<accumulator_bits>::digits};
-  static unsigned int constexpr product_whole_shift{16};                     // native transform product scale, independent of coordinate storage width
+  static unsigned int constexpr product_whole_shift{16};                     // transform product scale, independent of coordinate storage width
   static unsigned int constexpr product_fraction_shift{product_whole_shift - fraction_bits};
   static unsigned int constexpr retained_bits{whole_bits + fraction_bits};
   static unsigned int constexpr discarded_bits{accumulator_width - retained_bits};
@@ -49,7 +49,7 @@ struct render_geometry {
   static_assert((1 << (maths::world_format::fraction_bits - camera_fraction_shift)) == world_to_camera_scale);
 
   static constexpr coordinate wrap_coordinate(accumulator value) noexcept {
-    /// Reinterpret the native low coordinate word as signed
+    /// Retain a signed rendering coordinate independently of packed gameplay words
     return std::bit_cast<coordinate>(static_cast<coordinate_bits>(value));
   }
 
@@ -59,16 +59,17 @@ struct render_geometry {
   }
 
   static constexpr accumulator wrap_projection(accumulator_bits value) noexcept {
-    /// Sign-extend the retained whole coordinate and fractional byte
+    /// Sign-extend the wider retained coordinate and fractional byte
     return std::bit_cast<accumulator>(value << discarded_bits) >> discarded_bits;
   }
 };
 
 struct scene_limits {
-  static unsigned int constexpr surface_radius_cells{15};
+  static unsigned int constexpr native_surface_radius_cells{15};
+  static unsigned int constexpr surface_radius_cells{64};
   static unsigned int constexpr tunnel_radius_cells{8};
   static unsigned int constexpr minimum_scan_radius_cells{2};
-  static unsigned int constexpr maximum_scan_radius_cells{32};                  // scanner bound, not a guarantee that projection can represent the entire radius
+  static unsigned int constexpr maximum_scan_radius_cells{182};                  // covers the diagonal of the 256-cell wrapping world (nearest image is at most 128 cells per axis)
   static unsigned int constexpr distance_shade_tables{60};
   static unsigned int constexpr maximum_distance_shade_tables{255};
   static unsigned int constexpr distance_shade_shift{8};                       // whole depth units per fog-table entry; independent of projection fractions

@@ -68,9 +68,16 @@ camera_basis orient_model(camera_basis const &camera, camera_angles const angles
 }
 
 model_placement place_model(camera_basis const &basis, camera_position const camera, model_origin const origin) noexcept {
-  /// 2E21 transforms a cell origin while preserving word wrapping, fractional bytes and the sorting estimate
-  auto const column{render_geometry::wrap_coordinate(origin.column * render_geometry::world_to_camera_scale - camera.column)};
-  auto const row{render_geometry::wrap_coordinate(origin.row * render_geometry::world_to_camera_scale - camera.row)};
+  /// Transform the nearest world image with wide products; retain original fixed-point rounding and sorting estimate
+  auto const displacement{[](maths::world_format::position_component position, render_geometry::coordinate_bits camera_position) {
+    unsigned int constexpr world_cells{1u << (std::numeric_limits<maths::world_format::position_component>::digits - maths::world_format::cell_fraction_bits)};
+    unsigned int constexpr period{world_cells * render_geometry::camera_units_per_cell};
+    unsigned int constexpr half_period{period / 2};
+    auto const wrapped{(position * render_geometry::world_to_camera_scale - camera_position + half_period) % period};
+    return static_cast<render_geometry::coordinate>(wrapped) - static_cast<render_geometry::coordinate>(half_period);
+  }};
+  auto const column{displacement(origin.column, camera.column)};
+  auto const row{displacement(origin.row, camera.row)};
   auto const height{render_geometry::wrap_coordinate(origin.height + camera.altitude)};
   auto const x{render_geometry::wrap_coordinate(column * render_geometry::model_horizontal_scale)};
   auto const y{render_geometry::wrap_coordinate(row * render_geometry::model_horizontal_scale)};

@@ -11,10 +11,10 @@ namespace darker::graphics {
 std::vector<particle_point> project_emitter(game::particle_emitter const &emitter, model_placement const centre,
   camera_basis const &basis, screen_vertex const &origin) {
   /// 689F projects each ring sample and walks both arcs from the farthest accepted point towards the nearest
-  vec3<int> const offsets{
-    std::bit_cast<int16_t>(centre.horizontal.whole) * 256 + centre.horizontal.fraction,
-    std::bit_cast<int16_t>(centre.vertical.whole) * 256 + centre.vertical.fraction,
-    std::bit_cast<int16_t>(centre.depth.whole) * 256 + centre.depth.fraction,
+  vec3<render_geometry::accumulator> const offsets{
+    render_geometry::wrap_coordinate(centre.horizontal.whole) * 256 + centre.horizontal.fraction,
+    render_geometry::wrap_coordinate(centre.vertical.whole) * 256 + centre.vertical.fraction,
+    render_geometry::wrap_coordinate(centre.depth.whole) * 256 + centre.depth.fraction,
   };
   std::array<int16_t projection_axis::*, 3> const members{&projection_axis::horizontal, &projection_axis::vertical, &projection_axis::depth};
   std::array<vec2<int>, 3> coefficients{};
@@ -22,8 +22,8 @@ std::vector<particle_point> project_emitter(game::particle_emitter const &emitte
     coefficients[i] = {((basis[1].*members[i] * std::bit_cast<int16_t>(emitter.radius)) >> 16) >> 2,
       ((basis[0].*members[i] * std::bit_cast<int16_t>(emitter.radius)) >> 16) >> 2};
   }
-  auto const wrap24{[](int const value){
-    return std::bit_cast<int32_t>(static_cast<uint32_t>(value) << 8) >> 8;
+  auto const retain{[](render_geometry::accumulator const value){
+    return render_geometry::wrap_projection(static_cast<render_geometry::accumulator_bits>(value));
   }};
   unsigned int index{static_cast<unsigned int>(emitter.angle >> 5)};
   std::vector<particle_point> points;
@@ -32,14 +32,14 @@ std::vector<particle_point> project_emitter(game::particle_emitter const &emitte
     index &= 2046;
     auto const sine{maths::original_sine[index >> 1]};
     auto const cosine{maths::phase_cosine(index >> 1)};
-    vec3<int> v{};
-    for(unsigned int i{0}; i < 3; ++i) v[i] = wrap24(offsets[i] + ((coefficients[i][0] * sine) >> 8) + ((coefficients[i][1] * cosine) >> 8));
+    vec3<render_geometry::accumulator> v{};
+    for(unsigned int i{0}; i < 3; ++i) v[i] = retain(offsets[i] + ((coefficients[i][0] * sine) >> 8) + ((coefficients[i][1] * cosine) >> 8));
     auto const depth{v[2] >> 8};
     if(depth >= 32) {
       points.push_back({
         .x{std::bit_cast<int16_t>(static_cast<uint16_t>(v[0] / depth + origin.x))},
         .y{std::bit_cast<int16_t>(static_cast<uint16_t>(v[1] / depth + origin.y))},
-        .depth{static_cast<int16_t>(depth)}
+        .depth{static_cast<render_geometry::coordinate>(depth)}
       });
       if(depth > points[far].depth) far = points.size() - 1;
       if(depth < points[near].depth) near = points.size() - 1;

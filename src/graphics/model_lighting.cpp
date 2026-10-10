@@ -1,5 +1,6 @@
 #include "graphics/model_lighting.h"
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace darker::graphics {
@@ -13,6 +14,7 @@ distance_shading::distance_shading(unsigned int const count) {
   int constexpr half_shade{shade_fraction_scale / 2};
   if(count < minimum_distance_tables || count > scene_limits::maximum_distance_shade_tables) throw std::invalid_argument{"Distance shade table count exceeds its original byte range"};
   tables.resize(count);
+  end_depth = (count - 1) << scene_limits::distance_shade_shift;
   for(int shade{0}; shade < interpolated_shades; ++shade) {
     int const step{((shade - distant_shade) * shade_fraction_scale) / static_cast<int>(count - 1)};
     for(unsigned int distance{0}; distance < count; ++distance) {
@@ -21,15 +23,28 @@ distance_shading::distance_shading(unsigned int const count) {
   }
 }
 
+distance_shading::distance_shading(fog_range const range) : distance_shading{} {
+  /// Distances are map cells; table generation and indexed palette ramps remain unchanged
+  if(!std::isfinite(range.start_cells) || !std::isfinite(range.end_cells)
+    || range.start_cells < 0 || range.end_cells < range.start_cells || range.end_cells > scene_limits::maximum_scan_radius_cells) {
+    throw std::invalid_argument{"Fog distances must be finite, ordered and within the visible world range"};
+  }
+  start_depth = static_cast<uint32_t>(std::llround(range.start_cells * render_geometry::camera_units_per_cell));
+  end_depth = static_cast<uint32_t>(std::llround(range.end_cells * render_geometry::camera_units_per_cell));
+}
+
 model_colours distance_shading::colours(render_geometry::coordinate_bits depth, model_path const path, uint8_t const light) const {
-  /// 2CE4 folds beacon strength into distance; the near path clamps a negative origin depth before the wrapping subtraction
+  /// Remap fog distance, then retain 2CE4 beacon darkening; near clipping clamps a negative model origin to zero
   render_geometry::coordinate_bits constexpr depth_sign_bit{render_geometry::coordinate_bits{1} << (render_geometry::whole_bits - 1)};
   unsigned int constexpr full_beacon_light{255};
   unsigned int constexpr darkness_depth_scale{16};                             // each missing light unit adds 16 projection-depth units
   unsigned int constexpr dynamic_colour_base{0xf0};                            // palette ramp 7, upper half; light supplies the low nibble
-  // depth wraps before selecting its high byte, preserving the original distance-table lookup
+  // Beacon darkness is applied after fog remapping: distant fog settings must not restore power to an unlit district.
   if(path == model_path::near_clipped && (depth & depth_sign_bit)) depth = 0;
-  auto const adjusted{static_cast<render_geometry::coordinate_bits>(depth + darkness_depth_scale * (full_beacon_light - light))};
+  uint64_t const shade_distance{(tables.size() - 1) << scene_limits::distance_shade_shift};
+  uint64_t const fog_depth{depth <= start_depth ? 0 : end_depth == start_depth ? shade_distance
+    : std::min(shade_distance, static_cast<uint64_t>(depth - start_depth) * shade_distance / (end_depth - start_depth))};
+  auto const adjusted{fog_depth + darkness_depth_scale * (full_beacon_light - light)};
   auto const index{std::min<size_t>(adjusted >> scene_limits::distance_shade_shift, tables.size() - 1)};
   return {
     .shades{tables[index]},

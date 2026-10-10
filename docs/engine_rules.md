@@ -43,12 +43,23 @@ palette; see [cockpit rendering](cockpit_rendering.md).
 Start with `scene_limits`, then follow `render_geometry` through `camera`,
 `model_projection`, `near_clip`, `model_renderer` and `city_scene`.
 
+Redux exposes `--draw-distance` (2–182 map cells, default 64) and `--fog-start`
+(0 through the draw distance, default 0). The end of the fog ramp follows the draw
+distance. Equal start/end distances leave the admitted range clear. Lighting from
+beacons is applied after remapping fog distance, so it remains independent.
+
 A world cell contains 256 position units. Placement multiplies horizontal
-positions by four and doubles the relative horizontal displacement again
-before transformation. Signed word wrapping therefore matters well before the
-scanner's maximum radius. Cached projection values retain a coordinate word
-and fractional byte; their signed 24-bit wrap is an observable part of the
-native renderer.
+positions by four and doubles the relative horizontal displacement again before
+transformation. The runtime whole coordinate now uses 32 bits and products use
+64 bits; cached projections retain 32 whole bits and eight fractional bits.
+This removes the original 16-bit displacement and 24-bit projection overflow.
+The nearest image is chosen in the full 256-cell wrapping world, whose occupied
+city map is 128×128. A radius of 182 covers its maximum nearest-image diagonal.
+
+The native scanner remains available for radii up to 15. Larger radii enumerate
+each occupied map cell once, test its circular range and let model extent culling
+select the visible geometry. Sorting distances are also widened to 32 bits.
+Underground visibility and resource/gameplay word formats are unchanged.
 
 The transform-product shift is independent of coordinate storage width. The
 native focal length happens to equal the projection fraction scale (256), so
@@ -57,16 +68,11 @@ extra multiplication. An assertion makes that dependency explicit. Changing
 FOV requires changing projection, including near-plane intersection projection,
 not simply changing that constant.
 
-A wider fork must also check matrix-product overflow, sorting-distance overflow,
-scanner byte arithmetic (`city_visibility`), near-intersection saturation, culling, fog and tunnel
-visibility. Resource words need not grow with runtime camera coordinates.
-Screen-coordinate and sorting-distance aliases are independent of camera-coordinate
-width, even though all three currently use native words. Screen-origin wrapping
-has its own helper. Shade interpolation still has native word arithmetic of its
-own: a wider screen does not imply a wider palette accumulator.
-
-Native indexed-pixel comparisons should continue to exercise the unchanged
-reference configuration.
+Screen coordinates remain 16-bit, independently of camera coordinates and
+sorting distances. Screen-origin wrapping has its own helper. Shade interpolation
+still has native word arithmetic: a wider screen does not imply a wider palette
+accumulator. Native reference tests compare the unaliased close-range domain;
+separate tests cover distant placement, fog and traversal across the world seam.
 
 ## Changing internal resolution
 

@@ -1,4 +1,4 @@
-# Builds, packages and automatic releases
+# Builds, packages and manual releases
 
 The workflow is [`.github/workflows/build.yml`](../.github/workflows/build.yml).
 It builds and tests this matrix once, then publishes only the Release packages:
@@ -16,26 +16,18 @@ libraries use the pinned archives in `cmake/dependencies.cmake`.
 
 ## Triggers and cost control
 
-Pushes to `master`, pull requests and manual dispatch can run CI. Automatic
-runs are filtered to `src/`, `tests/`, `cmake/`, `CMakeLists.txt`,
-`CMakePresets.json`, `vectorstorm/`, `scripts/`, `tools/` and workflow files.
-README and documentation-only changes do not start builds. Pull requests run
-once through the pull-request event, rather than also building every branch push.
-
-Only a push to `master` that changes `src/`, `vectorstorm/`, `CMakeLists.txt` or `cmake/`
-(excluding `cmake/package.cmake`) is eligible for an automatic release.
-These include compiler and linked-dependency changes that alter the executable.
-Tests, docs, workflow files, packaging scripts and asset-fetch helper updates
-alone do not produce releases. Manual dispatch checks a build without publishing.
-The release comparison covers the complete pushed commit range, not just its
-last commit, including deletions.
+Automatic builds are disabled during rapid Redux development. In GitHub Actions,
+select **Build and release**, then **Run workflow** on the desired branch. The
+`release` input defaults to false: leave it unchecked for build/test verification,
+or enable it to publish the tested Release packages. Pushes and pull requests
+never start this workflow.
 
 All six jobs must succeed before publishing. Compiler caches are limited to
 500 MB per platform/configuration, and the Boost installations are cached.
 Packages and test reports are retained as workflow artifacts for seven days.
 Publication reuses the three Release artifacts; Debug packages remain available
 as CI artifacts only. There is no second release compilation.
-Obsolete pull-request runs are cancelled; master pushes have distinct groups.
+Manual runs on the same branch are serialised without cancelling an active run.
 
 Each release is tagged `release-<full commit SHA>`. Packages are uploaded to a
 draft before it is published, with a `SHA256SUMS` file. Rerunning the workflow

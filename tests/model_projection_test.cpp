@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <bit>
 #include <cstdint>
 #include "graphics/model_projection.h"
 #include "reference/model_projection_samples.h"
@@ -15,15 +16,15 @@ TEST_CASE("Stateful model projection matches native component updates and fracti
       };
     }
     parameters.horizontal = {
-      .whole{static_cast<uint16_t>(sample.base[0])},
+      .whole{static_cast<darker::graphics::render_geometry::coordinate_bits>(std::bit_cast<int16_t>(static_cast<uint16_t>(sample.base[0])))},
       .fraction{static_cast<uint8_t>(sample.base[1])}
     };
     parameters.vertical = {
-      .whole{static_cast<uint16_t>(sample.base[2])},
+      .whole{static_cast<darker::graphics::render_geometry::coordinate_bits>(std::bit_cast<int16_t>(static_cast<uint16_t>(sample.base[2])))},
       .fraction{static_cast<uint8_t>(sample.base[3])}
     };
     parameters.depth = {
-      .whole{static_cast<uint16_t>(sample.base[4])},
+      .whole{static_cast<darker::graphics::render_geometry::coordinate_bits>(std::bit_cast<int16_t>(static_cast<uint16_t>(sample.base[4])))},
       .fraction{static_cast<uint8_t>(sample.base[5])}
     };
     parameters.origin = {static_cast<int16_t>(sample.origin[0]), static_cast<int16_t>(sample.origin[1])};

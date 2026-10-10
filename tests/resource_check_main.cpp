@@ -278,6 +278,7 @@ auto main(int const argc, char const *const argv[])->int try {
       throw std::runtime_error{std::format("Camera/model drawing differs from native reference: bank {}, heading {}, pitch {}", sample.slot, sample.heading, sample.pitch)};
     }
   }
+  // Fixtures stored only the camera low word; recover its image beside their cell (64, 64).
   for(auto const &sample : darker::test_reference::city_placement_samples) {
     darker::resources::geometry_bank const bank{archives.load({
       .archive{0},
@@ -295,16 +296,16 @@ auto main(int const argc, char const *const argv[])->int try {
       }, 64 * 128 + 64,
       static_cast<uint8_t>(sample.model[3]), basis,
       {
-        .column{sample.camera[0]},
-        .row{sample.camera[1]},
+        .column{static_cast<unsigned int>(65536 + std::bit_cast<int16_t>(sample.camera[0]))},
+        .row{static_cast<unsigned int>(65536 + std::bit_cast<int16_t>(sample.camera[1]))},
         .altitude{std::bit_cast<int16_t>(sample.camera[2])}
       })};
     bool matched{item.has_value() == sample.visible};
     if(item && sample.visible) {
       std::array<uint16_t, 10> const values{
-        static_cast<uint16_t>(item->model_offset), item->placement.horizontal.whole, item->placement.horizontal.fraction,
-        item->placement.vertical.whole, item->placement.vertical.fraction, item->placement.depth.whole, item->placement.depth.fraction,
-        item->placement.sorting_distance, static_cast<uint16_t>(item->path == darker::graphics::model_path::near_clipped ? 0x2c62 : item->force_flat ? 0x2ca9 : 0x2cb3),
+        static_cast<uint16_t>(item->model_offset), static_cast<uint16_t>(item->placement.horizontal.whole), item->placement.horizontal.fraction,
+        static_cast<uint16_t>(item->placement.vertical.whole), item->placement.vertical.fraction, static_cast<uint16_t>(item->placement.depth.whole), item->placement.depth.fraction,
+        static_cast<uint16_t>(item->placement.sorting_distance), static_cast<uint16_t>(item->path == darker::graphics::model_path::near_clipped ? 0x2c62 : item->force_flat ? 0x2ca9 : 0x2cb3),
         static_cast<uint16_t>(item->background),
       };
       matched = values == sample.result;
@@ -327,6 +328,8 @@ auto main(int const argc, char const *const argv[])->int try {
           }
         },
         basis, {
+          .column{65536},
+          .row{65536},
           .altitude{1800}
         }, sample.underground)};
       if(!item || item->placement.sorting_distance != sample.distance) {
@@ -409,6 +412,7 @@ auto main(int const argc, char const *const argv[])->int try {
         .heading{static_cast<uint16_t>(sample.heading)},
         .pitch{static_cast<uint16_t>(sample.pitch)}
       },
+      .radius{darker::graphics::scene_limits::native_surface_radius_cells},
       .beacon_lighting{sample.slot == 30},
       .gouraud{sample.gouraud != 0},
     };

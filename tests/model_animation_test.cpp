@@ -23,7 +23,7 @@ TEST_CASE("Gate interpolation reproduces both original projection paths", "[grap
         .fraction{static_cast<uint8_t>(sample.fraction)}
       },
       .depth{
-        .whole{static_cast<uint16_t>(sample.depth)},
+        .whole{static_cast<darker::graphics::render_geometry::coordinate_bits>(std::bit_cast<int16_t>(static_cast<uint16_t>(sample.depth)))},
         .fraction{83}
       },
       .origin{160, 84},

@@ -74,7 +74,7 @@ private:
   camera_vertex anchor{};
   uint16_t interpolation{0};
   render_geometry::coordinate last_depth{0};
-  uint8_t distance_high;
+  render_geometry::coordinate distance_high;
   raster_viewport viewport;
   model_path path;
   model_shading shading;
@@ -180,7 +180,7 @@ private:
 public:
   interpreter(framework::render::indexed_surface frame, std::span<std::byte const> const bytes,
     projection_parameters const parameters, model_colours const &palette, raster_viewport const bounds, model_path const drawing_path, model_animation const &animation_state, model_shading const shading_mode)
-    : target{frame}, pool{bytes}, projection{parameters}, colours{palette}, animation{animation_state}, distance_high{static_cast<uint8_t>(parameters.depth.whole >> 8)}, viewport{bounds}, path{drawing_path}, shading{shading_mode}, screen_origin{parameters.origin} {
+    : target{frame}, pool{bytes}, projection{parameters}, colours{palette}, animation{animation_state}, distance_high{render_geometry::wrap_coordinate(parameters.depth.whole) >> 8}, viewport{bounds}, path{drawing_path}, shading{shading_mode}, screen_origin{parameters.origin} {
     /// Keep bytecode, projection cache and vertex storage together for one drawing invocation
   }
 
@@ -220,7 +220,7 @@ public:
           if(path == model_path::near_clipped && depth < render_geometry::near_depth) break;
           if(depth == 0) throw std::domain_error{"Model disc has zero depth"};
           auto const point{path == model_path::near_clipped ? project_vertex(centre, screen_origin) : vertices[cursor]};
-          draw_disc(target, {point.x, point.y}, radius / static_cast<uint16_t>(depth), index, viewport);
+          draw_disc(target, {point.x, point.y}, static_cast<unsigned int>(radius / static_cast<render_geometry::coordinate_bits>(depth)), index, viewport);
         }
         break;
       case model_opcode::line:
@@ -411,7 +411,7 @@ public:
         {
           auto const threshold{byte(position)};
           auto const skip{byte(position)};
-          if(static_cast<uint8_t>(distance_high - threshold) & 128) position += skip;
+          if(distance_high < threshold) position += skip;
         }
         break;
       default:

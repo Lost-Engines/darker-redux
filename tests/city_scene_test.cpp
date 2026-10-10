@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <bit>
 #include "graphics/city_scene.h"
 #include "maths/world_coordinates.h"
 #include "reference/city_scan_samples.h"
@@ -12,6 +13,7 @@ TEST_CASE("City scans preserve native candidate order and map boundaries", "[gra
   std::vector<uint16_t> candidates;
   size_t index{0};
   for(auto const &sample : darker::test_reference::city_scan_samples) {
+    if(sample.radius > darker::graphics::scene_limits::native_surface_radius_cells) continue; // extended radii use the new non-wrapping circular scan
     CAPTURE(index, sample.column, sample.row, sample.heading, sample.pitch, sample.radius);
     darker::graphics::collect_city_cells(cells, static_cast<uint8_t>(sample.column), static_cast<uint8_t>(sample.row),
       {
@@ -52,15 +54,15 @@ TEST_CASE("Distant moving objects project to the original single pixel", "[graph
     CAPTURE(sample);
     darker::graphics::model_placement const placement{
       .horizontal{
-        .whole{static_cast<uint16_t>(sample[0])},
+        .whole{static_cast<darker::graphics::render_geometry::coordinate_bits>(std::bit_cast<int16_t>(static_cast<uint16_t>(sample[0])))},
         .fraction{173}
       },
       .vertical{
-        .whole{static_cast<uint16_t>(sample[1])},
+        .whole{static_cast<darker::graphics::render_geometry::coordinate_bits>(std::bit_cast<int16_t>(static_cast<uint16_t>(sample[1])))},
         .fraction{89}
       },
       .depth{
-        .whole{static_cast<uint16_t>(sample[2])},
+        .whole{static_cast<darker::graphics::render_geometry::coordinate_bits>(std::bit_cast<int16_t>(static_cast<uint16_t>(sample[2])))},
         .fraction{255}
       },
     };
@@ -91,5 +93,22 @@ TEST_CASE("Draw traversal supplies the native record byte after a farther subtre
   for(size_t i{0}; i < items.size(); ++i) {
     CHECK(items[i].draw_record == records[i]);
     CHECK(items[i].projection_residue == residues[i]);
+  }
+}
+
+TEST_CASE("Maximum visibility includes each city cell once across the world seam", "[graphics][city]") {
+  darker::game::city_map cells{};
+  for(auto &cell : cells) cell.type = 1;
+  std::vector<uint16_t> candidates;
+  for(uint8_t const origin : {0, 64, 127, 128, 255}) {
+    darker::graphics::collect_city_cells(cells, origin, origin, {}, 182, candidates);
+    REQUIRE(candidates.size() == cells.size());
+    for(unsigned int index{0}; index < candidates.size(); ++index) CHECK(candidates[index] == index);
+  }
+  darker::graphics::collect_city_cells(cells, 64, 64, {}, 64, candidates);
+  for(auto const index : candidates) {
+    int const dx{index % 128 - 64};
+    int const dy{index / 128 - 64};
+    CHECK(dx * dx + dy * dy <= 64 * 64);
   }
 }

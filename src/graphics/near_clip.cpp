@@ -7,7 +7,7 @@ namespace darker::graphics {
 namespace {
 
 render_geometry::accumulator wrap(render_geometry::accumulator const value) noexcept {
-  /// Keep the original signed three-byte coordinate arithmetic
+  /// Keep the retained wide fixed-point coordinate arithmetic
   return render_geometry::wrap_projection(static_cast<render_geometry::accumulator_bits>(value));
 }
 
@@ -28,7 +28,7 @@ render_geometry::screen_coordinate divide(render_geometry::accumulator const num
 
 render_geometry::screen_coordinate intersection_coordinate(render_geometry::accumulator const value, render_geometry::screen_coordinate const origin) noexcept {
   /// 2359 saturates distant intersections before adding the screen origin; ordinary intersections shift arithmetically
-  auto const high{value >> render_geometry::whole_bits};
+  auto const high{value >> render_geometry::product_whole_shift};
   if(high < -render_geometry::intersection_high_word_limit || high >= render_geometry::intersection_high_word_limit) return value < 0 ? render_geometry::intersection_min : render_geometry::intersection_max;
   return word((value >> render_geometry::near_projection_shift) + origin);
 }

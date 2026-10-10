@@ -1,4 +1,5 @@
 #include "graphics/city_visibility.h"
+#include <bit>
 #include <stdexcept>
 #include "maths/angle.h"
 
@@ -9,6 +10,20 @@ void collect_city_cells(std::span<game::city_cell const, game::city_map_cell_cou
   /// 26EE traverses circular row spans, selecting the heading half unless pitch requires the full circle
   if(radius < scene_limits::minimum_scan_radius_cells || radius > scene_limits::maximum_scan_radius_cells) throw std::invalid_argument{"City scan radius exceeds its supported bounds"};
   output.clear();
+  if(radius > scene_limits::native_surface_radius_cells) {
+    // Enumerate each actual map cell once. Rendering's extent cull selects the view cone,
+    // avoiding the heading-half scan's premature rejection of large nearby geometry.
+    for(unsigned int y{0}; y < game::city_map_size.row; ++y) {
+      auto const dy{static_cast<int>(std::bit_cast<int8_t>(static_cast<uint8_t>(y - row)))};
+      for(unsigned int x{0}; x < game::city_map_size.column; ++x) {
+        auto const dx{static_cast<int>(std::bit_cast<int8_t>(static_cast<uint8_t>(x - column)))};
+        if(dx * dx + dy * dy > static_cast<int>(radius * radius)) continue;
+        auto const index{static_cast<uint16_t>(game::city_cell_index(x, y))};
+        if(cells[index].type) output.push_back(index);
+      }
+    }
+    return;
+  }
   // angles wrap at 65536 units per turn; discard six bits to use the 1024-step sine-table phase
   // +15 is the native quantisation bias, not round-to-nearest (+32); its original rationale is unknown
   auto const heading_phase{maths::view_angle_phase(angles.heading)};

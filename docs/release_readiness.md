@@ -47,11 +47,11 @@ for Linux x86-64, Windows x86-64 and macOS arm64. Every job runs the available
 asset-independent CTest suite and checks its installed executable's `--help`.
 CI does not download game packs or synthesiser ROMs to run private-asset tests.
 
-A code-changing push to `master` publishes the three tested Release packages after every
-job succeeds. Documentation-only pushes do not run the workflow. Workflow,
-test and helper-script changes can exercise the builds but do not alone publish
-a release. See [binary packaging](binary_packaging.md) for exact filters,
-package contents, prerequisites and reruns.
+Redux builds run only on manual dispatch. Enable the workflow's `release` input
+to publish the three tested Release packages after every job succeeds; leave it
+off for verification alone. Automatic push and pull-request triggers are disabled
+to control costs during development. See [binary packaging](binary_packaging.md)
+for package contents, prerequisites and reruns.
 
 The workflows define the checks; their presence does not itself establish that
 a platform passed. Use the run attached to the release commit as the build and

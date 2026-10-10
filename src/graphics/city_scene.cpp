@@ -30,7 +30,7 @@ std::optional<city_draw_item> classify_model(model_placement const placement, re
   auto const diameter{word(header.extent * 2)};
   auto bound{word(placement.depth.whole - render_geometry::near_depth)};
   bool const near{bound <= diameter};
-  bool const force_flat{!near && static_cast<uint8_t>(static_cast<render_geometry::coordinate_bits>(bound) >> 8) >= header.flat_distance};
+  bool const force_flat{!near && (static_cast<render_geometry::coordinate_bits>(bound) >> 8) >= header.flat_distance};
   if(near && static_cast<render_geometry::coordinate_bits>(bound) >= static_cast<render_geometry::coordinate_bits>(diameter)) {
     if(word(bound + diameter) < 0) return std::nullopt;
     bound = -render_geometry::near_depth;
@@ -58,7 +58,7 @@ std::optional<city_draw_item> place_city_cell(resources::geometry_bank const &ba
   auto placement{place_model(basis, camera, {
     .column{static_cast<uint16_t>((index % game::city_map_size.column) * maths::world_format::units_per_cell + type.column_fraction)},
     .row{static_cast<uint16_t>((index / game::city_map_size.column) * maths::world_format::units_per_cell + type.row_fraction)},
-    .height{word(header.height - (background ? 0 : type.collision_marker * 256))},
+    .height{std::bit_cast<int16_t>(static_cast<uint16_t>(header.height - (background ? 0 : type.collision_marker * 256)))},
   })};
   if(!background) placement.sorting_distance = static_cast<render_geometry::sorting_distance>(placement.sorting_distance + header.extent);
   auto item{classify_model(placement, header)};
@@ -71,11 +71,11 @@ std::optional<city_draw_item> place_city_cell(resources::geometry_bank const &ba
 }
 
 bool within_object_window(city_view const &view, maths::world_position const &position) noexcept {
-  /// 26EE patches 2F35's byte window before word-sized projection can alias distant objects into nearby space
-  auto const width{view.radius * 2 - 1};
-  auto const column{static_cast<uint8_t>((position.column >> maths::world_format::cell_fraction_bits) - (view.column >> maths::world_format::cell_fraction_bits) + view.radius - 1)};
-  auto const row{static_cast<uint8_t>((position.row >> maths::world_format::cell_fraction_bits) - (view.row >> maths::world_format::cell_fraction_bits) + view.radius - 1)};
-  return column < width && row < width;
+  /// Object admission follows the same 256-cell world period as geometry placement
+  auto const column{static_cast<int>(std::bit_cast<int8_t>(static_cast<uint8_t>((position.column >> maths::world_format::cell_fraction_bits) - (view.column >> maths::world_format::cell_fraction_bits))))};
+  auto const row{static_cast<int>(std::bit_cast<int8_t>(static_cast<uint8_t>((position.row >> maths::world_format::cell_fraction_bits) - (view.row >> maths::world_format::cell_fraction_bits))))};
+  if(view.radius <= scene_limits::native_surface_radius_cells) return column >= 1 - static_cast<int>(view.radius) && column < static_cast<int>(view.radius) && row >= 1 - static_cast<int>(view.radius) && row < static_cast<int>(view.radius);
+  return column * column + row * row <= static_cast<int>(view.radius * view.radius);
 }
 
 std::optional<city_draw_item> place_scene_object(resources::geometry_bank const &bank, scene_object const &object,
@@ -87,7 +87,7 @@ std::optional<city_draw_item> place_scene_object(resources::geometry_bank const 
   auto placement{place_model(basis, camera, {
     .column{object.pose.position.column},
     .row{object.pose.position.row},
-    .height{word(-object.pose.position.height)}
+    .height{std::bit_cast<int16_t>(static_cast<uint16_t>(-object.pose.position.height))}
   })};
   auto const header{bank.header_at(object.model_offset)};
   // BC94 patches 2EDC from ADD to SUB for underground moving objects
@@ -99,7 +99,7 @@ std::optional<city_draw_item> place_scene_object(resources::geometry_bank const 
     item->object_light = object.light;
     item->draw_record = object.native_id ? static_cast<uint16_t>(object.native_id + 14) : 0;
     item->distant_point = item->force_flat
-      && static_cast<uint8_t>(static_cast<render_geometry::coordinate_bits>(placement.depth.whole - render_geometry::near_depth) >> 8) >= header.point_distance;
+      && (static_cast<render_geometry::coordinate_bits>(placement.depth.whole - render_geometry::near_depth) >> 8) >= header.point_distance;
   }
   return item;
 }
@@ -167,7 +167,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   auto const basis{make_camera_basis(view.angles)};
   // position words hold 1/256-cell units; the extra fraction byte subdivides those units by another 256
   // projection needs 1/1024-cell units: multiply the word by four and retain the fraction's top two bits
-  // narrowing deliberately wraps at 16 bits, matching the native camera-origin subtractors
+  // retain the full scaled world position; placement chooses the nearest wrapping world image
   camera_position const camera{
     .column{static_cast<render_geometry::coordinate_bits>(view.column * render_geometry::world_to_camera_scale + (view.column_fraction >> render_geometry::camera_fraction_shift))},
     .row{static_cast<render_geometry::coordinate_bits>(view.row * render_geometry::world_to_camera_scale + (view.row_fraction >> render_geometry::camera_fraction_shift))},
@@ -201,7 +201,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
         auto const placement{place_model(basis, camera, {
           .column{emitter.position.column},
           .row{emitter.position.row},
-          .height{word(-emitter.position.height)}
+          .height{std::bit_cast<int16_t>(static_cast<uint16_t>(-emitter.position.height))}
         })};
         items.push_back({
           .placement{placement},
