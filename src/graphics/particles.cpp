@@ -3,13 +3,14 @@
 #include <bit>
 #include <stdexcept>
 #include "graphics/particle_tables.h"
+#include "graphics/near_clip.h"
 #include "graphics/screen_layout.h"
 #include "maths/angle.h"
 
 namespace darker::graphics {
 
 std::vector<particle_point> project_emitter(game::particle_emitter const &emitter, model_placement const centre,
-  camera_basis const &basis, screen_vertex const &origin) {
+  camera_basis const &basis, screen_vertex const &origin, double const focal_length) {
   /// 689F projects each ring sample and walks both arcs from the farthest accepted point towards the nearest
   vec3<render_geometry::accumulator> const offsets{
     render_geometry::wrap_coordinate(centre.horizontal.whole) * 256 + centre.horizontal.fraction,
@@ -36,9 +37,12 @@ std::vector<particle_point> project_emitter(game::particle_emitter const &emitte
     for(unsigned int i{0}; i < 3; ++i) v[i] = retain(offsets[i] + ((coefficients[i][0] * sine) >> 8) + ((coefficients[i][1] * cosine) >> 8));
     auto const depth{v[2] >> 8};
     if(depth >= 32) {
+      auto const point{focal_length == render_geometry::focal_length
+        ? screen_vertex{std::bit_cast<int16_t>(static_cast<uint16_t>(v[0] / depth + origin.x)), std::bit_cast<int16_t>(static_cast<uint16_t>(v[1] / depth + origin.y))}
+        : project_vertex({v[0], v[1], v[2]}, origin, focal_length)};
       points.push_back({
-        .x{std::bit_cast<int16_t>(static_cast<uint16_t>(v[0] / depth + origin.x))},
-        .y{std::bit_cast<int16_t>(static_cast<uint16_t>(v[1] / depth + origin.y))},
+        .x{point.x},
+        .y{point.y},
         .depth{static_cast<render_geometry::coordinate>(depth)}
       });
       if(depth > points[far].depth) far = points.size() - 1;
@@ -72,7 +76,7 @@ std::vector<particle_point> project_emitter(game::particle_emitter const &emitte
 }
 
 void draw_particle(framework::render::indexed_surface target,
-  framework::render::const_indexed_surface sheet, particle_point const point, uint8_t const phase, raster_viewport const viewport) {
+  framework::render::const_indexed_surface sheet, particle_point const point, uint8_t const phase, raster_viewport const viewport, double const focal_length) {
   if(!viewport.fits(target.width, target.height)) throw std::invalid_argument{"Particle viewport exceeds the framebuffer"};
   /// 6AA6 selects discrete source artwork and masked rows, preserving even-X destination alignment
   unsigned int constexpr animation_phase_count{22};
@@ -99,11 +103,16 @@ void draw_particle(framework::render::indexed_surface target,
   int const source_y{at(record + 2 + alignment)};
   // radius follows both parity records; subsequent byte pairs give each masked row's skip and width
   for(int row{0}; row < radius * 2; ++row) {
-    if(y + row < 0 || y + row >= viewport.bottom) continue;
+    double const scale{focal_length / render_geometry::focal_length};
+    int const top{std::max(0, point.y + static_cast<int>((y + row - point.y) * scale))};
+    int const bottom{std::min(viewport.bottom, point.y + static_cast<int>((y + row + 1 - point.y) * scale))};
     int const skip{at(table + 11 + row * 2)}, width{at(table + 12 + row * 2)};
     for(int column{skip}; column < skip + width; ++column) {
-      if(destination_x + column < 0 || destination_x + column > viewport.right) continue;
-      target.pixels[(y + row) * target.stride + destination_x + column] = sheet.pixels[(source_y + row) * sheet.stride + source_x + column];
+      int const left{std::max(0, point.x + static_cast<int>((destination_x + column - point.x) * scale))};
+      int const right{std::min(viewport.right + 1, point.x + static_cast<int>((destination_x + column + 1 - point.x) * scale))};
+      if(left >= right) continue;
+      auto const colour{sheet.pixels[(source_y + row) * sheet.stride + source_x + column]};
+      for(int output_y{top}; output_y < bottom; ++output_y) std::fill(target.row(output_y).begin() + left, target.row(output_y).begin() + right, colour);
     }
   }
 }

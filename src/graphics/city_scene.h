@@ -34,7 +34,7 @@ struct city_draw_item {
 };
 
 std::optional<city_draw_item> place_city_cell(resources::geometry_bank const &bank, game::city_cell cell, uint16_t index,
-  uint8_t damage_mask, camera_basis const &basis, camera_position camera, std::optional<world_image> image = std::nullopt);
+  uint8_t damage_mask, camera_basis const &basis, camera_position camera, std::optional<world_image> image = std::nullopt, double cull_scale = 1);
 void order_city_models(std::vector<city_draw_item> &items);
 
 struct scene_object {
@@ -45,8 +45,8 @@ struct scene_object {
 };
 
 std::optional<city_draw_item> place_scene_object(resources::geometry_bank const &bank, scene_object const &object,
-  camera_basis const &basis, camera_position camera, bool underground = false, std::optional<world_image> image = std::nullopt);
-std::optional<screen_vertex> project_distant_object(model_placement placement, screen_vertex const &origin, raster_viewport viewport, uint8_t residue = 0);
+  camera_basis const &basis, camera_position camera, bool underground = false, std::optional<world_image> image = std::nullopt, double cull_scale = 1);
+std::optional<screen_vertex> project_distant_object(model_placement placement, screen_vertex const &origin, raster_viewport viewport, uint8_t residue = 0, double focal_length = render_geometry::focal_length);
 
 struct city_view {
   maths::world_format::position_component column{0};                                                          // original 1/256-cell position words
@@ -60,6 +60,7 @@ struct city_view {
   raster_viewport viewport{
     .bottom{cockpit_view_layout::caero_height},
   };
+  double focal_length{render_geometry::focal_length};
   bool beacon_lighting{true};
   bool gouraud{true};
   bool underground{false};

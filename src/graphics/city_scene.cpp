@@ -26,7 +26,7 @@ int magnitude(render_geometry::coordinate_bits const value) noexcept {
   return value & (render_geometry::coordinate_bits{1} << (render_geometry::whole_bits - 1)) ? static_cast<render_geometry::coordinate_bits>(~value) : value;
 }
 
-std::optional<city_draw_item> classify_model(model_placement const placement, resources::model_header const header) {
+std::optional<city_draw_item> classify_model(model_placement const placement, resources::model_header const header, double const cull_scale) {
   /// Apply the shared extent cull and direct/near model-path selection
   auto const diameter{word(header.extent * 2)};
   auto bound{word(placement.depth.whole - render_geometry::near_depth)};
@@ -37,7 +37,7 @@ std::optional<city_draw_item> classify_model(model_placement const placement, re
     bound = -render_geometry::near_depth;
   }
   bound = word(bound + word(diameter + render_geometry::near_depth));
-  if(magnitude(placement.horizontal.whole) >= bound || magnitude(placement.vertical.whole) >= bound) return std::nullopt;
+  if(magnitude(placement.horizontal.whole) >= bound * cull_scale || magnitude(placement.vertical.whole) >= bound * cull_scale) return std::nullopt;
   return city_draw_item{
     .placement{placement},
     .path{near ? model_path::near_clipped : model_path::direct},
@@ -48,7 +48,7 @@ std::optional<city_draw_item> classify_model(model_placement const placement, re
 } // anonymous namespace
 
 std::optional<city_draw_item> place_city_cell(resources::geometry_bank const &bank, game::city_cell const cell, uint16_t const index,
-  uint8_t const damage_mask, camera_basis const &basis, camera_position const camera, std::optional<world_image> const image) {
+  uint8_t const damage_mask, camera_basis const &basis, camera_position const camera, std::optional<world_image> const image, double const cull_scale) {
   /// 2A1A selects the linked model, places its origin, chooses its drawing path and applies the extent cull
   if(!cell.type) return std::nullopt;
   if(index >= game::city_map_cell_count) throw std::invalid_argument{"City model position exceeds the map"};
@@ -62,7 +62,7 @@ std::optional<city_draw_item> place_city_cell(resources::geometry_bank const &ba
     .height{std::bit_cast<int16_t>(static_cast<uint16_t>(header.height - (background ? 0 : type.collision_marker * 256)))},
   }, image)};
   if(!background) placement.sorting_distance = static_cast<render_geometry::sorting_distance>(placement.sorting_distance + header.extent);
-  auto item{classify_model(placement, header)};
+  auto item{classify_model(placement, header, cull_scale)};
   if(item) {
     item->cell = index;
     item->model_offset = offset;
@@ -80,7 +80,7 @@ bool within_object_window(city_view const &view, maths::world_position const &po
 }
 
 std::optional<city_draw_item> place_scene_object(resources::geometry_bank const &bank, scene_object const &object,
-  camera_basis const &basis, camera_position camera, bool const underground, std::optional<world_image> const image) {
+  camera_basis const &basis, camera_position camera, bool const underground, std::optional<world_image> const image, double const cull_scale) {
   /// 2F35 preserves the object's fractional origin before the same model extent cull as city geometry
   // retain two sub-word bits in projection units; subtracting from the camera adds the object's fractional displacement
   camera.column = static_cast<render_geometry::coordinate_bits>(camera.column - (object.pose.fractions.column >> render_geometry::camera_fraction_shift));
@@ -93,7 +93,7 @@ std::optional<city_draw_item> place_scene_object(resources::geometry_bank const 
   auto const header{bank.header_at(object.model_offset)};
   // BC94 patches 2EDC from ADD to SUB for underground moving objects
   placement.sorting_distance = static_cast<render_geometry::sorting_distance>(placement.sorting_distance + (underground ? -header.extent : header.extent));
-  auto item{classify_model(placement, header)};
+  auto item{classify_model(placement, header, cull_scale)};
   if(item) {
     item->model_offset = object.model_offset;
     item->orientation = orient_model(basis, object.pose.angles);
@@ -105,19 +105,19 @@ std::optional<city_draw_item> place_scene_object(resources::geometry_bank const 
   return item;
 }
 
-std::optional<screen_vertex> project_distant_object(model_placement const placement, screen_vertex const &origin, raster_viewport const viewport, uint8_t const residue) {
+std::optional<screen_vertex> project_distant_object(model_placement const placement, screen_vertex const &origin, raster_viewport const viewport, uint8_t const residue, double const focal_length) {
   /// 2D32 consumes traversal AL for the Y divide, then projected Y's low byte for the X divide
   auto point{project_vertex({
     .horizontal{0},
     .vertical{word(placement.vertical.whole) * render_geometry::fraction_scale + residue},
     .depth{word(placement.depth.whole) * render_geometry::fraction_scale}
-  }, origin)};
+  }, origin, focal_length)};
   if(point.y < 0 || point.y >= viewport.bottom) return std::nullopt;
   point.x = project_vertex({
     .horizontal{word(placement.horizontal.whole) * render_geometry::fraction_scale + static_cast<uint8_t>(point.y)},
     .vertical{0},
     .depth{word(placement.depth.whole) * render_geometry::fraction_scale}
-  }, origin).x;
+  }, origin, focal_length).x;
   if(!viewport.contains(point.x, point.y)) return std::nullopt;
   return point;
 }
@@ -166,6 +166,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   /// Assemble the selected native visibility path before sorting world geometry, actors and particle effects
   if(!view.viewport.fits(target.width, target.height)) throw std::invalid_argument{"City viewport exceeds the framebuffer"};
   auto const basis{make_camera_basis(view.angles)};
+  double const cull_scale{std::max({1.0, (view.viewport.right + 1) / (2 * view.focal_length), view.viewport.bottom / (2 * view.focal_length)})};
   // position words hold 1/256-cell units; the extra fraction byte subdivides those units by another 256
   // projection needs 1/1024-cell units: multiply the word by four and retain the fraction's top two bits
   // Retain the full scaled world position for placement of each visible world image.
@@ -176,7 +177,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   };
   items.clear();
   auto const place{[&](uint16_t const index){
-    if(auto item{place_city_cell(bank, cells[index], index, damage_mask, basis, camera)}) {
+    if(auto item{place_city_cell(bank, cells[index], index, damage_mask, basis, camera, std::nullopt, cull_scale)}) {
       items.push_back(*item);
       return true;
     }
@@ -189,7 +190,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
     visit_tunnel_cells(cells, camera_column, camera_row, tunnel_visibility, place);
   } else {
     tunnel_visibility.fill(0);
-    collect_city_cells(cells, camera_column, camera_row, view.angles, view.radius, candidates);
+    collect_city_cells(cells, camera_column, camera_row, view.angles, view.radius, candidates, cull_scale > 1);
     for(auto const index : candidates) {
       if(view.radius <= scene_limits::native_surface_radius_cells) {
         place(index);
@@ -198,7 +199,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
       visit_world_images(camera_column, camera_row,
         index % game::city_map_size.column, index / game::city_map_size.column, view.radius,
         [&](world_image const image) {
-          if(auto item{place_city_cell(bank, cells[index], index, damage_mask, basis, camera, image)}) items.push_back(*item);
+          if(auto item{place_city_cell(bank, cells[index], index, damage_mask, basis, camera, image, cull_scale)}) items.push_back(*item);
         });
     }
   }
@@ -234,7 +235,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   for(auto const &object : objects) {
     if(!within_object_window(view, object.pose.position)) continue;
     auto const place_object{[&](std::optional<world_image> const image) {
-      if(auto item{place_scene_object(bank, object, basis, camera, view.underground, image)}) items.push_back(*item);
+      if(auto item{place_scene_object(bank, object, basis, camera, view.underground, image, cull_scale)}) items.push_back(*item);
     }};
     if(view.radius <= scene_limits::native_surface_radius_cells || (view.underground && !view.unrestricted_visibility)) place_object(std::nullopt);
     else visit_world_images(camera_column, camera_row,
@@ -244,13 +245,13 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   order_city_models(items);
   for(auto const &item : items) {
     if(item.emitter) {
-      for(auto const point : project_emitter(*item.emitter, item.placement, basis, view.origin)) {
-        draw_particle(target, particles->sheet, point, item.phase, view.viewport);
+      for(auto const point : project_emitter(*item.emitter, item.placement, basis, view.origin, view.focal_length)) {
+        draw_particle(target, particles->sheet, point, item.phase, view.viewport, view.focal_length);
       }
       continue;
     }
     if(item.distant_point) {
-      if(auto const point{project_distant_object(item.placement, view.origin, view.viewport, item.projection_residue)}) {
+      if(auto const point{project_distant_object(item.placement, view.origin, view.viewport, item.projection_residue, view.focal_length)}) {
         auto const colour{bank.header_at(item.model_offset).point_colour};
         // 2D71 reuses the last mesh's shade table; it does not calculate distance or fade again
         target.pixels[static_cast<size_t>(point->y) * target.stride + point->x] = retained_colours.point_colour(colour);
@@ -263,6 +264,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
       .vertical{item.placement.vertical},
       .depth{item.placement.depth},
       .origin{screen_vertex{view.origin}},
+      .focal_length{view.focal_length},
     };
     uint8_t light{item.orientation ? item.object_light : uint8_t{255}};
     if(view.beacon_lighting && !item.orientation) {

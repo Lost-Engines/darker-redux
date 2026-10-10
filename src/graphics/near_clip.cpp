@@ -1,5 +1,6 @@
 #include "graphics/near_clip.h"
 #include <bit>
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 
@@ -35,13 +36,19 @@ render_geometry::screen_coordinate intersection_coordinate(render_geometry::accu
 
 } // anonymous namespace
 
-screen_vertex project_vertex(camera_vertex const vertex, screen_vertex const &origin) {
+screen_vertex project_vertex(camera_vertex const vertex, screen_vertex const &origin, double const focal_length) {
   /// Project a retained camera-space vertex using its whole signed depth
   auto const depth{render_geometry::wrap_coordinate(vertex.depth >> render_geometry::fraction_bits)};
-  return {divide(vertex.horizontal, depth, origin.x), divide(vertex.vertical, depth, origin.y)};
+  if(focal_length == render_geometry::focal_length) return {divide(vertex.horizontal, depth, origin.x), divide(vertex.vertical, depth, origin.y)};
+  if(depth == 0) throw std::domain_error{"Model projection has zero depth"};
+  auto const project{[&](render_geometry::accumulator value, int centre) {
+    double const offset{static_cast<double>(value) * focal_length / (render_geometry::fraction_scale * static_cast<double>(depth))};
+    return static_cast<render_geometry::screen_coordinate>(std::clamp(offset + centre, static_cast<double>(render_geometry::intersection_min), static_cast<double>(render_geometry::intersection_max)));
+  }};
+  return {project(vertex.horizontal, origin.x), project(vertex.vertical, origin.y)};
 }
 
-screen_vertex near_intersection(camera_vertex const inside, camera_vertex const outside, screen_vertex const &origin) {
+screen_vertex near_intersection(camera_vertex const inside, camera_vertex const outside, screen_vertex const &origin, double const focal_length) {
   /// 22B4 searches the depth-32 crossing with ordered arithmetic halvings, retaining the native asymmetric rounding
   auto horizontal{inside.horizontal};
   auto vertical{inside.vertical};
@@ -65,10 +72,11 @@ screen_vertex near_intersection(camera_vertex const inside, camera_vertex const 
       distance = wrap(distance + depth_step);
     }
   }
-  return {intersection_coordinate(horizontal, origin.x), intersection_coordinate(vertical, origin.y)};
+  if(focal_length == render_geometry::focal_length) return {intersection_coordinate(horizontal, origin.x), intersection_coordinate(vertical, origin.y)};
+  return project_vertex({horizontal, vertical, render_geometry::near_depth_fixed}, origin, focal_length);
 }
 
-size_t clip_near_polygon(std::span<camera_vertex const> const vertices, screen_vertex const &origin, std::span<screen_vertex> const output) {
+size_t clip_near_polygon(std::span<camera_vertex const> const vertices, screen_vertex const &origin, std::span<screen_vertex> const output, double const focal_length) {
   /// 20EF emits each visible vertex then its outgoing crossing, retaining the original cyclic order
   if(vertices.empty()) return 0;
   size_t count{0};
@@ -81,14 +89,14 @@ size_t clip_near_polygon(std::span<camera_vertex const> const vertices, screen_v
     auto const next{vertices[(i + 1) % vertices.size()]};
     bool const current_inside{current.depth >= render_geometry::near_depth_fixed};
     bool const next_inside{next.depth >= render_geometry::near_depth_fixed};
-    if(current_inside) emit(project_vertex(current, origin));
-    if(current_inside != next_inside) emit(current_inside ? near_intersection(current, next, origin) : near_intersection(next, current, origin));
+    if(current_inside) emit(project_vertex(current, origin, focal_length));
+    if(current_inside != next_inside) emit(current_inside ? near_intersection(current, next, origin, focal_length) : near_intersection(next, current, origin, focal_length));
   }
   return count;
 }
 
 size_t clip_near_shaded_polygon(std::span<camera_vertex const> const vertices, std::span<uint16_t const> const shades,
-  screen_vertex const &origin, std::span<shaded_vertex> const output) {
+  screen_vertex const &origin, std::span<shaded_vertex> const output, double const focal_length) {
   /// 2195 retains geometric halving but interpolates colour using a separate ratio of whole depths
   if(vertices.size() != shades.size()) throw std::invalid_argument{"Near polygon colour count differs from its vertices"};
   size_t count{0};
@@ -102,7 +110,7 @@ size_t clip_near_shaded_polygon(std::span<camera_vertex const> const vertices, s
   for(size_t i{0}; i < vertices.size(); ++i) {
     auto const j{(i + 1) % vertices.size()};
     bool const current_inside{vertices[i].depth >= render_geometry::near_depth_fixed}, next_inside{vertices[j].depth >= render_geometry::near_depth_fixed};
-    if(current_inside) emit(project_vertex(vertices[i], origin), shades[i]);
+    if(current_inside) emit(project_vertex(vertices[i], origin, focal_length), shades[i]);
     if(current_inside == next_inside) continue;
     auto const inside{current_inside ? i : j}, outside{current_inside ? j : i};
     auto const depth{vertices[inside].depth >> render_geometry::fraction_bits};
@@ -112,7 +120,7 @@ size_t clip_near_shaded_polygon(std::span<camera_vertex const> const vertices, s
     auto const fraction{static_cast<int16_t>(numerator / divisor)};
     int const delta{std::bit_cast<int16_t>(static_cast<uint16_t>((shades[outside] - shades[inside]) * 2))};
     auto const shade{static_cast<uint16_t>(shades[inside] + ((delta * fraction) >> 16))};
-    emit(near_intersection(vertices[inside], vertices[outside], origin), shade);
+    emit(near_intersection(vertices[inside], vertices[outside], origin, focal_length), shade);
   }
   return count;
 }

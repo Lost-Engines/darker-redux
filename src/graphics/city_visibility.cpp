@@ -6,11 +6,11 @@
 namespace darker::graphics {
 
 void collect_city_cells(std::span<game::city_cell const, game::city_map_cell_count> const cells, city_scan_rules::coordinate const column, city_scan_rules::coordinate const row,
-  camera_angles const angles, unsigned int const radius, std::vector<uint16_t> &output) {
+  camera_angles const angles, unsigned int const radius, std::vector<uint16_t> &output, bool const full_circle) {
   /// 26EE traverses circular row spans, selecting the heading half unless pitch requires the full circle
   if(radius < scene_limits::minimum_scan_radius_cells || radius > scene_limits::maximum_scan_radius_cells) throw std::invalid_argument{"City scan radius exceeds its supported bounds"};
   output.clear();
-  if(radius > scene_limits::native_surface_radius_cells) {
+  if(full_circle || radius > scene_limits::native_surface_radius_cells) {
     // Enumerate each actual map cell once. Rendering's extent cull selects the view cone,
     // avoiding the heading-half scan's premature rejection of large nearby geometry.
     for(unsigned int y{0}; y < game::city_map_size.row; ++y) {

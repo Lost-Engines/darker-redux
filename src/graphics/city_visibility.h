@@ -18,6 +18,6 @@ struct city_scan_rules {
 };
 
 void collect_city_cells(std::span<game::city_cell const, game::city_map_cell_count> cells, city_scan_rules::coordinate column, city_scan_rules::coordinate row,
-  camera_angles angles, unsigned int radius, std::vector<uint16_t> &output);
+  camera_angles angles, unsigned int radius, std::vector<uint16_t> &output, bool full_circle = false);
 
 } // namespace darker::graphics

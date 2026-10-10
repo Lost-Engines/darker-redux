@@ -15,8 +15,8 @@ struct particle_point {
 };
 
 std::vector<particle_point> project_emitter(game::particle_emitter const &emitter, model_placement centre,
-  camera_basis const &basis, screen_vertex const &origin);
+  camera_basis const &basis, screen_vertex const &origin, double focal_length = render_geometry::focal_length);
 void draw_particle(framework::render::indexed_surface target,
-  framework::render::const_indexed_surface sheet, particle_point point, uint8_t phase, raster_viewport viewport);
+  framework::render::const_indexed_surface sheet, particle_point point, uint8_t phase, raster_viewport viewport, double focal_length = render_geometry::focal_length);
 
 } // namespace darker::graphics

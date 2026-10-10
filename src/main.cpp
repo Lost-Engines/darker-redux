@@ -1,3 +1,5 @@
+#include <charconv>
+#include <numbers>
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -81,6 +83,7 @@ int startup_failure(std::string_view const message) {
 enum class session_exit { none, menu, death, aborted, completed, previous };
 
 struct flight_host {
+  double field_of_view{2 * std::atan(120.0 / 256.0) * 180 / std::numbers::pi};
   darker::game::player_flight player{};
   darker::audio::flight_sounds sounds;
   darker::audio::world_sounds world_audio;
@@ -171,6 +174,8 @@ auto main(int const argc, char const *const argv[])->int {
     ("level", boost::program_options::value<int>(), "start at campaign level 1..116 with accumulated setup changes, without assumed combat damage; do not write saves")
     ("skip-intro", "start at game selection, skipping the startup presentation and title")
     ("scale", boost::program_options::value<int>(), "initial window scale: positive integer multiple of 320 x 240 (default: fit available screen)")
+    ("resolution", boost::program_options::value<std::string>()->default_value("320x240"), "internal world resolution WIDTHxHEIGHT (64..8192 per axis)")
+    ("fov", boost::program_options::value<double>(), "vertical field of view in degrees, 15..140 (default: original projection)")
     ("draw-distance", boost::program_options::value<unsigned int>()->default_value(darker::graphics::scene_limits::surface_radius_cells), "surface draw radius in map cells, 2..182 (182 includes the whole city)")
     ("fog-start", boost::program_options::value<double>()->default_value(0), "surface fog start in map cells, 0..draw-distance; fog reaches full strength at the draw distance")
     ("music", boost::program_options::value<std::string>()->default_value("soundblaster_awe32"), "music arrangement: none, soundblaster_fm, midi, roland-lapc, roland-sc55, roland-scc1a, gravis or soundblaster_awe32")
@@ -240,8 +245,17 @@ auto main(int const argc, char const *const argv[])->int {
   if((music_name == "roland-sc55" || music_name == "roland-scc1a") && arguments.contains("soundfont")) return startup_failure("Sound Canvas emulation uses ROMs, not --soundfont");
   auto const opl_name{arguments["opl"].as<std::string>()};
   if(opl_name != "nuked" && opl_name != "dosbox") return startup_failure("--opl must be nuked or dosbox");
-  int constexpr display_width{framework::render::cockpit_framebuffer::width};
-  int constexpr display_height{framework::render::cockpit_framebuffer::height};
+  auto const resolution{arguments["resolution"].as<std::string>()};
+  auto const separator{resolution.find('x')};
+  int display_width{}, display_height{};
+  auto const parse_dimension{[](std::string_view text, int &value) {
+    auto const result{std::from_chars(text.data(), text.data() + text.size(), value)};
+    return result.ec == std::errc{} && result.ptr == text.data() + text.size() && value >= 64 && value <= 8192;
+  }};
+  if(separator == std::string::npos || !parse_dimension(std::string_view{resolution}.substr(0, separator), display_width)
+    || !parse_dimension(std::string_view{resolution}.substr(separator + 1), display_height)) return startup_failure("--resolution must be WIDTHxHEIGHT with each dimension between 64 and 8192");
+  double const initial_fov{arguments.contains("fov") ? arguments["fov"].as<double>() : 2 * std::atan(120.0 / 256.0) * 180 / std::numbers::pi};
+  if(!std::isfinite(initial_fov) || initial_fov < 15 || initial_fov > 140) return startup_failure("--fov must be a finite angle between 15 and 140 degrees");
   if(scale < 1 || scale > std::numeric_limits<int>::max() / std::max(display_width, display_height)) {
     return startup_failure("--scale must be a positive integer whose window dimensions fit in an int");
   }
@@ -422,10 +436,16 @@ auto main(int const argc, char const *const argv[])->int {
     .end_cells{static_cast<double>(draw_distance)},
   }};
   darker::graphics::distance_shading const tunnel_lighting;
-  framework::render::indexed_cockpit_framebuffer display{}, world{};
+  host.field_of_view = initial_fov;
+  framework::render::indexed_cockpit_framebuffer display{};
+  std::vector<uint8_t> world_pixels(static_cast<size_t>(display_width) * display_height);
+  framework::render::indexed_surface const world{world_pixels, display_width, display_height, static_cast<size_t>(display_width)};
+  std::vector<framework::render::rgba_pixel> world_output(world_pixels.size());
+  bool presenting_front{false};
   framework::render::cockpit_framebuffer output;
   auto const render{[&](uint16_t const clock, bool const enlarged, uint16_t const frame_step = 0){
-    if(front && front->active()) {
+    presenting_front = front && front->active();
+    if(presenting_front) {
       front->draw(output);
       return size_t{0};
     }
@@ -463,6 +483,10 @@ auto main(int const argc, char const *const argv[])->int {
     bool const cockpit_visible{!watched && host.camera.visible_mode() == darker::game::camera_mode::cockpit};
     bool const external{watched || (host.camera.visible_mode() != darker::game::camera_mode::cockpit && host.camera.visible_mode() != darker::game::camera_mode::fullscreen)};
     int const height{cockpit_visible ? (caero ? darker::graphics::cockpit_view_layout::caero_height : darker::graphics::cockpit_view_layout::skimma_height) : framework::render::display_layout::height};
+    int const world_height{height * display_height / framework::render::display_layout::height};
+    double const native_fov{2 * std::atan(120.0 / 256.0) * 180 / std::numbers::pi};
+    double const focal_length{host.field_of_view == native_fov ? 256.0 * display_height / 240
+      : display_height / (2 * std::tan(host.field_of_view * std::numbers::pi / 360))};
     auto const &pose{host.player.pose()};
     auto const subject{!watched ? darker::game::camera_subject::player : (watched->flags & 8) ? darker::game::camera_subject::missile_effect : darker::game::camera_subject::missile};
     auto const &camera_pose{watching_actor && actor != combat->actors.end() ? actor->pose : watched ? watched->placement : pose};
@@ -479,10 +503,12 @@ auto main(int const argc, char const *const argv[])->int {
       .row_fraction{camera.fractions.row},
       .altitude{std::bit_cast<int16_t>(camera.position.height)},
       .angles{camera.angles},
-      .origin{framework::render::display_layout::centre_x, static_cast<darker::graphics::render_geometry::screen_coordinate>(height / 2)},
+      .origin{static_cast<darker::graphics::render_geometry::screen_coordinate>(display_width / 2), static_cast<darker::graphics::render_geometry::screen_coordinate>(world_height / 2)},
       .viewport{
-        .bottom{height},
+        .right{display_width - 1},
+        .bottom{world_height},
       },
+      .focal_length{focal_length},
     };
     combat->targeting_basis = darker::maths::make_view_basis(view.angles);
     view.underground = host.player.tunnel.has_value();
@@ -494,7 +520,8 @@ auto main(int const argc, char const *const argv[])->int {
     animation.parameters[0] = std::bit_cast<int16_t>(host.hangar.extension);
     if(caero && !host.player.tunnel) std::ranges::copy(combat->spawning.platforms, animation.parameters.begin() + 1);
     darker::graphics::update_fountain_parameters(animation, clock);
-    darker::graphics::draw_sky_ground(world, view.angles, view.origin, height);
+    std::ranges::fill(world_pixels, uint8_t{0});
+    darker::graphics::draw_sky_ground(world, view.angles, view.origin, world_height, focal_length);
     objects.clear();
     contacts.clear();
     auto const coverage{darker::game::make_radar_coverage(cells, {pose.position.column, pose.position.row}, view.underground)};
@@ -631,7 +658,16 @@ auto main(int const argc, char const *const argv[])->int {
           });
       }
     }
-    framework::render::expand_palette(display, game_palette.colours, output);
+    // Keep the cockpit/HUD's original 320x240 drawing path unchanged for this
+    // first resolution pass. Its native-size result occupies the top-left corner.
+    int const world_top{cockpit_visible && caero ? darker::graphics::cockpit_view_layout::caero_top : 0};
+    for(int y{0}; y < display_height; ++y) {
+      for(int x{0}; x < display_width; ++x) {
+        uint8_t const colour{x < 320 && y < 240 ? display.pixels[y * 320 + x]
+          : y >= world_top ? world.row(y - world_top)[x] : uint8_t{0}};
+        world_output[static_cast<size_t>(y) * display_width + x] = game_palette.colours[colour];
+      }
+    }
     return count;
   }};
   render(0, false);
@@ -640,8 +676,9 @@ auto main(int const argc, char const *const argv[])->int {
   if(arguments.contains("screenshot")) {
     std::ofstream file{arguments["screenshot"].as<std::string>(), std::ios::binary};
     file.exceptions(std::ios::failbit | std::ios::badbit);
-    file << "P6\n" << framework::render::display_layout::width << ' ' << framework::render::display_layout::height << "\n255\n";
-    for(auto const &pixel : output.pixels) {
+    file << "P6\n" << (presenting_front ? 320 : display_width) << ' ' << (presenting_front ? 240 : display_height) << "\n255\n";
+    auto const pixels{presenting_front ? std::span<framework::render::rgba_pixel const>{output.pixels} : std::span<framework::render::rgba_pixel const>{world_output}};
+    for(auto const &pixel : pixels) {
       file.put(static_cast<char>(pixel.r));
       file.put(static_cast<char>(pixel.g));
       file.put(static_cast<char>(pixel.b));
@@ -784,6 +821,10 @@ auto main(int const argc, char const *const argv[])->int {
         host.player.controls.pitch.previous_mouse = 0;
       }
       return;
+    }
+    if(action == GLFW_PRESS && (key == GLFW_KEY_LEFT_BRACKET || key == GLFW_KEY_RIGHT_BRACKET)) {
+      host.field_of_view = std::clamp(host.field_of_view + (key == GLFW_KEY_RIGHT_BRACKET ? 5.0 : -5.0), 15.0, 140.0);
+      std::cout << "Vertical FOV: " << host.field_of_view << " degrees\n";
     }
     if(key == GLFW_KEY_F9 && action == GLFW_PRESS) host.gouraud = !host.gouraud;
     if(key == GLFW_KEY_ESCAPE) {
@@ -1083,7 +1124,8 @@ auto main(int const argc, char const *const argv[])->int {
         if(audio_device) audio.publish({});
         pause_reported = true;
       }
-      presenter.present(output);
+      if(presenting_front) presenter.present(output);
+      else presenter.present(world_output, display_width, display_height);
       continue;
     }
     pause_reported = false;
@@ -1408,7 +1450,8 @@ auto main(int const argc, char const *const argv[])->int {
       : host.player.lifecycle.crashing                                       ? (caero ? " - crashed" : " - crashed: restarting") : " - flight"};
     std::string const title{"Darker - " + std::string{darker::resources::profile(world_mode).name} + " - " + std::to_string(count) + " models - " + (host.gouraud ? "Gouraud" : "flat") + status};
     glfwSetWindowTitle(window.get(), title.c_str());
-    presenter.present(output);
+    if(presenting_front) presenter.present(output);
+    else presenter.present(world_output, display_width, display_height);
   }
   return EXIT_SUCCESS;
 }

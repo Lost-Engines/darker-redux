@@ -22,6 +22,7 @@ struct projection_parameters {
   projection_term vertical{};
   projection_term depth{};
   screen_vertex origin{};
+  double focal_length{render_geometry::focal_length};
 };
 
 struct projected_vertex {

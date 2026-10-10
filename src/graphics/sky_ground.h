@@ -5,6 +5,6 @@
 
 namespace darker::graphics {
 
-void draw_sky_ground(framework::render::indexed_surface target, camera_angles angles, screen_vertex const &origin, int bottom);
+void draw_sky_ground(framework::render::indexed_surface target, camera_angles angles, screen_vertex const &origin, int bottom, double focal_length = render_geometry::focal_length);
 
 } // namespace darker::graphics

@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <algorithm>
+#include <vector>
 #include "graphics/sky_ground.h"
 #include "reference/sky_ground_samples.h"
 
@@ -18,5 +20,24 @@ TEST_CASE("Sky and ground bands match native horizon projection", "[graphics][ba
       hash *= 1099511628211ull;
     }
     CHECK(hash == sample.hash);
+  }
+}
+
+TEST_CASE("Sky rendering respects runtime dimensions and padded row stride", "[graphics][background]") {
+  int constexpr width{853}, height{479}, stride{864};
+  uint8_t constexpr untouched{255};
+  std::vector<uint8_t> pixels(stride * (height + 1), untouched);
+  framework::render::indexed_surface const surface{pixels, width, height, stride};
+  for(auto const roll : {0u, 7000u, 19000u, 47000u}) {
+    std::ranges::fill(pixels, untouched);
+    darker::graphics::draw_sky_ground(surface, {
+      .pitch{1000},
+      .roll{static_cast<uint16_t>(roll)},
+    }, {width / 2, height / 2}, height, 380);
+    for(int y{0}; y < height; ++y) {
+      for(int x{0}; x < width; ++x) REQUIRE(pixels[y * stride + x] != untouched);
+      for(int x{width}; x < stride; ++x) REQUIRE(pixels[y * stride + x] == untouched);
+    }
+    for(int x{0}; x < stride; ++x) REQUIRE(pixels[height * stride + x] == untouched);
   }
 }

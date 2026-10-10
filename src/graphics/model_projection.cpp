@@ -72,7 +72,7 @@ projected_vertex model_projection::project() const {
   /// The direct path divides the same cached camera coordinates that the near path retains
   auto const vertex{transform()};
   return {
-    .screen{project_vertex(vertex, parameters.origin)},
+    .screen{project_vertex(vertex, parameters.origin, parameters.focal_length)},
     .depth{render_geometry::wrap_coordinate(vertex.depth >> render_geometry::fraction_bits)}
   };
 }

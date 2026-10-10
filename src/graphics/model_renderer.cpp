@@ -79,6 +79,7 @@ private:
   model_path path;
   model_shading shading;
   screen_vertex screen_origin;
+  double focal_length;
   model_workspace &workspace;
   std::array<bool, 256> defined{};
   size_t cursor{0};
@@ -114,7 +115,7 @@ private:
     if(cursor >= workspace.vertices.size()) throw std::invalid_argument{"Model exceeds its projected vertex buffer"};
     workspace.camera_vertices[cursor] = projection.transform();
     last_depth = signed_word(workspace.camera_vertices[cursor].depth >> render_geometry::fraction_bits);
-    if(path == model_path::direct) workspace.vertices[cursor] = project_vertex(workspace.camera_vertices[cursor], screen_origin);
+    if(path == model_path::direct) workspace.vertices[cursor] = project_vertex(workspace.camera_vertices[cursor], screen_origin, focal_length);
     defined[cursor++] = true;
   }
 
@@ -153,7 +154,7 @@ private:
       result.horizontal = signed_coordinate(anchor.horizontal + ((signed_word(signed_coordinate(current.horizontal - anchor.horizontal) >> 7) * factor) >> 8));
       result.vertical = signed_coordinate(anchor.vertical + ((signed_word(signed_coordinate(current.vertical - anchor.vertical) >> 7) * factor) >> 8));
       result.depth = signed_word((anchor.depth >> render_geometry::fraction_bits) + ((signed_word((last_depth - (anchor.depth >> render_geometry::fraction_bits)) * 2) * factor) >> 16)) * render_geometry::fraction_scale;
-      workspace.vertices[cursor] = project_vertex(result, screen_origin);
+      workspace.vertices[cursor] = project_vertex(result, screen_origin, focal_length);
     }
     workspace.camera_vertices[cursor] = result;
     defined[cursor++] = true;
@@ -179,7 +180,7 @@ private:
 public:
   interpreter(model_workspace &storage, framework::render::indexed_surface frame, std::span<std::byte const> const bytes,
     projection_parameters const parameters, model_colours const &palette, raster_viewport const bounds, model_path const drawing_path, model_animation const &animation_state, model_shading const shading_mode)
-    : target{frame}, pool{bytes}, projection{parameters}, colours{palette}, animation{animation_state}, distance_high{render_geometry::wrap_coordinate(parameters.depth.whole) >> 8}, viewport{bounds}, path{drawing_path}, shading{shading_mode}, screen_origin{parameters.origin}, workspace{storage} {
+    : target{frame}, pool{bytes}, projection{parameters}, colours{palette}, animation{animation_state}, distance_high{render_geometry::wrap_coordinate(parameters.depth.whole) >> 8}, viewport{bounds}, path{drawing_path}, shading{shading_mode}, screen_origin{parameters.origin}, focal_length{parameters.focal_length}, workspace{storage} {
     /// Keep bytecode, projection cache and vertex storage together for one drawing invocation
   }
 
@@ -218,8 +219,8 @@ public:
           auto const depth{path == model_path::near_clipped ? signed_word(centre.depth >> render_geometry::fraction_bits) : last_depth};
           if(path == model_path::near_clipped && depth < render_geometry::near_depth) break;
           if(depth == 0) throw std::domain_error{"Model disc has zero depth"};
-          auto const point{path == model_path::near_clipped ? project_vertex(centre, screen_origin) : workspace.vertices[cursor]};
-          draw_disc(target, {point.x, point.y}, static_cast<unsigned int>(radius / static_cast<render_geometry::coordinate_bits>(depth)), index, viewport);
+          auto const point{path == model_path::near_clipped ? project_vertex(centre, screen_origin, focal_length) : workspace.vertices[cursor]};
+          draw_disc(target, {point.x, point.y}, static_cast<unsigned int>(radius * (focal_length / render_geometry::focal_length) / static_cast<render_geometry::coordinate_bits>(depth)), index, viewport);
         }
         break;
       case model_opcode::line:
@@ -233,8 +234,8 @@ public:
             auto const left{workspace.camera_vertices[a]}, right{workspace.camera_vertices[b]};
             bool const left_inside{left.depth >= render_geometry::near_depth_fixed}, right_inside{right.depth >= render_geometry::near_depth_fixed};
             if(!left_inside && !right_inside) break;
-            first = left_inside ? project_vertex(left, screen_origin) : near_intersection(right, left, screen_origin);
-            last = right_inside ? project_vertex(right, screen_origin) : near_intersection(left, right, screen_origin);
+            first = left_inside ? project_vertex(left, screen_origin, focal_length) : near_intersection(right, left, screen_origin, focal_length);
+            last = right_inside ? project_vertex(right, screen_origin, focal_length) : near_intersection(left, right, screen_origin, focal_length);
           } else {
             first = workspace.vertices[a];
             last = workspace.vertices[b];
@@ -374,12 +375,12 @@ public:
           }
           if(shaded && shading == model_shading::gouraud) {
             auto const projected_count{path == model_path::near_clipped
-              ? clip_near_shaded_polygon(std::span{workspace.camera_face}.first(count), std::span{workspace.vertex_shades}.first(count), screen_origin, workspace.shaded_face) : count};
+              ? clip_near_shaded_polygon(std::span{workspace.camera_face}.first(count), std::span{workspace.vertex_shades}.first(count), screen_origin, workspace.shaded_face, focal_length) : count};
             draw_gouraud_polygon(target, std::span{workspace.shaded_face}.first(projected_count), viewport);
             break;
           }
           auto const projected_count{path == model_path::near_clipped
-            ? clip_near_polygon(std::span{workspace.camera_face}.first(count), screen_origin, workspace.face) : count};
+            ? clip_near_polygon(std::span{workspace.camera_face}.first(count), screen_origin, workspace.face, focal_length) : count};
           draw_flat_polygon(target, std::span{workspace.face}.first(projected_count), index, viewport);
         }
         break;
@@ -394,7 +395,7 @@ public:
           if(path == model_path::near_clipped) {
             std::array const triangle{workspace.camera_vertices[indices[0]], workspace.camera_vertices[indices[1]], workspace.camera_vertices[indices[2]]};
             std::array<screen_vertex, 6> clipped{};
-            auto const count{clip_near_polygon(triangle, screen_origin, clipped)};
+            auto const count{clip_near_polygon(triangle, screen_origin, clipped, focal_length)};
             hidden = count == 0 || back_facing(clipped[0], clipped[1], clipped[2]);
           } else {
             hidden = back_facing(vertex(indices[0]), vertex(indices[1]), vertex(indices[2]));

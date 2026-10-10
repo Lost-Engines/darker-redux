@@ -8,7 +8,7 @@
 
 namespace darker::graphics {
 
-void draw_sky_ground(framework::render::indexed_surface target, camera_angles const angles, screen_vertex const &origin, int const bottom) {
+void draw_sky_ground(framework::render::indexed_surface target, camera_angles const angles, screen_vertex const &origin, int const bottom, double const focal_length) {
   /// Reconstruct B409's indexed sky/ground bands using its rounded angles, integer projection and B71A colour sequence
   if(bottom < 0 || bottom > target.height) throw std::invalid_argument{"Sky/ground viewport exceeds the framebuffer"};
   std::array<uint8_t, 17> constexpr colours{28, 29, 30, 31, 60, 61, 62, 63, 252, 92, 93, 94, 95, 124, 125, 126, 127};
@@ -30,20 +30,21 @@ void draw_sky_ground(framework::render::indexed_surface target, camera_angles co
   auto const sine{maths::original_sine[roll]};
   auto const cosine{maths::phase_cosine(roll)};
   auto const tangent{maths::original_sine[pitch] * 512 / maths::phase_cosine(pitch)};
-  int const centre_x{origin.x + ((tangent * sine) >> 16)};
-  int const centre_y{origin.y + ((tangent * cosine) >> 16)};
+  double const scale{focal_length / render_geometry::focal_length};
+  int const centre_x{origin.x + static_cast<int>(((tangent * sine) >> 16) * scale)};
+  int const centre_y{origin.y + static_cast<int>(((tangent * cosine) >> 16) * scale)};
   std::array<int, 16> boundaries{};
   // preserve the original independent signed high-word products at each band boundary
   int const slope{sine == 0 ? 0 : cosine * 256 / sine};
-  if((sine == 0 || slope >= 64 * 256) && (centre_y + 41 <= 0 || (sine != 0 && centre_y - 41 >= bottom))) {
+  if((sine == 0 || slope >= 64 * 256) && (centre_y + static_cast<int>(41 * scale) <= 0 || (sine != 0 && centre_y - static_cast<int>(41 * scale) >= bottom))) {
     for(int y{0}; y < bottom; ++y) std::ranges::fill(target.row(y), outer_colour);
     return;
   }
-  int const first_row{sine != 0 && slope >= 64 * 256 && centre_y + 41 >= bottom ? std::max(0, centre_y - 41) : 0};
+  int const first_row{sine != 0 && slope >= 64 * 256 && centre_y + static_cast<int>(41 * scale) >= bottom ? std::max(0, centre_y - static_cast<int>(41 * scale)) : 0};
   for(size_t i{0}; i < offsets.size(); ++i) {
-    int const x{centre_x - ((offsets[i] * sine) >> 16)};
-    int const y{centre_y - first_row - ((offsets[i] * cosine) >> 16)};
-    boundaries[i] = sine == 0 ? y : x + ((y * slope) >> 8);
+    int const x{centre_x - static_cast<int>(((offsets[i] * sine) >> 16) * scale)};
+    int const y{centre_y - first_row - static_cast<int>(((offsets[i] * cosine) >> 16) * scale)};
+    boundaries[i] = sine == 0 ? y : x + static_cast<int>((static_cast<int64_t>(y) * slope) >> 8);
   }
   for(int row{0}; row < bottom; ++row) {
     int const y{mirror ? bottom - 1 - row : row};
