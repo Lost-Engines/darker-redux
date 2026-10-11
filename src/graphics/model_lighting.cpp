@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include "vectorstorm/vector/vector3.h"
 
 namespace darker::graphics {
 
@@ -48,24 +49,59 @@ distance_shading::distance_shading(fog_range const range) : distance_shading{} {
   }
 }
 
+void distance_shading::set_fog_palette(framework::render::colour_palette const *const palette, uint8_t const background) {
+  /// Build indexed RGB blends once per palette change, retaining the game's colours and cheap span fills.
+  fog_tables.clear();
+  if(!palette) return;
+  fog_tables.resize(tables.size());
+  auto const &destination{(*palette)[background]};
+  auto const last{static_cast<unsigned int>(fog_tables.size() - 1)};
+  for(unsigned int step{0}; step <= last; ++step) {
+    for(unsigned int index{0}; index < palette->size(); ++index) {
+      if(step == 0 || step == last) {
+        fog_tables[step][index] = step == 0 ? static_cast<uint8_t>(index) : background;
+        continue;
+      }
+      auto const &source{(*palette)[index]};
+      vec3<int> const blended{
+        static_cast<int>((source.r * (last - step) + destination.r * step + last / 2) / last),
+        static_cast<int>((source.g * (last - step) + destination.g * step + last / 2) / last),
+        static_cast<int>((source.b * (last - step) + destination.b * step + last / 2) / last)
+      };
+      int best_error{3 * 256 * 256};
+      for(unsigned int candidate{0}; candidate < palette->size(); ++candidate) {
+        auto const &colour{(*palette)[candidate]};
+        auto const difference{blended - vec3<int>{colour.r, colour.g, colour.b}};
+        auto const error{difference.dot(difference)};
+        if(error < best_error) {
+          best_error = error;
+          fog_tables[step][index] = static_cast<uint8_t>(candidate);
+        }
+      }
+    }
+  }
+}
+
 model_colours distance_shading::colours(render_geometry::coordinate_bits depth, model_path const path, uint8_t const light) const {
   /// Remap fog distance, then retain 2CE4 beacon darkening; near clipping clamps a negative model origin to zero
   render_geometry::coordinate_bits constexpr depth_sign_bit{render_geometry::coordinate_bits{1} << (render_geometry::whole_bits - 1)};
   unsigned int constexpr full_beacon_light{255};
   unsigned int constexpr darkness_depth_scale{16};                             // each missing light unit adds 16 projection-depth units
   unsigned int constexpr dynamic_colour_base{0xf0};                            // palette ramp 7, upper half; light supplies the low nibble
-  // Beacon darkness is applied after fog remapping: distant fog settings must not restore power to an unlit district.
+  // Original ramps combine fog and beacon darkness. Background fog first shades by beacon light,
+  // then blends that result into the atmosphere, keeping nearby unpowered districts dark.
   if(path == model_path::near_clipped && (depth & depth_sign_bit)) depth = 0;
   uint64_t const shade_distance{(tables.size() - 1) << scene_limits::distance_shade_shift};
   uint64_t const fog_depth{depth <= start_depth ? 0 : depth >= end_depth ? shade_distance
     : !curved_depths.empty() ? curved_depths[depth - start_depth]
     : std::min(shade_distance, static_cast<uint64_t>(depth - start_depth) * shade_distance / (end_depth - start_depth))};
-  auto const adjusted{fog_depth + darkness_depth_scale * (full_beacon_light - light)};
+  auto const adjusted{(fog_tables.empty() ? fog_depth : 0) + darkness_depth_scale * (full_beacon_light - light)};
   auto const index{std::min<size_t>(adjusted >> scene_limits::distance_shade_shift, tables.size() - 1)};
   model_colours result{
     .shades{tables[index]},
     .dynamic{static_cast<uint8_t>(dynamic_colour_base | (light >> 4))}
   };
+  if(!fog_tables.empty()) result.fog = &fog_tables[std::min<size_t>(fog_depth >> scene_limits::distance_shade_shift, fog_tables.size() - 1)];
   // Retain the original next-row lookup explicitly. Beyond the final table,
   // use zero padding rather than reading unrelated emulated scratch memory.
   if(index + 1 < tables.size()) std::copy_n(tables[index + 1].begin(), result.point_shade_tail.size(), result.point_shade_tail.begin());

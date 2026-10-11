@@ -26,3 +26,22 @@ TEST_CASE("Gouraud polygons match original palette bands and clipping", "[graphi
     ++index;
   }
 }
+
+TEST_CASE("Fog translates finished Gouraud pixels rather than interpolating translated palette indices", "[graphics][gouraud]") {
+  framework::render::colour_translation translation;
+  for(unsigned int i{0}; i < translation.size(); ++i) translation[i] = static_cast<uint8_t>((i * 73) & 255);
+  for(auto const &sample : darker::test_reference::gouraud_samples) {
+    std::array<darker::graphics::shaded_vertex, 4> vertices{};
+    for(unsigned int i{0}; i < sample.count; ++i) {
+      auto const &source{sample.vertices[i]};
+      vertices[i] = {
+        .position{static_cast<int16_t>(source[0]), static_cast<int16_t>(source[1])},
+        .shade{static_cast<uint16_t>((sample.base + source[2]) * 256 + source[2] + 128)}
+      };
+    }
+    framework::render::indexed_cockpit_framebuffer original{}, fogged{};
+    darker::graphics::draw_gouraud_polygon(original, std::span{vertices}.first(sample.count));
+    darker::graphics::draw_gouraud_polygon(fogged, std::span{vertices}.first(sample.count), {}, &translation);
+    for(unsigned int i{0}; i < original.pixels.size(); ++i) REQUIRE(fogged.pixels[i] == translation[original.pixels[i]]);
+  }
+}

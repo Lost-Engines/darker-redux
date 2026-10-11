@@ -104,6 +104,7 @@ TEST_CASE("Logarithmic fog thickens nearby shading without moving either endpoin
   distance_shading const linear{fog_range{
     .start_cells{20},
     .end_cells{120},
+    .curve{0},
   }};
   distance_shading const curved{fog_range{
     .start_cells{20},
@@ -137,4 +138,37 @@ TEST_CASE("Logarithmic fog thickens nearby shading without moving either endpoin
     };
     REQUIRE_THROWS_AS(distance_shading{invalid}, std::invalid_argument);
   }
+}
+
+TEST_CASE("Background fog preserves near colours and beacon shading and converges to its palette target", "[graphics][lighting]") {
+  using namespace darker::graphics;
+  framework::render::colour_palette palette;
+  for(unsigned int i{0}; i < palette.size(); ++i) {
+    auto const value{static_cast<uint8_t>(i)};
+    palette[i] = {value, value, value};
+  }
+  distance_shading fog{fog_range{
+    .start_cells{1},
+    .end_cells{100},
+    .curve{100}
+  }};
+  auto const near_before{fog.colours(1024, model_path::direct, 0)};
+  fog.set_fog_palette(&palette, 127);
+  auto const near{fog.colours(1024, model_path::direct, 0)};
+  CHECK(near.shades == near_before.shades);
+  REQUIRE(near.fog);
+  for(unsigned int i{0}; i < 256; ++i) CHECK(near.apply_fog(static_cast<uint8_t>(i)) == i);
+  auto const far{fog.colours(100 * 1024, model_path::direct, 255)};
+  for(unsigned int i{0}; i < 256; ++i) CHECK(far.point_colour(static_cast<uint8_t>(i)) == 127);
+  int previous_error{127};
+  for(unsigned int distance{1}; distance <= 100; ++distance) {
+    auto const sample{fog.colours(distance * 1024, model_path::direct, 0)};
+    CHECK(sample.shades == near.shades); // fog never substitutes for beacon lighting
+    int const error{127 - sample.apply_fog(0)};
+    CHECK(error <= previous_error);
+    previous_error = error;
+  }
+  fog.set_fog_palette(nullptr, 0);
+  CHECK_FALSE(fog.colours(100 * 1024, model_path::direct, 255).fog);
+  CHECK(fog.colours(1024, model_path::direct, 0).shades == near_before.shades);
 }

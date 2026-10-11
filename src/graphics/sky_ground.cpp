@@ -12,7 +12,7 @@ namespace darker::graphics {
 void draw_sky_ground(framework::render::indexed_surface target, camera_angles const angles, screen_vertex const &origin, int const bottom, double const focal_length) {
   /// Reconstruct B409's indexed sky/ground bands using its rounded angles, integer projection and B71A colour sequence
   if(bottom < 0 || bottom > target.height) throw std::invalid_argument{"Sky/ground viewport exceeds the framebuffer"};
-  std::array<uint8_t, 17> constexpr colours{28, 29, 30, 31, 60, 61, 62, 63, 252, 92, 93, 94, 95, 124, 125, 126, 127};
+  std::array<uint8_t, 17> constexpr colours{28, 29, 30, 31, 60, 61, 62, 63, 252, 92, 93, 94, 95, 124, 125, 126, ground_background_colour};
   std::array<int, 16> constexpr offsets{74, 56, 42, 30, 20, 12, 6, 2, -2, -6, -12, -20, -30, -42, -56, -74};
   auto pitch{maths::view_angle_phase(angles.pitch)};
   auto roll{maths::view_angle_phase(angles.roll)};

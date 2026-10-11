@@ -14,6 +14,6 @@ struct shaded_vertex {
 };
 
 void draw_gouraud_polygon(framework::render::indexed_surface target,
-  std::span<shaded_vertex const> vertices, raster_viewport viewport = {});
+  std::span<shaded_vertex const> vertices, raster_viewport viewport = {}, framework::render::colour_translation const *colours = nullptr);
 
 } // namespace darker::graphics

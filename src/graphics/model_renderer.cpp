@@ -174,7 +174,7 @@ private:
       unsigned int const value{static_cast<uint8_t>((colours.dynamic & model_colours::shade_mask) + colours.shades.back())};
       shade = std::min(model_colours::shade_count - 1, static_cast<unsigned int>(static_cast<uint8_t>(value + 11 - (value >> 2))) >> 1);
     }
-    return static_cast<uint8_t>((source & model_colours::ramp_mask) + shade);
+    return colours.apply_fog(static_cast<uint8_t>((source & model_colours::ramp_mask) + shade));
   }
 
 public:
@@ -376,7 +376,7 @@ public:
           if(shaded && shading == model_shading::gouraud) {
             auto const projected_count{path == model_path::near_clipped
               ? clip_near_shaded_polygon(std::span{workspace.camera_face}.first(count), std::span{workspace.vertex_shades}.first(count), screen_origin, workspace.shaded_face, focal_length) : count};
-            draw_gouraud_polygon(target, std::span{workspace.shaded_face}.first(projected_count), viewport);
+            draw_gouraud_polygon(target, std::span{workspace.shaded_face}.first(projected_count), viewport, colours.fog);
             break;
           }
           auto const projected_count{path == model_path::near_clipped

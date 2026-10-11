@@ -180,8 +180,9 @@ auto main(int const argc, char const *const argv[])->int {
     ("resolution", boost::program_options::value<std::string>()->default_value("320x240"), "internal world resolution WIDTHxHEIGHT (64..8192 per axis)")
     ("fov", boost::program_options::value<double>(), "full-screen vertical field of view in degrees, 15..140 (original/default: approximately 50.2 degrees)")
     ("draw-distance", boost::program_options::value<unsigned int>()->default_value(darker::graphics::scene_limits::surface_radius_cells), "surface draw radius in map cells, 2..182 (original: 15; 182 includes the whole city)")
-    ("fog-start", boost::program_options::value<double>()->default_value(0), "surface fog start in map cells, 0..draw-distance; fog reaches full strength at the draw distance")
-    ("fog-curve", boost::program_options::value<double>()->default_value(0), "fog build-up curve: 0 is linear; larger positive values thicken nearby fog (try 10 or 100)")
+    ("fog-start", boost::program_options::value<double>()->default_value(darker::graphics::fog_range{}.start_cells), "surface fog start in map cells, 0..draw-distance; fog reaches full strength at the draw distance")
+    ("fog-target", boost::program_options::value<std::string>()->default_value("background"), "Delphi fog target: background or original (near-black); Halon keeps its original palette fog")
+    ("fog-curve", boost::program_options::value<double>()->default_value(darker::graphics::fog_range{}.curve), "fog build-up curve: 0 is linear; larger positive values thicken nearby fog (try 10 or 100)")
     ("music", boost::program_options::value<std::string>()->default_value("soundblaster_awe32"), "music arrangement: none, soundblaster_fm, midi, roland-lapc, roland-sc55, roland-scc1a, gravis or soundblaster_awe32")
     ("roland-gm-bank", boost::program_options::value<std::string>(), "load the whole Roland MTGM.MID bank before Darker custom instruments on the same device")
     ("roland-gm-percussion-bank", boost::program_options::value<std::string>(), "supplement unmapped Roland percussion using Roland MTGM.MID on a separate emulated device")
@@ -216,6 +217,8 @@ auto main(int const argc, char const *const argv[])->int {
     : language_name == "french" ? darker::resources::scenario_language::french : darker::resources::scenario_language::german};
   auto const draw_distance{arguments["draw-distance"].as<unsigned int>()};
   auto const fog_start{arguments["fog-start"].as<double>()};
+  auto const fog_target{arguments["fog-target"].as<std::string>()};
+  if(fog_target != "background" && fog_target != "original") return startup_failure("--fog-target must be background or original");
   auto const fog_curve{arguments["fog-curve"].as<double>()};
   if(!std::isfinite(fog_curve) || fog_curve < 0) return startup_failure("--fog-curve must be finite and non-negative");
   if(draw_distance < darker::graphics::scene_limits::minimum_scan_radius_cells || draw_distance > darker::graphics::scene_limits::maximum_scan_radius_cells) {
@@ -412,11 +415,16 @@ auto main(int const argc, char const *const argv[])->int {
   auto initial_player{host.player};
   auto initial_cells{cells};
   darker::graphics::city_renderer scene;
-  darker::graphics::distance_shading const surface_lighting{darker::graphics::fog_range{
+  darker::graphics::distance_shading surface_lighting{darker::graphics::fog_range{
     .start_cells{fog_start},
     .end_cells{static_cast<double>(draw_distance)},
     .curve{fog_curve},
   }};
+  auto const update_fog_palette{[&] {
+    surface_lighting.set_fog_palette(fog_target == "background" && world_mode == world_kind::delphi
+      ? &game_palette.colours : nullptr, darker::graphics::ground_background_colour);
+  }};
+  update_fog_palette();
   darker::graphics::distance_shading const tunnel_lighting;
   host.field_of_view = initial_fov;
   framework::render::indexed_cockpit_framebuffer display{};
@@ -1185,6 +1193,7 @@ auto main(int const argc, char const *const argv[])->int {
           bank = darker::resources::geometry_bank{archives.load({0, darker::resources::profile(world_mode).geometry_entry})};
           cells = darker::game::make_city_map(archives.load({0, darker::resources::profile(world_mode).map_entry(mission.configuration)}), world_mode == world_kind::delphi);
           game_palette = underground ? darker::graphics::decode_palette(archives.load({0, 19}), bitmap.palette).palette : bitmap.palette;
+          update_fog_palette();
           scene = {};
           if(underground) {
             tunnel_network.emplace(archives.load({0, 78}));

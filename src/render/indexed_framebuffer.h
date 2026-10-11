@@ -9,6 +9,8 @@
 
 namespace framework::render {
 
+using colour_translation = std::array<uint8_t, 256>;
+
 using colour_palette = std::array<rgba_pixel, 256>;
 
 template<unsigned int rows, unsigned int columns = source_sheet_layout::width>

@@ -30,10 +30,16 @@ struct model_colours {
   // Its last four indices spill into the following contiguous shade row.
   std::array<uint8_t, shade_mask + 1 - shade_count> point_shade_tail{};
 
+  framework::render::colour_translation const *fog{nullptr}; // borrowed from the active distance_shading tables
+
+  uint8_t apply_fog(uint8_t const colour) const noexcept {
+    return fog ? (*fog)[colour] : colour;
+  }
+
   uint8_t point_colour(uint8_t source) const noexcept {
     auto const shade{source & shade_mask};
     auto const value{shade < shade_count ? shades[shade] : point_shade_tail[shade - shade_count]};
-    return static_cast<uint8_t>((source & ramp_mask) + value);
+    return apply_fog(static_cast<uint8_t>((source & ramp_mask) + value));
   }
 };
 
