@@ -175,7 +175,7 @@ auto main(int const argc, char const *const argv[])->int {
     ("skip-intro", "start at game selection, skipping the startup presentation and title")
     ("scale", boost::program_options::value<int>(), "initial window scale: positive integer multiple of 320 x 240 (default: fit available screen)")
     ("resolution", boost::program_options::value<std::string>()->default_value("320x240"), "internal world resolution WIDTHxHEIGHT (64..8192 per axis)")
-    ("fov", boost::program_options::value<double>(), "vertical field of view in degrees, 15..140 (default: original projection)")
+    ("fov", boost::program_options::value<double>(), "full-screen vertical field of view in degrees, 15..140 (original/default: approximately 50.2 degrees)")
     ("draw-distance", boost::program_options::value<unsigned int>()->default_value(darker::graphics::scene_limits::surface_radius_cells), "surface draw radius in map cells, 2..182 (original: 15; 182 includes the whole city)")
     ("fog-start", boost::program_options::value<double>()->default_value(0), "surface fog start in map cells, 0..draw-distance; fog reaches full strength at the draw distance")
     ("fog-curve", boost::program_options::value<double>()->default_value(0), "fog build-up curve: 0 is linear; larger positive values thicken nearby fog (try 10 or 100)")
