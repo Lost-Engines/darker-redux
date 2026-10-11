@@ -98,3 +98,43 @@ TEST_CASE("Distant point colours retain the native cross-row shade lookup", "[gr
   // A point can precede the first mesh and therefore use the zeroed shade latch.
   CHECK(model_colours{}.point_colour(255) == 224);
 }
+
+TEST_CASE("Logarithmic fog thickens nearby shading without moving either endpoint", "[graphics][lighting]") {
+  using namespace darker::graphics;
+  distance_shading const linear{fog_range{
+    .start_cells{20},
+    .end_cells{120},
+  }};
+  distance_shading const curved{fog_range{
+    .start_cells{20},
+    .end_cells{120},
+    .curve{100},
+  }};
+  auto const sample{[](distance_shading const &fog, unsigned int cells, uint8_t light = 255) {
+    return fog.colours(cells * render_geometry::camera_units_per_cell, model_path::direct, light).shades;
+  }};
+  CHECK(sample(curved, 0) == sample(linear, 0));
+  CHECK(sample(curved, 20) == sample(linear, 20));
+  CHECK(sample(curved, 30).back() < sample(linear, 30).back());
+  // log(11)/log(101) = 0.51957: about 52% fog at 10% of the distance.
+  CHECK(sample(curved, 30) == sample(linear, 72));
+  CHECK(sample(curved, 120) == sample(linear, 120));
+  CHECK(sample(curved, 182) == sample(curved, 120));
+  CHECK(sample(curved, 20, 0) == sample(linear, 20, 0));
+  auto previous{sample(curved, 20)};
+  for(unsigned int cells{21}; cells <= 120; ++cells) {
+    auto const current{sample(curved, cells)};
+    for(unsigned int shade{0}; shade < current.size(); ++shade) {
+      // Palette shade zero rises towards one; the remaining shades fall towards it.
+      if(shade == 0) CHECK(current[shade] >= previous[shade]);
+      else CHECK(current[shade] <= previous[shade]);
+    }
+    previous = current;
+  }
+  for(double const value : {-1.0, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
+    fog_range const invalid{
+      .curve{value},
+    };
+    REQUIRE_THROWS_AS(distance_shading{invalid}, std::invalid_argument);
+  }
+}

@@ -176,8 +176,9 @@ auto main(int const argc, char const *const argv[])->int {
     ("scale", boost::program_options::value<int>(), "initial window scale: positive integer multiple of 320 x 240 (default: fit available screen)")
     ("resolution", boost::program_options::value<std::string>()->default_value("320x240"), "internal world resolution WIDTHxHEIGHT (64..8192 per axis)")
     ("fov", boost::program_options::value<double>(), "vertical field of view in degrees, 15..140 (default: original projection)")
-    ("draw-distance", boost::program_options::value<unsigned int>()->default_value(darker::graphics::scene_limits::surface_radius_cells), "surface draw radius in map cells, 2..182 (182 includes the whole city)")
+    ("draw-distance", boost::program_options::value<unsigned int>()->default_value(darker::graphics::scene_limits::surface_radius_cells), "surface draw radius in map cells, 2..182 (original: 15; 182 includes the whole city)")
     ("fog-start", boost::program_options::value<double>()->default_value(0), "surface fog start in map cells, 0..draw-distance; fog reaches full strength at the draw distance")
+    ("fog-curve", boost::program_options::value<double>()->default_value(0), "fog build-up curve: 0 is linear; larger positive values thicken nearby fog (try 10 or 100)")
     ("music", boost::program_options::value<std::string>()->default_value("soundblaster_awe32"), "music arrangement: none, soundblaster_fm, midi, roland-lapc, roland-sc55, roland-scc1a, gravis or soundblaster_awe32")
     ("roland-gm-bank", boost::program_options::value<std::string>(), "load the whole Roland MTGM.MID bank before Darker custom instruments on the same device")
     ("roland-gm-percussion-bank", boost::program_options::value<std::string>(), "supplement unmapped Roland percussion using Roland MTGM.MID on a separate emulated device")
@@ -212,6 +213,8 @@ auto main(int const argc, char const *const argv[])->int {
     : language_name == "french" ? darker::resources::scenario_language::french : darker::resources::scenario_language::german};
   auto const draw_distance{arguments["draw-distance"].as<unsigned int>()};
   auto const fog_start{arguments["fog-start"].as<double>()};
+  auto const fog_curve{arguments["fog-curve"].as<double>()};
+  if(!std::isfinite(fog_curve) || fog_curve < 0) return startup_failure("--fog-curve must be finite and non-negative");
   if(draw_distance < darker::graphics::scene_limits::minimum_scan_radius_cells || draw_distance > darker::graphics::scene_limits::maximum_scan_radius_cells) {
     return startup_failure("--draw-distance must be between 2 and 182 map cells");
   }
@@ -409,6 +412,7 @@ auto main(int const argc, char const *const argv[])->int {
   darker::graphics::distance_shading const surface_lighting{darker::graphics::fog_range{
     .start_cells{fog_start},
     .end_cells{static_cast<double>(draw_distance)},
+    .curve{fog_curve},
   }};
   darker::graphics::distance_shading const tunnel_lighting;
   host.field_of_view = initial_fov;

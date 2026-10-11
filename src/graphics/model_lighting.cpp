@@ -29,8 +29,23 @@ distance_shading::distance_shading(fog_range const range) : distance_shading{} {
     || range.start_cells < 0 || range.end_cells < range.start_cells || range.end_cells > scene_limits::maximum_scan_radius_cells) {
     throw std::invalid_argument{"Fog distances must be finite, ordered and within the visible world range"};
   }
+  if(!std::isfinite(range.curve) || range.curve < 0) throw std::invalid_argument{"Fog curve must be finite and non-negative"};
   start_depth = static_cast<uint32_t>(std::llround(range.start_cells * render_geometry::camera_units_per_cell));
   end_depth = static_cast<uint32_t>(std::llround(range.end_cells * render_geometry::camera_units_per_cell));
+  if(range.curve > 0 && end_depth > start_depth) {
+    auto const span{end_depth - start_depth};
+    curved_depths.resize(span + 1);
+    auto const shade_distance{(tables.size() - 1) << scene_limits::distance_shade_shift};
+    // Precompute at camera-depth precision, avoiding a logarithm per object per frame.
+    // Long double also retains useful ratios for very small positive curve values.
+    long double const curve{range.curve};
+    auto const normalisation{std::log1p(curve)};
+    for(uint32_t depth{0}; depth <= span; ++depth) {
+      auto const strength{std::log1p(curve * (static_cast<long double>(depth) / span)) / normalisation};
+      curved_depths[depth] = static_cast<uint16_t>(std::clamp(strength, 0.0L, 1.0L) * shade_distance);
+    }
+    curved_depths.back() = static_cast<uint16_t>(shade_distance);
+  }
 }
 
 model_colours distance_shading::colours(render_geometry::coordinate_bits depth, model_path const path, uint8_t const light) const {
@@ -42,7 +57,8 @@ model_colours distance_shading::colours(render_geometry::coordinate_bits depth, 
   // Beacon darkness is applied after fog remapping: distant fog settings must not restore power to an unlit district.
   if(path == model_path::near_clipped && (depth & depth_sign_bit)) depth = 0;
   uint64_t const shade_distance{(tables.size() - 1) << scene_limits::distance_shade_shift};
-  uint64_t const fog_depth{depth <= start_depth ? 0 : end_depth == start_depth ? shade_distance
+  uint64_t const fog_depth{depth <= start_depth ? 0 : depth >= end_depth ? shade_distance
+    : !curved_depths.empty() ? curved_depths[depth - start_depth]
     : std::min(shade_distance, static_cast<uint64_t>(depth - start_depth) * shade_distance / (end_depth - start_depth))};
   auto const adjusted{fog_depth + darkness_depth_scale * (full_beacon_light - light)};
   auto const index{std::min<size_t>(adjusted >> scene_limits::distance_shade_shift, tables.size() - 1)};
