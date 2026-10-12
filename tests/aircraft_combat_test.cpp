@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <array>
+#include <bit>
+#include "game/object_deadline.h"
 #include "game/aircraft_combat.h"
 #include "game/mission_combat.h"
 #include "game/object_definitions.h"
@@ -164,4 +166,51 @@ TEST_CASE("Aircraft bomb drops match native target, cooldown and exhausted-pool 
       CHECK(shot->parameters.definition == &darker::game::original_object_definitions[14]);
     }
   }
+}
+
+TEST_CASE("Falling wrecks survive their original deadline until impact, including clock wrap", "[combat][wrecks]") {
+  using namespace darker::game;
+  scenario_actor wreck;
+  wreck.parameters.update_entry = object_update::falling_aircraft;
+  wreck.flags = 0x20;
+  wreck.fade = 7;
+  wreck.pose.position.height = 0x6000;
+  clock_tick constexpr start{65500};
+  wreck.expiry = static_cast<clock_tick>(start + 64);
+  unsigned int elapsed{0};
+  while(std::bit_cast<int16_t>(wreck.pose.position.height) > 0 && elapsed < 30000) {
+    elapsed += 8;
+    REQUIRE_FALSE(advance_actor_deadline(wreck, static_cast<clock_tick>(start + elapsed)));
+    REQUIRE(wreck.fade == 255);
+    advance_falling_aircraft(wreck, 8);
+  }
+  REQUIRE(elapsed > 64);
+  REQUIRE(elapsed < 30000);
+  REQUIRE(std::bit_cast<int16_t>(wreck.pose.position.height) <= 0);
+  // The existing city-collision path retires the wreck after its impact effect.
+  auto const impact_clock{static_cast<clock_tick>(start + elapsed)};
+  wreck.pose.position.height = 0;
+  wreck.parameters.update_entry = object_update::effect_only;
+  wreck.flags |= 8;
+  wreck.expiry = static_cast<clock_tick>(impact_clock + 256);
+  CHECK_FALSE(advance_actor_deadline(wreck, static_cast<clock_tick>(impact_clock + 128)));
+  CHECK(wreck.fade == 128);
+  CHECK(advance_actor_deadline(wreck, static_cast<clock_tick>(impact_clock + 257)));
+}
+
+TEST_CASE("Scripted departures and already impacted wrecks retain timed removal", "[combat][wrecks]") {
+  using namespace darker::game;
+  for(auto const callback : {object_update::departing_aircraft, object_update::effect_only, object_update::falling_aircraft}) {
+    scenario_actor actor;
+    actor.parameters.update_entry = callback;
+    actor.flags = callback == object_update::falling_aircraft ? 0x28 : 0x20;
+    actor.expiry = 100;
+    CHECK(advance_actor_deadline(actor, 101));
+  }
+  scenario_actor ground_actor;
+  ground_actor.category = actor_category::ground;
+  ground_actor.parameters.update_entry = object_update::falling_aircraft;
+  ground_actor.flags = 0x20;
+  ground_actor.expiry = 100;
+  CHECK(advance_actor_deadline(ground_actor, 101));
 }

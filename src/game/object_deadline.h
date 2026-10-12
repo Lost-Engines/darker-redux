@@ -5,6 +5,10 @@
 
 namespace darker::game {
 
+struct scenario_actor;
+
+bool advance_actor_deadline(scenario_actor &actor, clock_tick clock) noexcept;
+
 bool advance_object_deadline(uint8_t &flags, clock_tick &deadline, uint8_t &fade, uint16_t altitude, clock_tick clock) noexcept;
 
 } // namespace darker::game

@@ -48,6 +48,49 @@ void check_mission_combat(darker::resources::archive_set const &archives) {
     .archive{0},
     .slot{30}
   })};
+  for(uint8_t const flags : {uint8_t{0x20}, uint8_t{0x30}}) {
+    // Redux: use the real city sweep and impact effect, including scripted collision protection.
+    darker::game::scenario_actor wreck;
+    wreck.index = 1;
+    wreck.attributes = 1;
+    wreck.flags = flags;
+    wreck.expiry = 64;
+    wreck.parameters.definition = &darker::game::original_object_definitions[19];
+    wreck.parameters.model_token = bank.special_models()[19];
+    wreck.parameters.update_entry = darker::game::object_update::falling_aircraft;
+    wreck.pose.position = {
+      .column{5000},
+      .row{5000},
+      .height{8192}
+    };
+    darker::game::mission_combat falling{{wreck}};
+    darker::game::city_map ground{};
+    darker::game::player_flight observer;
+    observer.pose().position = {
+      .column{25000},
+      .row{25000},
+      .height{2048}
+    };
+    bool impacted{false};
+    for(uint32_t tick{8}; tick < 30000 && !falling.actors.empty(); tick += 8) {
+      falling.advance(observer, ground, bank, {
+        .elapsed_ticks{tick},
+        .frame_step{8}
+      });
+      if(!falling.actors.empty()) {
+        auto const &actor{falling.actors.front()};
+        if(actor.parameters.update_entry == darker::game::object_update::effect_only) {
+          if(tick <= 64 || !(actor.flags & 8)) throw std::runtime_error{"Falling wreck skipped its flight or impact"};
+          impacted = true;
+        } else if(actor.fade != 255 || falling.completed_objectives != 0) {
+          throw std::runtime_error{"Airborne wreck faded or was counted before impact"};
+        }
+      }
+    }
+    if(!impacted || !falling.actors.empty() || falling.completed_objectives != 1 || falling.remaining_objectives() != 0) {
+      throw std::runtime_error{"Falling wreck did not complete ground impact and single objective credit"};
+    }
+  }
   for(auto const &v : darker::test_reference::player_ramming_samples) {
     darker::game::player_flight player;
     if(v[0] != 25) player.craft = darker::game::skimma_flight_state{};
@@ -496,7 +539,8 @@ void check_mission_combat(darker::resources::archive_set const &archives) {
     {78, 3, "Return to base, Tolly.", false, 9}, {79, 10, "Well done- you can return to base.", false, 9},
     {83, 6, "Tolly: get back to base.", false, 9}, {84, 4, "Return to Hemmersan.", false, 9}, {85, 15, "and clear the network of enemy craft.", false, 9},
     {88, 28, "Mission accomplished. Return to base.", false, 8}, {89, 23, "Return to Hemmersan, Tolly.", false, 9}, {90, 34, "Good job, Tolly. Return to base.", false, 9},
-    {95, 7, "Tolly; we need you back at Hemmersan.", false, 9}, {97, 17, "we've important news from Intelligence.", false, 9},
+    // With impact-based removal, mission 97's timed spawners admit two more counted aircraft.
+    {95, 7, "Tolly; we need you back at Hemmersan.", false, 9}, {97, 19, "we've important news from Intelligence.", false, 9},
   }};
   for(auto const &test : cases) {
     auto const mission{test.stage - 1};
@@ -512,6 +556,10 @@ void check_mission_combat(darker::resources::archive_set const &archives) {
       static_cast<uint8_t>(1 + record.groups[0].objects.size() + record.groups[1].objects.size()), darker::resources::world_kind::delphi, record.shared.offset);
     darker::game::prepare_delphi_aircraft_sites(combat.spawning, cells);
     darker::game::player_flight player;
+    // This controlled gun platform teleports between targets instead of flying or evading.
+    // Longer-lived wrecks must not turn that test shortcut into an accidental player crash.
+    player.noclip = true;
+    player.damage_cheat = true;
     auto &caero{std::get<darker::game::caero_flight_state>(player.craft)};
     caero.flying = true;
     caero.energy.reserve = 0xcfff;

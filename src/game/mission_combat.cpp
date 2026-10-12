@@ -293,7 +293,7 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
   auto const damage_mask{player.world_damage_mask()};
   auto const player_extent{bank.header_at(bank.special_models()[player_definition]).extent};
   std::erase_if(actors, [&](auto &actor){
-    if(!advance_object_deadline(actor.flags, actor.expiry, actor.fade, actor.pose.position.height, clock)) return false;
+    if(!advance_actor_deadline(actor, clock)) return false;
     release_target(native_object_layout::actor(actor.index));
     completed_objectives += actor.attributes & 1;
     adjust_objectives(static_cast<uint8_t>(-(actor.attributes & 1)));
