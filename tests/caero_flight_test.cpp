@@ -149,3 +149,47 @@ TEST_CASE("Caero boost activation matches the original reserve threshold and byt
     REQUIRE(state.active_boost == sample.result_active);
   }
 }
+
+TEST_CASE("Moving between permanently extinguished beacons does not accumulate flight forces", "[game][flight][nightmare]") {
+  darker::game::city_map cumulative{}, isolated{};
+  cumulative.fill({
+    .type{1},
+    .state{255},
+  });
+  auto fresh{darker::game::caero_flight_state{}};
+  fresh.flying = true;
+  auto travelling{fresh};
+  darker::game::caero_flight_parameters const parameters{
+    .angular_response{416},
+    .drive_multiplier{1656},
+  };
+  // Move along the real nine-cell beacon lattice. Earlier towers stay dark in
+  // cumulative; isolated restores them. Retain all flight state in both craft.
+  for(unsigned int beacon{1}; beacon < 14; ++beacon) {
+    auto const cell{beacon * 9};
+    isolated.fill({
+      .type{1},
+      .state{255},
+    });
+    for(unsigned int phase{0}; phase < 2; ++phase) {
+      auto const strength{static_cast<uint8_t>(phase == 0 ? 255 : 0)};
+      cumulative[darker::game::city_cell_index(cell, cell)].state = strength;
+      isolated[darker::game::city_cell_index(cell, cell)].state = strength;
+      for(unsigned int frame{0}; frame < 2048; ++frame) {
+        // Pin the sampling location to avoid terrain or neighbouring coverage
+        // obscuring the effect of persistent beacon state on the flight model.
+        travelling.pose.position = {
+          .column{static_cast<uint16_t>(cell * 256 + 128)},
+          .row{static_cast<uint16_t>(cell * 256 + 128)},
+          .height{2400},
+        };
+        fresh.pose.position = travelling.pose.position;
+        darker::game::advance_caero_flight(travelling, parameters, {}, 8, cumulative);
+        darker::game::advance_caero_flight(fresh, parameters, {}, 8, isolated);
+      }
+      CAPTURE(beacon, phase);
+      CHECK(write_state(travelling) == write_state(fresh));
+      CHECK(std::bit_cast<int16_t>(travelling.pose.angles.pitch) >= -4096);
+    }
+  }
+}

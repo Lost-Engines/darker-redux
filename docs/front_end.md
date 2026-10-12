@@ -198,6 +198,21 @@ Briefing and mission opcodes 36/37 set difficulty and score checkpoints. Opcode
 38 toggles the independent scripted altitude-hold bit; it consumes a height
 word only when enabling it, and does not cancel the player's manual hold bit.
 
+Late in the challenge, this enables a target height of **512 immediately before
+extinguishing the queued beacon at (18,18)**. It can therefore feel like a
+persistent nose-down force when following the last lit beacons at greater
+altitude; it is separate from the ordinary low-speed nose-down assistance.
+Native `C194` sets bit 7 of `7ED2` and writes `80AC`; `8067` routes any nonzero
+altitude flag to `80A4`'s height-error controller. The A key toggles bit 0, so it
+does not cancel the scripted bit. Pitch input offsets the requested height
+through the normal control reference rather than directly driving pitch in
+this mode. The script later clears its bit before restoring the grid.
+In the controlled full-script replay these changes occur at ticks 124056 and
+151056; their wall-clock timing in play depends on completing the preceding
+objectives. Repeated permanent beacon outages have a regression check that
+retains flight state while travelling to each fresh beacon: earlier dark
+towers do not accumulate an additional pitch force.
+
 Nightmare air reserves use the separate native `C3E2` admission path selected
 at `C35A` when the menu selection is four. They retain their authored horizontal
 positions, start with fade zero and flags `40h`, and fade in over 256 ticks.
