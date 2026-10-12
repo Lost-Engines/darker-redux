@@ -6,17 +6,17 @@ Explore the reverse engineering, maps and models at [Lost Engines](https://loste
 
 ## Getting started
 
-The original game data is required. Fetch the packs, manual, map and optional music assets with:
+The original game's data files are required to run this.  Darker is considered abandonware at this point, and images of the original media are widely available: https://archive.org/details/darker-cdrom/ or https://www.myabandonware.com/game/darker-2dn#download.  If you wish to provide your own data files, just pass the `--data-dir` commandline argument.
 
+To make things easier, there's automatic fetch script to get all necessary data (including the manual and map and sound emulation ROMs) into a default directory in your profile:
 ```sh
 ./scripts/fetch-assets.sh
 ```
-
-On Windows:
-
-```bat
+or on windows:
+```sh
 scripts\fetch-assets.bat
 ```
+
 
 Then run `./darker`, or double-click `darker.exe` on Windows. You can also supply a local installation with `--data-dir PATH`. The Bash helper defaults to `~/.local/share/darker` (respecting `XDG_DATA_HOME`); the Windows helper defaults to the directory beside the executable. Both accept a destination directory as their first argument.
 
