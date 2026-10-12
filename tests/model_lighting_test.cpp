@@ -112,7 +112,7 @@ TEST_CASE("Logarithmic fog thickens nearby shading without moving either endpoin
     .curve{100},
   }};
   auto const sample{[](distance_shading const &fog, unsigned int cells, uint8_t light = 255) {
-    return fog.colours(cells * render_geometry::camera_units_per_cell, model_path::direct, light).shades;
+    return fog.colours(cells * render_geometry::camera_units_per_cell, model_path::direct, static_cast<uint8_t>(light)).shades;
   }};
   CHECK(sample(curved, 0) == sample(linear, 0));
   CHECK(sample(curved, 20) == sample(linear, 20));
@@ -140,35 +140,71 @@ TEST_CASE("Logarithmic fog thickens nearby shading without moving either endpoin
   }
 }
 
-TEST_CASE("Background fog preserves near colours and beacon shading and converges to its palette target", "[graphics][lighting]") {
+TEST_CASE("Background fade starts only after the original palette fog is complete", "[graphics][lighting]") {
   using namespace darker::graphics;
   framework::render::colour_palette palette;
   for(unsigned int i{0}; i < palette.size(); ++i) {
     auto const value{static_cast<uint8_t>(i)};
     palette[i] = {value, value, value};
   }
-  distance_shading fog{fog_range{
+  fog_range const range{
     .start_cells{1},
-    .end_cells{100},
-    .curve{100}
-  }};
-  auto const near_before{fog.colours(1024, model_path::direct, 0)};
+    .end_cells{90},
+    .curve{100},
+    .background_end_cells{100}
+  };
+  distance_shading const original{range};
+  distance_shading fog{range};
   fog.set_fog_palette(&palette, 127);
-  auto const near{fog.colours(1024, model_path::direct, 0)};
-  CHECK(near.shades == near_before.shades);
-  REQUIRE(near.fog);
-  for(unsigned int i{0}; i < 256; ++i) CHECK(near.apply_fog(static_cast<uint8_t>(i)) == i);
-  auto const far{fog.colours(100 * 1024, model_path::direct, 255)};
-  for(unsigned int i{0}; i < 256; ++i) CHECK(far.point_colour(static_cast<uint8_t>(i)) == 127);
+  for(auto const light : {0, 128, 255}) {
+    for(unsigned int distance{0}; distance <= 100; ++distance) {
+      auto const depth{distance * render_geometry::camera_units_per_cell};
+      auto const sample{fog.colours(depth, model_path::direct, static_cast<uint8_t>(light))};
+      auto const reference{original.colours(depth, model_path::direct, static_cast<uint8_t>(light))};
+      CHECK(sample.shades == reference.shades);
+      if(distance <= 90) {
+        CHECK_FALSE(sample.fog);
+        for(unsigned int i{0}; i < 256; ++i) CHECK(sample.point_colour(static_cast<uint8_t>(i)) == reference.point_colour(static_cast<uint8_t>(i)));
+      }
+    }
+  }
   int previous_error{127};
-  for(unsigned int distance{1}; distance <= 100; ++distance) {
-    auto const sample{fog.colours(distance * 1024, model_path::direct, 0)};
-    CHECK(sample.shades == near.shades); // fog never substitutes for beacon lighting
+  for(unsigned int distance{90}; distance <= 100; ++distance) {
+    auto const sample{fog.colours(distance * render_geometry::camera_units_per_cell, model_path::direct, 255)};
     int const error{127 - sample.apply_fog(0)};
     CHECK(error <= previous_error);
     previous_error = error;
   }
+  auto const halfway{fog.colours(95 * render_geometry::camera_units_per_cell, model_path::direct, 255)};
+  CHECK(halfway.apply_fog(0) >= 61);
+  CHECK(halfway.apply_fog(0) <= 64); // linear halfway blend, quantised to a shade-table row
+  for(auto const distance : {100, 110}) {
+    auto const far{fog.colours(distance * render_geometry::camera_units_per_cell, model_path::direct, 255)};
+    for(unsigned int i{0}; i < 256; ++i) CHECK(far.point_colour(static_cast<uint8_t>(i)) == 127);
+  }
+  CHECK_FALSE(fog.colours(static_cast<render_geometry::coordinate_bits>(-1), model_path::near_clipped, 255).fog);
   fog.set_fog_palette(nullptr, 0);
-  CHECK_FALSE(fog.colours(100 * 1024, model_path::direct, 255).fog);
-  CHECK(fog.colours(1024, model_path::direct, 0).shades == near_before.shades);
+  CHECK_FALSE(fog.colours(100 * render_geometry::camera_units_per_cell, model_path::direct, 255).fog);
+}
+
+TEST_CASE("Background fade validates its range and permits a disabled interval", "[graphics][lighting]") {
+  using namespace darker::graphics;
+  for(double const end : {-1.0, 89.0, 183.0, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
+    fog_range const range{
+      .start_cells{1},
+      .end_cells{90},
+      .background_end_cells{end}
+    };
+    CHECK_THROWS_AS(distance_shading{range}, std::invalid_argument);
+  }
+  framework::render::colour_palette const palette{};
+  for(auto const end : {std::optional<double>{}, std::optional<double>{90}}) {
+    distance_shading fog{fog_range{
+      .start_cells{1},
+      .end_cells{90},
+      .background_end_cells{end}
+    }};
+    fog.set_fog_palette(&palette, 127);
+    CHECK_FALSE(fog.colours(100 * render_geometry::camera_units_per_cell, model_path::direct, 255).fog);
+  }
 }

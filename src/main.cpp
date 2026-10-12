@@ -180,8 +180,9 @@ auto main(int const argc, char const *const argv[])->int {
     ("resolution", boost::program_options::value<std::string>()->default_value("320x240"), "internal world resolution WIDTHxHEIGHT (64..8192 per axis)")
     ("fov", boost::program_options::value<double>(), "full-screen vertical field of view in degrees, 15..140 (original/default: approximately 50.2 degrees)")
     ("draw-distance", boost::program_options::value<unsigned int>()->default_value(darker::graphics::scene_limits::surface_radius_cells), "surface draw radius in map cells, 2..182 (original: 15; 182 includes the whole city)")
-    ("fog-start", boost::program_options::value<double>()->default_value(darker::graphics::fog_range{}.start_cells), "surface fog start in map cells, 0..draw-distance; fog reaches full strength at the draw distance")
-    ("fog-target", boost::program_options::value<std::string>()->default_value("background"), "Delphi fog target: background or original (near-black); Halon keeps its original palette fog")
+    ("fog-start", boost::program_options::value<double>()->default_value(darker::graphics::fog_range{}.start_cells), "surface fog start in map cells; Delphi reaches full natural fog at fade-distance")
+    ("fade-distance", boost::program_options::value<double>()->default_value(darker::graphics::scene_limits::surface_fade_cells), "Delphi: full natural fog here, then background fade until draw-distance (default capped to draw-distance)")
+    ("fog-target", boost::program_options::value<std::string>()->default_value("background"), "Delphi final fade: background or original (keep dark silhouettes); Halon keeps its original palette fog")
     ("fog-curve", boost::program_options::value<double>()->default_value(darker::graphics::fog_range{}.curve), "fog build-up curve: 0 is linear; larger positive values thicken nearby fog (try 10 or 100)")
     ("music", boost::program_options::value<std::string>()->default_value("soundblaster_awe32"), "music arrangement: none, soundblaster_fm, midi, roland-lapc, roland-sc55, roland-scc1a, gravis or soundblaster_awe32")
     ("roland-gm-bank", boost::program_options::value<std::string>(), "load the whole Roland MTGM.MID bank before Darker custom instruments on the same device")
@@ -227,6 +228,12 @@ auto main(int const argc, char const *const argv[])->int {
   if(!std::isfinite(fog_start) || fog_start < 0 || fog_start > draw_distance) {
     return startup_failure("--fog-start must be a finite distance between zero and --draw-distance");
   }
+  auto const requested_fade{arguments["fade-distance"].as<double>()};
+  auto const fade_distance{arguments["fade-distance"].defaulted() ? std::min(requested_fade, static_cast<double>(draw_distance)) : requested_fade};
+  if(!std::isfinite(fade_distance) || fade_distance < fog_start || fade_distance > draw_distance) {
+    return startup_failure("--fade-distance must be finite and between --fog-start and --draw-distance");
+  }
+
   bool const automatic_scale{!arguments.contains("scale")};
   auto const scale{automatic_scale ? 1 : arguments["scale"].as<int>()};
   auto const music_name{arguments["music"].as<std::string>()};
@@ -415,12 +422,14 @@ auto main(int const argc, char const *const argv[])->int {
   auto initial_player{host.player};
   auto initial_cells{cells};
   darker::graphics::city_renderer scene;
-  darker::graphics::distance_shading surface_lighting{darker::graphics::fog_range{
-    .start_cells{fog_start},
-    .end_cells{static_cast<double>(draw_distance)},
-    .curve{fog_curve},
-  }};
+  darker::graphics::distance_shading surface_lighting;
   auto const update_fog_palette{[&] {
+    surface_lighting = darker::graphics::distance_shading{darker::graphics::fog_range{
+      .start_cells{fog_start},
+      .end_cells{world_mode == world_kind::delphi ? fade_distance : static_cast<double>(draw_distance)},
+      .curve{fog_curve},
+      .background_end_cells{static_cast<double>(draw_distance)}
+    }};
     surface_lighting.set_fog_palette(fog_target == "background" && world_mode == world_kind::delphi
       ? &game_palette.colours : nullptr, darker::graphics::ground_background_colour);
   }};

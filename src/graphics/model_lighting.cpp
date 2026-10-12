@@ -31,6 +31,11 @@ distance_shading::distance_shading(fog_range const range) : distance_shading{} {
     throw std::invalid_argument{"Fog distances must be finite, ordered and within the visible world range"};
   }
   if(!std::isfinite(range.curve) || range.curve < 0) throw std::invalid_argument{"Fog curve must be finite and non-negative"};
+  if(range.background_end_cells && (!std::isfinite(*range.background_end_cells)
+    || *range.background_end_cells < range.end_cells || *range.background_end_cells > scene_limits::maximum_scan_radius_cells)) {
+    throw std::invalid_argument{"Background fade must end at or beyond the natural fog endpoint, within the visible world range"};
+  }
+  background_end_depth = static_cast<uint32_t>(std::llround(range.background_end_cells.value_or(range.end_cells) * render_geometry::camera_units_per_cell));
   start_depth = static_cast<uint32_t>(std::llround(range.start_cells * render_geometry::camera_units_per_cell));
   end_depth = static_cast<uint32_t>(std::llround(range.end_cells * render_geometry::camera_units_per_cell));
   if(range.curve > 0 && end_depth > start_depth) {
@@ -88,20 +93,24 @@ model_colours distance_shading::colours(render_geometry::coordinate_bits depth, 
   unsigned int constexpr full_beacon_light{255};
   unsigned int constexpr darkness_depth_scale{16};                             // each missing light unit adds 16 projection-depth units
   unsigned int constexpr dynamic_colour_base{0xf0};                            // palette ramp 7, upper half; light supplies the low nibble
-  // Original ramps combine fog and beacon darkness. Background fog first shades by beacon light,
-  // then blends that result into the atmosphere, keeping nearby unpowered districts dark.
+  // Keep native palette darkening and beacon lighting through the whole view.
+  // Only the final distance interval blends the resulting silhouettes into the background.
   if(path == model_path::near_clipped && (depth & depth_sign_bit)) depth = 0;
   uint64_t const shade_distance{(tables.size() - 1) << scene_limits::distance_shade_shift};
   uint64_t const fog_depth{depth <= start_depth ? 0 : depth >= end_depth ? shade_distance
     : !curved_depths.empty() ? curved_depths[depth - start_depth]
     : std::min(shade_distance, static_cast<uint64_t>(depth - start_depth) * shade_distance / (end_depth - start_depth))};
-  auto const adjusted{(fog_tables.empty() ? fog_depth : 0) + darkness_depth_scale * (full_beacon_light - light)};
+  auto const adjusted{fog_depth + darkness_depth_scale * (full_beacon_light - light)};
   auto const index{std::min<size_t>(adjusted >> scene_limits::distance_shade_shift, tables.size() - 1)};
   model_colours result{
     .shades{tables[index]},
     .dynamic{static_cast<uint8_t>(dynamic_colour_base | (light >> 4))}
   };
-  if(!fog_tables.empty()) result.fog = &fog_tables[std::min<size_t>(fog_depth >> scene_limits::distance_shade_shift, fog_tables.size() - 1)];
+  if(!fog_tables.empty() && background_end_depth > end_depth && depth > end_depth) {
+    uint64_t const fade_depth{std::min(depth, background_end_depth) - end_depth};
+    auto const fade_index{static_cast<size_t>(fade_depth * (fog_tables.size() - 1) / (background_end_depth - end_depth))};
+    result.fog = &fog_tables[fade_index];
+  }
   // Retain the original next-row lookup explicitly. Beyond the final table,
   // use zero padding rather than reading unrelated emulated scratch memory.
   if(index + 1 < tables.size()) std::copy_n(tables[index + 1].begin(), result.point_shade_tail.size(), result.point_shade_tail.begin());
