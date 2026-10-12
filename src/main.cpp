@@ -94,6 +94,7 @@ struct flight_host {
   darker::audio::ambient_sounds ambient_audio;
   darker::game::flight_camera camera;
   bool pick_camera{false};
+  bool camera_selection_visible{false};
   darker::game::hangar_state hangar;
   darker::game::object_pose audio_listener, audio_motion;
   darker::game::mission_combat *combat{nullptr};
@@ -500,6 +501,10 @@ auto main(int const argc, char const *const argv[])->int {
       host.combat->camera_actor.reset();
     }
     if(std::exchange(host.pick_camera, false) && !(darker::game::has_player_flag(host.player.lifecycle.flags, darker::game::player_flag::ground_protection)) && !host.player.tunnel) {
+      if(darker::game::camera_target_in_range(host.player.pose(), host.audio_listener)) {
+        host.camera.begin_selection(clock);
+        host.camera_selection_visible = true;
+      }
       if(auto const picked{darker::game::pick_camera_target(host.audio_listener, host.player.pose(),
         bank.header_at(bank.special_models()[host.player.definition_slot()]).extent, host.combat->camera_actor,
         combat->actors, cells, bank, host.player.world_damage_mask())}) {
@@ -652,7 +657,7 @@ auto main(int const argc, char const *const argv[])->int {
       .row{host.player.tunnel ? uint8_t{0} : grid[1]},
       .column{host.player.tunnel ? uint8_t{0} : grid[0]},
     };
-    bool const sights_visible{!watched && (cockpit_visible || host.camera.visible_mode() == darker::game::camera_mode::fullscreen)};
+    bool const sights_visible{!watched && host.camera.sights_visible()};
     int const sight_y{cockpit_visible ? (caero ? 92 : 90) : 120};
     if(sights_visible && caero) {
       for(auto *shot{combat->hostile_projectiles.objects().head()}; shot; shot = shot->next) {
@@ -707,6 +712,8 @@ auto main(int const argc, char const *const argv[])->int {
       darker::graphics::draw_target_marker(display, darker::graphics::target_marker::skimma_aim,
         {164, static_cast<int16_t>(sight_y + combat->skimma.aim_offset)}, 14, 14);
     }
+    if(host.camera_selection_visible) darker::graphics::draw_camera_selection_marker(display,
+      cockpit_visible ? (caero ? 92 : 90) : 120);
     // Native 54F0–55BE draws the enlarged Caero radar in every camera mode.
     // Two reserved layer values distinguish untouched pixels from the translucent
     // backdrop; actual radar contacts retain their full palette colours.
@@ -1244,6 +1251,7 @@ auto main(int const argc, char const *const argv[])->int {
       host.camera = {};
       host.combat->camera_actor.reset();
       host.pick_camera = false;
+      host.camera_selection_visible = false;
       host.hangar = {};
       host.sounds = {};
       host.world_audio = {};
@@ -1686,6 +1694,7 @@ auto main(int const argc, char const *const argv[])->int {
       host.camera.distance_step = 5;
     }
     bool const enlarged{caero && !host.player.tunnel && (host.key_down(*window, GLFW_KEY_INSERT) || host.key_down(*window, GLFW_KEY_KP_0))};
+    host.camera_selection_visible = host.camera.update_selection(game_clock.frame_ticks, host.key_down(*window, GLFW_KEY_TAB));
     host.camera.update_look(host.player.look_drive, host.key_down(*window, GLFW_KEY_TAB), step, darker::game::has_player_flag(host.player.lifecycle.flags, darker::game::player_flag::ground_protection));
     auto const clock{game_clock.frame_ticks};
     host.clock = clock;
