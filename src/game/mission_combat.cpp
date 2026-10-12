@@ -75,6 +75,25 @@ mission_combat::mission_combat(std::vector<scenario_actor> initial) : actors{std
   }));
 }
 
+#ifndef NDEBUG
+unsigned int mission_combat::eliminate_active_enemies(clock_tick const clock) noexcept {
+  unsigned int count{0};
+  for(auto &actor : actors) {
+    // Aircraft include uncounted pursuers. Ground/static actors must be mission
+    // targets: preserve uncounted escorts and machinery such as the tunnel wrecker.
+    if(actor.category != actor_category::air && !(actor.attributes & 1)) continue;
+    uint8_t constexpr appearing_flag{0x40};
+    uint8_t constexpr expired_wreck_flags{0x28};
+    actor.flags = static_cast<uint8_t>((actor.flags & ~appearing_flag) | expired_wreck_flags);
+    actor.expiry = static_cast<clock_tick>(clock - 1);
+    ++count;
+  }
+  // The next combat update performs normal removal, target release, kill credit
+  // and respawn-pool bookkeeping. Flag 08 also bypasses Redux's falling-wreck wait.
+  return count;
+}
+#endif // NDEBUG
+
 std::span<uint8_t const> mission_combat::status_flags(uint8_t const player_flags) noexcept {
   /// C1EF addresses stable object indices, including the player and records removed from active lists
   retained_flags[0] = player_flags;

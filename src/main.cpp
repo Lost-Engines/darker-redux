@@ -116,6 +116,9 @@ struct flight_host {
   bool paused{false};
   bool single_step{false};
   bool freeze_enabled{false};
+#ifndef NDEBUG
+  bool developer_cheats{false};
+#endif // NDEBUG
   bool mouse_enabled{true};
   bool menu_mouse_consumed{false};
   int resume_key{GLFW_KEY_UNKNOWN};
@@ -203,6 +206,7 @@ auto main(int const argc, char const *const argv[])->int {
     ("opl", boost::program_options::value<std::string>()->default_value("dosbox"), "FM synthesis: dosbox (default, 44100 Hz) or nuked");
 #ifndef NDEBUG
   options.add_options()
+    ("cheats-dev", "developer use: enable K to eliminate active enemies and credit their objectives")
     ("seconds", boost::program_options::value<double>()->default_value(0.0), "developer use: close after this many seconds; zero disables the time limit")
     ("screenshot", boost::program_options::value<std::string>(), "developer use: save a screenshot of the initial scene as a PPM image, then exit without opening a window");
 #endif // NDEBUG
@@ -351,6 +355,9 @@ auto main(int const argc, char const *const argv[])->int {
   darker::game::assign_city_variants(cells, variant_limits);
   flight_host host;
   host.freeze_enabled = arguments.contains("cheat-lyndon");
+#ifndef NDEBUG
+  host.developer_cheats = arguments.contains("cheats-dev");
+#endif // NDEBUG
   host.mouse_enabled = !arguments.contains("no-mouse");
   bool const noclip{arguments.contains("noclip")};
   bool const boost_cheat{arguments.contains("cheat-brooke")};
@@ -1006,6 +1013,12 @@ auto main(int const argc, char const *const argv[])->int {
       return;
     }
     if(host.player.lifecycle.crashing) return;
+#ifndef NDEBUG
+    if(key == GLFW_KEY_K && action == GLFW_PRESS && host.developer_cheats && host.combat) {
+      host.combat->eliminate_active_enemies(host.clock);
+      return;
+    }
+#endif // NDEBUG
     if(key == GLFW_KEY_Z && action == GLFW_PRESS && host.freeze_enabled) {
       host.player.toggle_freeze();
       return;

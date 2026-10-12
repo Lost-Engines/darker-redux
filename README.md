@@ -39,6 +39,7 @@ Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/d
 - **Transparent enlarged radar:** hold Insert or keypad 0 to overlay the radar with a half-opacity backdrop. Contacts, heading and coordinates remain opaque, including in F4 and external views.
 
 - **Nightmare reinforcements:** restored the original authored spawn positions and fade-in, avoiding overlapping arrivals that immediately collide. This correction is also backported to the faithful engine.
+- **Developer cheats (Debug only):** launch with `--cheats-dev`, then press **K** during flight to eliminate active aircraft and ground/static mission targets. Normal objective credit and cleanup run on the next simulation update; reserve waves and uncounted ground escorts are preserved. This switch and key handler are absent from Release builds.
 - **Nightmare steering:** removed the scripted height-512 altitude hold during the late truck hunt. Pitch remains under player control; the A-key altitude hold is still available. The beacon patterns, enemies and objective progression are unchanged.
 - **Fountain lights:** white fountain lamps use the beacons’ luminous shading so they remain bright at a distance. Their tinted reflections retain ordinary shading, and the lamps remain independent of beacon power.
 - **Distant smoke and fire:** particle sprites shrink with projected size, becoming a single actual render pixel only when sufficiently distant for the current resolution and field of view.

@@ -78,6 +78,9 @@ public:
   void activate_reserves(actor_category category, uint8_t count, object_pose const &player, clock_tick clock);
   void adjust_objectives(uint8_t operand) noexcept;
   void update_difficulty(campaign_clock clock) noexcept;
+#ifndef NDEBUG
+  unsigned int eliminate_active_enemies(clock_tick clock) noexcept;
+#endif // NDEBUG
   unsigned int remaining_objectives() const noexcept;
   std::span<uint8_t const> status_flags(uint8_t player_flags) noexcept;
   void advance(player_flight &player, city_map &cells, resources::geometry_bank const &bank,
