@@ -152,3 +152,34 @@ TEST_CASE("Powered streetlight discs fade out without leaving minimum-size dots"
     }
   }
 }
+
+TEST_CASE("Fountain lamps retain luminous shading while reflections stay dim", "[graphics][models]") {
+  using namespace darker::graphics;
+  std::array<std::byte, 17> model{};
+  model[11] = std::byte{0x97};
+  model[12] = std::byte{0x22};
+  model[14] = std::byte{1};
+  model[16] = std::byte{0x0d};
+  projection_parameters const projection{
+    .depth{
+      .whole{256},
+    },
+    .origin{160, 100},
+  };
+  for(auto const path : {model_path::direct, model_path::near_clipped}) {
+    for(unsigned int const power : {0u, 15u}) {
+      model_colours colours{};
+      colours.shades.fill(1);
+      colours.dynamic = static_cast<uint8_t>(0xf0 | power);
+      auto const pixel{[&](uint8_t const source) {
+        model[13] = std::byte{source};
+        framework::render::indexed_cockpit_framebuffer frame{};
+        draw_model(frame, model, 0, projection, colours, {}, path);
+        return frame.pixels[100 * 320 + 160];
+      }};
+      CHECK(pixel(27) == 17); // full-strength luminous colour at maximum natural darkening
+      CHECK(pixel(147) == 129); // original purple reflection ramp, ordinarily shaded
+      if(power == 15) CHECK(pixel(27) == pixel(28));
+    }
+  }
+}
