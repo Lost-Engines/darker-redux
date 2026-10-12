@@ -180,7 +180,7 @@ auto main(int const argc, char const *const argv[])->int {
     ("resolution", boost::program_options::value<std::string>()->default_value("320x240"), "internal world resolution WIDTHxHEIGHT (64..8192 per axis)")
     ("fov", boost::program_options::value<double>(), "full-screen vertical field of view in degrees, 15..140 (original/default: approximately 50.2 degrees)")
     ("draw-distance", boost::program_options::value<unsigned int>()->default_value(darker::graphics::scene_limits::surface_radius_cells), "surface draw radius in map cells, 2..182 (original: 15; 182 includes the whole city)")
-    ("minimum-light-size", boost::program_options::value<double>()->default_value(1), "minimum city light disc diameter in 320x200 reference pixels (scaled by height); 0 disables")
+    ("minimum-light-size", boost::program_options::value<double>()->default_value(0.5), "minimum city light disc diameter in 320x200 reference pixels (scaled by height); 0 disables")
     ("fog-start", boost::program_options::value<double>()->default_value(darker::graphics::fog_range{}.start_cells), "surface fog start in map cells; Delphi reaches full natural fog at fade-distance")
     ("fade-distance", boost::program_options::value<double>()->default_value(darker::graphics::scene_limits::surface_fade_cells), "Delphi: full natural fog here, then background fade until draw-distance (default capped to draw-distance)")
     ("fog-target", boost::program_options::value<std::string>()->default_value("background"), "Delphi final fade: background or original (keep dark silhouettes); Halon keeps its original palette fog")
