@@ -55,9 +55,9 @@ struct model_workspace {
 };
 
 void draw_model(model_workspace &workspace, framework::render::indexed_surface target, std::span<std::byte const> pool,
-  size_t model_offset, projection_parameters projection, model_colours const &colours, raster_viewport viewport = {}, model_path path = model_path::direct, model_animation const &animation = {}, model_shading shading = model_shading::flat);
+  size_t model_offset, projection_parameters projection, model_colours const &colours, raster_viewport viewport = {}, model_path path = model_path::direct, model_animation const &animation = {}, model_shading shading = model_shading::flat, unsigned int minimum_disc_radius = 0);
 
 void draw_model(framework::render::indexed_surface target, std::span<std::byte const> pool,
-  size_t model_offset, projection_parameters projection, model_colours const &colours, raster_viewport viewport = {}, model_path path = model_path::direct, model_animation const &animation = {}, model_shading shading = model_shading::flat);
+  size_t model_offset, projection_parameters projection, model_colours const &colours, raster_viewport viewport = {}, model_path path = model_path::direct, model_animation const &animation = {}, model_shading shading = model_shading::flat, unsigned int minimum_disc_radius = 0);
 
 } // namespace darker::graphics

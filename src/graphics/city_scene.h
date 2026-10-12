@@ -61,6 +61,7 @@ struct city_view {
     .bottom{cockpit_view_layout::caero_height},
   };
   double focal_length{render_geometry::focal_length};
+  unsigned int minimum_light_radius{0}; // render pixels; zero retains the native single-pixel minimum
   bool beacon_lighting{true};
   bool gouraud{true};
   bool underground{false};

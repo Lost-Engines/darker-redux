@@ -80,6 +80,7 @@ private:
   model_shading shading;
   screen_vertex screen_origin;
   double focal_length;
+  unsigned int minimum_disc_radius;
   model_workspace &workspace;
   std::array<bool, 256> defined{};
   size_t cursor{0};
@@ -179,8 +180,8 @@ private:
 
 public:
   interpreter(model_workspace &storage, framework::render::indexed_surface frame, std::span<std::byte const> const bytes,
-    projection_parameters const parameters, model_colours const &palette, raster_viewport const bounds, model_path const drawing_path, model_animation const &animation_state, model_shading const shading_mode)
-    : target{frame}, pool{bytes}, projection{parameters}, colours{palette}, animation{animation_state}, distance_high{render_geometry::wrap_coordinate(parameters.depth.whole) >> 8}, viewport{bounds}, path{drawing_path}, shading{shading_mode}, screen_origin{parameters.origin}, focal_length{parameters.focal_length}, workspace{storage} {
+    projection_parameters const parameters, model_colours const &palette, raster_viewport const bounds, model_path const drawing_path, model_animation const &animation_state, model_shading const shading_mode, unsigned int const minimum_radius)
+    : target{frame}, pool{bytes}, projection{parameters}, colours{palette}, animation{animation_state}, distance_high{render_geometry::wrap_coordinate(parameters.depth.whole) >> 8}, viewport{bounds}, path{drawing_path}, shading{shading_mode}, screen_origin{parameters.origin}, focal_length{parameters.focal_length}, minimum_disc_radius{minimum_radius}, workspace{storage} {
     /// Keep bytecode, projection cache and vertex storage together for one drawing invocation
   }
 
@@ -220,7 +221,8 @@ public:
           if(path == model_path::near_clipped && depth < render_geometry::near_depth) break;
           if(depth == 0) throw std::domain_error{"Model disc has zero depth"};
           auto const point{path == model_path::near_clipped ? project_vertex(centre, screen_origin, focal_length) : workspace.vertices[cursor]};
-          draw_disc(target, {point.x, point.y}, static_cast<unsigned int>(radius * (focal_length / render_geometry::focal_length) / static_cast<render_geometry::coordinate_bits>(depth)), index, viewport);
+          auto const projected_radius{static_cast<unsigned int>(radius * (focal_length / render_geometry::focal_length) / static_cast<render_geometry::coordinate_bits>(depth))};
+          draw_disc(target, {point.x, point.y}, std::max(projected_radius, minimum_disc_radius), index, viewport);
         }
         break;
       case model_opcode::line:
@@ -431,18 +433,18 @@ void update_fountain_parameters(model_animation &animation, uint16_t const clock
 }
 
 void draw_model(framework::render::indexed_surface target, std::span<std::byte const> const pool,
-  size_t const model_offset, projection_parameters const projection, model_colours const &colours, raster_viewport const viewport, model_path const path, model_animation const &animation, model_shading const shading) {
+  size_t const model_offset, projection_parameters const projection, model_colours const &colours, raster_viewport const viewport, model_path const path, model_animation const &animation, model_shading const shading, unsigned int const minimum_disc_radius) {
   /// Standalone callers can draw without retaining a workspace between invocations
   model_workspace workspace;
-  draw_model(workspace, target, pool, model_offset, projection, colours, viewport, path, animation, shading);
+  draw_model(workspace, target, pool, model_offset, projection, colours, viewport, path, animation, shading, minimum_disc_radius);
 }
 
 void draw_model(model_workspace &workspace, framework::render::indexed_surface target, std::span<std::byte const> const pool,
-  size_t const model_offset, projection_parameters const projection, model_colours const &colours, raster_viewport const viewport, model_path const path, model_animation const &animation, model_shading const shading) {
+  size_t const model_offset, projection_parameters const projection, model_colours const &colours, raster_viewport const viewport, model_path const path, model_animation const &animation, model_shading const shading, unsigned int const minimum_disc_radius) {
   /// The common eleven-byte model header precedes drawing code for both city and special definitions
   if(model_offset > pool.size() || pool.size() - model_offset < 12) throw std::invalid_argument{"Model has no complete header and drawing body"};
   if(!viewport.fits(target.width, target.height)) throw std::invalid_argument{"Model viewport exceeds the framebuffer"};
-  interpreter{workspace, target, pool, projection, colours, viewport, path, animation, shading}.run(model_offset + 11);
+  interpreter{workspace, target, pool, projection, colours, viewport, path, animation, shading, minimum_disc_radius}.run(model_offset + 11);
 }
 
 } // namespace darker::graphics

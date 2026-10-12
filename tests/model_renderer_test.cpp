@@ -81,3 +81,37 @@ TEST_CASE("Reused model storage does not make previous vertices valid", "[graphi
   invalid[16] = std::byte{0x0d}; // return
   REQUIRE_THROWS_AS(darker::graphics::draw_model(workspace, frame, invalid, 0, projection, {}), std::invalid_argument);
 }
+
+TEST_CASE("City light minimum enlarges distant discs without shrinking nearby discs", "[graphics][models]") {
+  using namespace darker::graphics;
+  std::array<std::byte, 17> model{};
+  model[11] = std::byte{0x97}; // emit the origin
+  model[12] = std::byte{0x22}; // disc consuming that vertex
+  model[13] = std::byte{1};
+  model[14] = std::byte{1};    // radius numerator 1: projects to a single pixel
+  model[16] = std::byte{0x0d};
+  model_colours colours{};
+  colours.shades[1] = 7;
+  projection_parameters const projection{
+    .depth{
+      .whole{256},
+    },
+    .origin{160, 100},
+  };
+  auto const render{[&](unsigned int const minimum, model_path const path) {
+    framework::render::indexed_cockpit_framebuffer frame{};
+    draw_model(frame, model, 0, projection, colours, {}, path, {}, model_shading::flat, minimum);
+    return frame;
+  }};
+  for(auto const path : {model_path::direct, model_path::near_clipped}) {
+    auto const native{render(0, path)};
+    CHECK(std::ranges::count(native.pixels, 7) == 1);
+    auto const enlarged{render(3, path)};
+    CHECK(std::ranges::count(enlarged.pixels, 7) > 1);
+    model[15] = std::byte{8}; // radius numerator 2049: larger than the minimum
+    auto const large{render(0, path)};
+    auto const large_with_minimum{render(3, path)};
+    CHECK(large.pixels == large_with_minimum.pixels);
+    model[15] = std::byte{0};
+  }
+}
