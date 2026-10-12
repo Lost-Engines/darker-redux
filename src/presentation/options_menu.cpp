@@ -8,18 +8,23 @@
 #include <sstream>
 #include <stdexcept>
 #include <utility>
+#include <GLFW/glfw3.h>
 #include "graphics/font.h"
 
 namespace darker::presentation {
 namespace {
 enum class option_row : unsigned int {
   resolution, field_of_view, draw_distance, fog_start, fade_distance, fog_curve,
-  minimum_light_size, background_fade, gouraud, defaults, apply, cancel, back, count
+  minimum_light_size, background_fade, gouraud, controls, defaults, apply, cancel, back, count
 };
-constexpr unsigned int setting_count{std::to_underlying(option_row::defaults)};
+constexpr unsigned int setting_count{std::to_underlying(option_row::controls)};
 constexpr unsigned int row_count{std::to_underlying(option_row::count)};
 constexpr int first_row{35};
-constexpr int row_height{12};
+constexpr int row_height{11};
+constexpr unsigned int visible_rows{14};
+constexpr unsigned int mouse_setting_count{2};
+constexpr unsigned int controls_defaults{mouse_setting_count + std::to_underlying(input::control_action::count)};
+constexpr unsigned int controls_back{controls_defaults + 1};
 constexpr std::array<std::array<int, 2>, 9> resolutions{{
   {320, 240}, {640, 480}, {960, 540}, {1280, 720}, {1280, 960},
   {1600, 900}, {1920, 1080}, {2560, 1440}, {3840, 2160}
@@ -34,14 +39,14 @@ std::string number(double value) {
 }
 } // namespace
 
-bool display_preferences::valid() const noexcept {
+bool preferences::valid() const noexcept {
   return width >= 64 && width <= 8192 && height >= 64 && height <= 8192
     && std::isfinite(field_of_view) && field_of_view >= 15 && field_of_view <= 140
     && draw_distance >= 2 && draw_distance <= 182
     && std::isfinite(fog_start) && std::isfinite(fade_distance)
     && fog_start >= 0 && fade_distance >= fog_start && fade_distance <= draw_distance
     && std::isfinite(fog_curve) && fog_curve >= 0
-    && std::isfinite(minimum_light_size) && minimum_light_size >= 0;
+    && std::isfinite(minimum_light_size) && minimum_light_size >= 0 && controls.valid();
 }
 
 std::filesystem::path preferences_path() {
@@ -53,16 +58,16 @@ std::filesystem::path preferences_path() {
   return "darker-redux-options.cfg";
 }
 
-display_preferences read_preferences(std::filesystem::path const &path) {
-  display_preferences result;
+preferences read_preferences(std::filesystem::path const &path) {
+  preferences result;
   if(!std::filesystem::exists(path)) return result;
   std::ifstream input{path};
-  if(!input) throw std::runtime_error{"Cannot read display preferences"};
+  if(!input) throw std::runtime_error{"Cannot read preferences"};
   std::string line;
   while(std::getline(input, line)) {
     if(line.empty() || line.front() == '#') continue;
     auto const equals{line.find('=')};
-    if(equals == std::string::npos) throw std::runtime_error{"Invalid display preferences"};
+    if(equals == std::string::npos) throw std::runtime_error{"Invalid preferences"};
     auto const name{line.substr(0, equals)};
     std::istringstream value{line.substr(equals + 1)};
     if(name == "width") value >> result.width;
@@ -75,26 +80,40 @@ display_preferences read_preferences(std::filesystem::path const &path) {
     else if(name == "minimum-light-size") value >> result.minimum_light_size;
     else if(name == "background-fade") value >> result.background_fade;
     else if(name == "gouraud") value >> result.gouraud;
+    else if(name == "mouse-sensitivity") value >> result.controls.mouse_sensitivity;
+    else if(name == "invert-mouse") value >> result.controls.invert_mouse;
+    else if(name.starts_with("bind.")) {
+      auto const descriptions{input::control_descriptions()};
+      auto const found{std::ranges::find(descriptions, std::string_view{name}.substr(5), &input::control_description::name)};
+      if(found == descriptions.end()) continue;
+      value >> result.controls.keys[static_cast<unsigned int>(found - descriptions.begin())];
+    }
     else continue; // Allow newer versions to add preferences.
-    if(value.fail() || (value >> std::ws, !value.eof())) throw std::runtime_error{"Invalid display preference: " + name};
+    if(value.fail() || (value >> std::ws, !value.eof())) throw std::runtime_error{"Invalid preference: " + name};
   }
-  if(!result.valid()) throw std::runtime_error{"Display preferences are outside supported ranges"};
+  if(!result.valid()) throw std::runtime_error{"Preferences are outside supported ranges"};
   return result;
 }
 
-void write_preferences(std::filesystem::path const &path, display_preferences const &value) {
-  if(!value.valid()) throw std::invalid_argument{"Invalid display preferences"};
+void write_preferences(std::filesystem::path const &path, preferences const &value) {
+  if(!value.valid()) throw std::invalid_argument{"Invalid preferences"};
   if(!path.parent_path().empty()) std::filesystem::create_directories(path.parent_path());
   std::ofstream output{path};
   output << std::setprecision(17)
-    << "# Darker Redux display preferences; command-line options override these.\n"
+    << "# Darker Redux preferences; command-line options override these.\n"
     << "width=" << value.width << "\nheight=" << value.height
     << "\nfov=" << value.field_of_view << "\ndraw-distance=" << value.draw_distance
     << "\nfog-start=" << value.fog_start << "\nfade-distance=" << value.fade_distance
     << "\nfog-curve=" << value.fog_curve << "\nminimum-light-size=" << value.minimum_light_size
     << "\nbackground-fade=" << value.background_fade << "\ngouraud=" << value.gouraud << '\n';
+  output << "mouse-sensitivity=" << value.controls.mouse_sensitivity
+    << "\ninvert-mouse=" << value.controls.invert_mouse << '\n';
+  auto const descriptions{input::control_descriptions()};
+  for(unsigned int i{0}; i < descriptions.size(); ++i) {
+    output << "bind." << descriptions[i].name << '=' << value.controls.keys[i] << '\n';
+  }
   output.close();
-  if(!output) throw std::runtime_error{"Cannot save display preferences to " + path.string()};
+  if(!output) throw std::runtime_error{"Cannot save preferences to " + path.string()};
 }
 
 void options_menu::open() {
@@ -102,10 +121,54 @@ void options_menu::open() {
   active = true;
   save_requested = false;
   selected = 0;
+  scroll = 0;
+  controls_page = false;
+  binding_pending = false;
+  notice.clear();
+}
+
+unsigned int options_menu::rows() const noexcept {
+  return controls_page ? controls_back + 1 : row_count;
+}
+
+void options_menu::keep_visible() noexcept {
+  if(selected < scroll) scroll = selected;
+  if(selected >= scroll + visible_rows) scroll = selected - visible_rows + 1;
+}
+
+bool options_menu::capturing_key() const noexcept {
+  return binding_pending;
+}
+
+void options_menu::capture_key(int const physical_key) {
+  if(!active || !binding_pending) return;
+  if(physical_key == GLFW_KEY_ESCAPE) {
+    binding_pending = false;
+    notice.clear();
+    return;
+  }
+  int const key{physical_key == GLFW_KEY_DELETE ? GLFW_KEY_UNKNOWN : input::normalise_key(physical_key)};
+  if(!input::bindable_key(key)) {
+    notice = "Reserved key. Choose another, or Esc to cancel.";
+    return;
+  }
+  auto const action{selected - mouse_setting_count};
+  auto const conflict{values.controls.action_for_key(key)};
+  if(conflict && std::to_underlying(*conflict) != action) {
+    notice = "In use: " + std::string{input::control_descriptions()[std::to_underlying(*conflict)].label};
+    return;
+  }
+  values.controls.keys[action] = key;
+  binding_pending = false;
   notice.clear();
 }
 
 void options_menu::adjust(int const direction) {
+  if(controls_page) {
+    if(selected == 0) values.controls.mouse_sensitivity = std::clamp(std::round(values.controls.mouse_sensitivity * 10 + direction) / 10, 0.1, 5.0);
+    if(selected == 1) values.controls.invert_mouse = !values.controls.invert_mouse;
+    return;
+  }
   switch(static_cast<option_row>(selected)) {
   case option_row::resolution: {
     auto position{std::ranges::find_if(resolutions, [&](auto const &size){ return size[0] == values.width && size[1] == values.height; })};
@@ -140,38 +203,68 @@ void options_menu::adjust(int const direction) {
 }
 
 void options_menu::key(options_key const key) {
-  if(!active) return;
+  if(!active || binding_pending) return;
   notice.clear();
   switch(key) {
-  case options_key::up: selected = (selected + row_count - 1) % row_count; break;
-  case options_key::down: selected = (selected + 1) % row_count; break;
-  case options_key::left: if(selected < setting_count) adjust(-1); break;
-  case options_key::right: if(selected < setting_count) adjust(1); break;
+  case options_key::up: selected = (selected + rows() - 1) % rows(); break;
+  case options_key::down: selected = (selected + 1) % rows(); break;
+  case options_key::left: if(selected < (controls_page ? mouse_setting_count : setting_count)) adjust(-1); break;
+  case options_key::right: if(selected < (controls_page ? mouse_setting_count : setting_count)) adjust(1); break;
+  case options_key::page_up: selected = selected > visible_rows ? selected - visible_rows : 0; break;
+  case options_key::page_down: selected = std::min(selected + visible_rows, rows() - 1); break;
   case options_key::cancel:
+    if(controls_page) {
+      controls_page = false;
+      selected = std::to_underlying(option_row::controls);
+      scroll = 0;
+      break;
+    }
     values = original;
     save_requested = false;
     active = false;
     break;
   case options_key::accept:
-    if(selected < setting_count) adjust(1);
-    else if(selected == std::to_underlying(option_row::defaults)) values = display_preferences{};
+    if(controls_page) {
+      if(selected < mouse_setting_count) adjust(1);
+      else if(selected < controls_defaults) binding_pending = true;
+      else if(selected == controls_defaults) values.controls = input::control_preferences{};
+      else {
+        controls_page = false;
+        selected = std::to_underlying(option_row::controls);
+        scroll = 0;
+      }
+      break;
+    }
+    if(selected < (controls_page ? mouse_setting_count : setting_count)) adjust(1);
+    else if(selected == std::to_underlying(option_row::controls)) {
+      controls_page = true;
+      selected = 0;
+      scroll = 0;
+    } else if(selected == std::to_underlying(option_row::defaults)) values = preferences{};
     else if(selected == std::to_underlying(option_row::apply)) save_requested = true;
     else if(selected == std::to_underlying(option_row::cancel)) { values = original; active = false; }
     else active = false; // Keep the preview for this session, without writing preferences.
     break;
   }
+  keep_visible();
 }
 
 void options_menu::point(int const x, int const y) {
-  if(x >= 12 && x < 308 && y >= first_row && y < first_row + static_cast<int>(row_count) * row_height) {
-    selected = static_cast<unsigned int>((y - first_row) / row_height);
+  if(binding_pending) return;
+  if(x >= 12 && x < 308 && y >= first_row && y < first_row + static_cast<int>(std::min(visible_rows, rows() - scroll)) * row_height) {
+    selected = scroll + static_cast<unsigned int>((y - first_row) / row_height);
   }
 }
 
 void options_menu::click(int const x, int const y) {
-  if(x < 12 || x >= 308 || y < first_row || y >= first_row + static_cast<int>(row_count) * row_height) return;
+  if(controls_page && !binding_pending && y >= 188 && y < 199) {
+    if(x >= 20 && x < 60) key(options_key::page_up);
+    if(x >= 260 && x < 300) key(options_key::page_down);
+    return;
+  }
+  if(binding_pending || x < 12 || x >= 308 || y < first_row || y >= first_row + static_cast<int>(std::min(visible_rows, rows() - scroll)) * row_height) return;
   point(x, y);
-  key(selected < setting_count && x < 235 && x >= 190 ? options_key::left : options_key::accept);
+  key(selected < (controls_page ? mouse_setting_count : setting_count) && x < 235 && x >= 190 ? options_key::left : options_key::accept);
 }
 
 void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int const width, int const height,
@@ -184,10 +277,13 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
         .edge{0}
       });
   }};
-  text("DISPLAY OPTIONS", 95, 15, 2);
+  text(controls_page ? "CONTROLS" : "OPTIONS", 125, 15, 2);
+  if(controls_page) {
+    text(std::to_string(scroll + 1) + "-" + std::to_string(std::min(scroll + visible_rows, rows())) + "/" + std::to_string(rows()), 252, 15);
+  }
   std::array<std::string, row_count> const labels{
     "Resolution", "Vertical field of view", "Draw distance", "Fog starts", "Fog reaches full shade",
-    "Fog curve", "Minimum light size", "Distant fade", "Gouraud shading", "Restore defaults",
+    "Fog curve", "Minimum light size", "Distant fade", "Gouraud shading", "Controls...", "Restore defaults",
     "Apply and save", "Cancel changes", "Return without saving"
   };
   std::array<std::string, 9> const settings{
@@ -195,8 +291,22 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
     number(values.draw_distance), number(values.fog_start), number(values.fade_distance), number(values.fog_curve),
     number(values.minimum_light_size), values.background_fade ? "Sky colour" : "Original", values.gouraud ? "On" : "Off"
   };
-  for(unsigned int row{0}; row < row_count; ++row) {
-    int const y{first_row + static_cast<int>(row) * row_height};
+  for(unsigned int row{scroll}; row < std::min(scroll + visible_rows, rows()); ++row) {
+    int const y{first_row + static_cast<int>(row - scroll) * row_height};
+    if(controls_page) {
+      std::string label;
+      std::string value;
+      if(row == 0) { label = "Mouse sensitivity"; value = number(values.controls.mouse_sensitivity) + "x"; }
+      else if(row == 1) { label = "Invert vertical mouse"; value = values.controls.invert_mouse ? "On" : "Off"; }
+      else if(row < controls_defaults) {
+        auto const action{row - mouse_setting_count};
+        label = input::control_descriptions()[action].label;
+        value = binding_pending && row == selected ? "Press a key" : input::key_label(values.controls.keys[action]);
+      } else label = row == controls_defaults ? "Restore control defaults" : "Back to options";
+      text(label, 20, y, row == selected ? 2 : 1);
+      text(value, 220, y, row == selected ? 2 : 1);
+      continue;
+    }
     text(labels[row], 20, y, row == selected ? 2 : 1);
     if(row < settings.size()) {
       text("<", 193, y);
@@ -204,18 +314,26 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
       text(">", 294, y);
     }
   }
+  if(controls_page) {
+    text("< Prev", 20, 190);
+    text("Next >", 260, 190);
+  }
   std::array<std::string_view, row_count> constexpr hints{
     "Render resolution; window size stays unchanged.", "Vertical angle in degrees. Original: 50.2.",
     "Map cells. Original: 15. Whole city: 182.", "Map cells before distance shading begins.",
     "Map cells to full shade, then distant fade.", "Higher values darken nearby objects faster.",
     "Pixels at 320x200. Zero disables the minimum.", "Blend the farthest Delphi silhouettes into sky.",
-    "Gouraud shading. F9 also switches this in flight.", "Preview the recommended Redux defaults.",
+    "Gouraud shading can also be switched in flight.", "Key bindings and mouse steering settings.", "Preview the recommended Redux defaults.",
     "Save these settings for future sessions.", "Restore the settings from when this menu opened.",
     "Keep changes until you quit, without saving."
   };
-  text(notice.empty() ? hints[selected] : std::string_view{notice}, 13, 201);
-  text("Arrows: adjust   Enter: select   Esc: cancel", 26, 217);
-  text("Hold Tab to preview the unobscured scene", 36, 225);
+  std::string_view const hint{controls_page
+    ? (binding_pending ? "Press a key; Delete clears; Esc cancels."
+      : "Mouse buttons: left primary, right secondary.")
+    : hints[selected]};
+  text(notice.empty() ? hint : std::string_view{notice}, 13, 201);
+  text(controls_page ? "Arrows: navigate   Enter: change   Esc: back" : "Arrows: adjust   Enter: select   Esc: cancel", 22, 217);
+  text(controls_page ? "PgUp/PgDn: scroll   Changes save via Options" : "Hold Tab to preview the unobscured scene", 20, 225);
   // Retain a faint scene silhouette without competing with the menu text.
   unsigned int constexpr background_divisor{16};
   auto const viewport{framework::render::fit_viewport(width, height, 320, 240)};
@@ -227,8 +345,8 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
       if(source_x < 7 || source_x >= 313) continue;
       auto &pixel{pixels[static_cast<size_t>(y + viewport.y) * width + x + viewport.x]};
       auto const code{ink.pixels[static_cast<unsigned int>(source_y * 320 + source_x)]};
-      bool const highlight{source_y >= first_row + static_cast<int>(selected) * row_height - 1
-        && source_y < first_row + static_cast<int>(selected + 1) * row_height - 1};
+      bool const highlight{source_y >= first_row + static_cast<int>(selected - scroll) * row_height - 1
+        && source_y < first_row + static_cast<int>(selected - scroll + 1) * row_height - 1};
       if(code) pixel = code == 2 ? framework::render::rgba_pixel{238, 220, 184} : framework::render::rgba_pixel{174, 170, 186};
       else if(source_x == 7 || source_x == 312 || source_y == 7 || source_y == 233) pixel = {108, 100, 120};
       else pixel = {static_cast<uint8_t>(pixel.r / background_divisor + (highlight ? 44 : 15)), static_cast<uint8_t>(pixel.g / background_divisor + (highlight ? 38 : 14)), static_cast<uint8_t>(pixel.b / background_divisor + (highlight ? 52 : 22))};

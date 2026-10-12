@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numbers>
 #include "graphics/model_lighting.h"
+#include "input/control_preferences.h"
 #include <span>
 #include <string>
 #include "render/framebuffer.h"
@@ -11,7 +12,7 @@
 
 namespace darker::presentation {
 
-struct display_preferences {
+struct preferences {
   int width{320};
   int height{240};
   double field_of_view{2 * std::atan(120.0 / 256.0) * 180 / std::numbers::pi};
@@ -22,30 +23,38 @@ struct display_preferences {
   double minimum_light_size{0.5};
   bool background_fade{true};
   bool gouraud{true};
+  input::control_preferences controls;
 
   bool valid() const noexcept;
-  bool operator==(display_preferences const&) const = default;
+  bool operator==(preferences const&) const = default;
 };
 
 std::filesystem::path preferences_path();
-display_preferences read_preferences(std::filesystem::path const &path);
-void write_preferences(std::filesystem::path const &path, display_preferences const &value);
+preferences read_preferences(std::filesystem::path const &path);
+void write_preferences(std::filesystem::path const &path, preferences const &value);
 
-enum class options_key { up, down, left, right, accept, cancel };
+enum class options_key { up, down, left, right, accept, cancel, page_up, page_down };
 
 class options_menu {
-  display_preferences original;
+  preferences original;
   unsigned int selected{0};
+  unsigned int scroll{0};
+  bool controls_page{false};
+  bool binding_pending{false};
+  unsigned int rows() const noexcept;
+  void keep_visible() noexcept;
   void adjust(int direction);
 
 public:
-  display_preferences values;
+  preferences values;
   bool active{false};
   bool save_requested{false};
   std::string notice;
 
   void open();
   void key(options_key key);
+  bool capturing_key() const noexcept;
+  void capture_key(int key);
   void point(int x, int y);
   void click(int x, int y);
   void draw(std::span<framework::render::rgba_pixel> pixels, int width, int height,

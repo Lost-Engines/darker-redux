@@ -127,7 +127,14 @@ struct flight_host {
 
   bool key_down(GLFWwindow &window, int const key) const {
     /// A resume key remains consumed through repeats and held-key polling until its release
-    return focused && !paused && key != resume_key && glfwGetKey(&window, key) == GLFW_PRESS;
+    int const binding{options.values.controls.binding_for_command(key)};
+    if(!focused || paused || binding == GLFW_KEY_UNKNOWN || binding == darker::input::normalise_key(resume_key)) return false;
+    if(glfwGetKey(&window, binding) == GLFW_PRESS) return true;
+    // Retain the original paired modifiers and keypad aliases.
+    for(int const alias : {GLFW_KEY_RIGHT_CONTROL, GLFW_KEY_RIGHT_ALT, GLFW_KEY_KP_ENTER, GLFW_KEY_KP_0, GLFW_KEY_GRAVE_ACCENT}) {
+      if(darker::input::normalise_key(alias) == binding && glfwGetKey(&window, alias) == GLFW_PRESS) return true;
+    }
+    return false;
   }
 
   int cursor_mode(bool const captured) noexcept {
@@ -137,8 +144,7 @@ struct flight_host {
     return mouse_enabled ? (captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL) : GLFW_CURSOR_HIDDEN;
   }
 
-  double mouse_origin_x{0};
-  double mouse_origin_y{0};
+  darker::input::mouse_motion mouse_motion;
 
   darker::game::flight_controls_input input(GLFWwindow &window) {
     /// Supply wrapping relative mouse counters and held steering keys to the original control filter
@@ -149,13 +155,15 @@ struct flight_host {
     double x{0}, y{0};
     if(mouse_enabled) glfwGetCursorPos(&window, &x, &y);
     if(!mouse_started) {
-      mouse_origin_x = x;
-      mouse_origin_y = y;
+      mouse_motion.reset();
+      player.controls.bank.previous_mouse = 0;
+      player.controls.pitch.previous_mouse = 0;
       mouse_started = true;
     }
     auto const down{[&](int const key){
       return key_down(window, key);
     }};
+    auto const mouse{mouse_motion.sample(x, y, options.values.controls)};
     return {
       .left{down(GLFW_KEY_LEFT)},
       .right{down(GLFW_KEY_RIGHT)},
@@ -163,8 +171,8 @@ struct flight_host {
       .down{down(GLFW_KEY_DOWN)},
       .control{down(GLFW_KEY_LEFT_CONTROL) || down(GLFW_KEY_RIGHT_CONTROL)},
       .look_around{down(GLFW_KEY_TAB)},
-      .mouse_x{static_cast<uint16_t>(static_cast<int64_t>(x - mouse_origin_x))},
-      .mouse_y{static_cast<uint16_t>(static_cast<int64_t>(mouse_origin_y - y))},
+      .mouse_x{mouse.x},
+      .mouse_y{mouse.y},
     };
   }
 };
@@ -173,7 +181,7 @@ struct flight_host {
 
 auto main(int const argc, char const *const argv[])->int {
   /// Run the reconstructed city flight path while scenario, actors and remaining presentation systems are recovered
-  boost::program_options::options_description options{"Darker (F10 opens display options)"};
+  boost::program_options::options_description options{"Darker (F10 opens options)"};
   options.add_options()
     ("help,h", "show usage")
     ("data-dir", boost::program_options::value<std::string>(), "game directory: packs and DARKER.SAV (default: local installation, then user data directory)")
@@ -226,11 +234,11 @@ auto main(int const argc, char const *const argv[])->int {
     return startup_failure(error.what());
   }
   auto const preferences_file{darker::presentation::preferences_path()};
-  darker::presentation::display_preferences saved_preferences;
+  darker::presentation::preferences saved_preferences;
   try {
     saved_preferences = darker::presentation::read_preferences(preferences_file);
   } catch(std::exception const &error) {
-    std::cerr << "WARNING: " << error.what() << "; using display defaults.\n";
+    std::cerr << "WARNING: " << error.what() << "; using default settings.\n";
   }
   // Explicit command-line values take precedence over saved preferences.
   auto const saved_default{[&](char const *name, auto value){
@@ -507,7 +515,8 @@ auto main(int const argc, char const *const argv[])->int {
     .fog_curve{fog_curve},
     .minimum_light_size{minimum_light_size},
     .background_fade{fog_target == "background"},
-    .gouraud{host.gouraud}
+    .gouraud{host.gouraud},
+    .controls{saved_preferences.controls}
   };
   framework::render::indexed_cockpit_framebuffer display{};
   std::vector<uint8_t> world_pixels(static_cast<size_t>(display_width) * display_height);
@@ -894,7 +903,7 @@ auto main(int const argc, char const *const argv[])->int {
     host.player.controls.pitch.previous_mouse = 0;
   });
 
-  glfwSetKeyCallback(window.get(), [](GLFWwindow *const window, int const key, int, int const action, int const modifiers){
+  glfwSetKeyCallback(window.get(), [](GLFWwindow *const window, int key, int, int const action, int const modifiers){
     auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};
     if(action == GLFW_RELEASE) {
       if(key == host.resume_key) host.resume_key = GLFW_KEY_UNKNOWN;
@@ -902,12 +911,21 @@ auto main(int const argc, char const *const argv[])->int {
     }
     if(!host.focused || key == host.resume_key) return;
     if(host.options.active) {
+      if(host.options.capturing_key()) {
+        if(action == GLFW_PRESS) {
+          host.options.capture_key(key);
+          host.resume_key = key;
+        }
+        return;
+      }
       using darker::presentation::options_key;
       switch(key) {
       case GLFW_KEY_UP: host.options.key(options_key::up); break;
       case GLFW_KEY_DOWN: host.options.key(options_key::down); break;
       case GLFW_KEY_LEFT: host.options.key(options_key::left); break;
       case GLFW_KEY_RIGHT: host.options.key(options_key::right); break;
+      case GLFW_KEY_PAGE_UP: host.options.key(options_key::page_up); break;
+      case GLFW_KEY_PAGE_DOWN: host.options.key(options_key::page_down); break;
       case GLFW_KEY_KP_ENTER:
       case GLFW_KEY_ENTER: if(action == GLFW_PRESS) host.options.key(options_key::accept); break;
       case GLFW_KEY_F10:
@@ -1001,11 +1019,6 @@ auto main(int const argc, char const *const argv[])->int {
       }
       return;
     }
-    if(action == GLFW_PRESS && (key == GLFW_KEY_LEFT_BRACKET || key == GLFW_KEY_RIGHT_BRACKET)) {
-      host.field_of_view = std::clamp(host.field_of_view + (key == GLFW_KEY_RIGHT_BRACKET ? 5.0 : -5.0), 15.0, 140.0);
-      std::cout << "Vertical FOV: " << host.field_of_view << " degrees\n";
-    }
-    if(key == GLFW_KEY_F9 && action == GLFW_PRESS) host.gouraud = !host.gouraud;
     if(key == GLFW_KEY_ESCAPE) {
       if(action == GLFW_PRESS) host.quit_prompt.toggle(host.clock);
       return;
@@ -1018,6 +1031,40 @@ auto main(int const argc, char const *const argv[])->int {
       host.exit_requested = session_exit::completed;
       return;
     }
+    if((key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) && host.player.lifecycle.crashing) {
+      if(action == GLFW_PRESS) host.exit_requested = session_exit::death;
+      return;
+    }
+    if(!host.player.lifecycle.crashing) {
+#ifndef NDEBUG
+      if(key == GLFW_KEY_K && action == GLFW_PRESS && host.developer_cheats && host.combat) {
+        host.combat->eliminate_active_enemies(host.clock);
+        return;
+      }
+#endif // NDEBUG
+      if(key == GLFW_KEY_Z && action == GLFW_PRESS && host.freeze_enabled) {
+        host.player.toggle_freeze();
+        return;
+      }
+      if(key == GLFW_KEY_X && action == GLFW_PRESS && host.front && host.front->level_skip_enabled()
+        && !(darker::game::has_player_flag(host.player.lifecycle.flags, darker::game::player_flag::dead))) {
+        // B926 restores C610 into C81E and requests the ordinary successful mission exit
+        if(modifiers & GLFW_MOD_SHIFT) {
+          if(!host.front->nightmare_selected()) host.exit_requested = session_exit::previous;
+          return;
+        }
+        host.hangar.return_site = host.hangar.next_return_site;
+        host.exit_requested = session_exit::completed;
+        return;
+      }
+    }
+    key = host.options.values.controls.command_key(key);
+    if(key == GLFW_KEY_UNKNOWN) return;
+    if(action == GLFW_PRESS && (key == GLFW_KEY_LEFT_BRACKET || key == GLFW_KEY_RIGHT_BRACKET)) {
+      host.field_of_view = std::clamp(host.field_of_view + (key == GLFW_KEY_RIGHT_BRACKET ? 5.0 : -5.0), 15.0, 140.0);
+      std::cout << "Vertical FOV: " << host.field_of_view << " degrees\n";
+    }
+    if(key == GLFW_KEY_F9 && action == GLFW_PRESS) host.gouraud = !host.gouraud;
     if(action == GLFW_PRESS && key >= GLFW_KEY_F1 && key <= GLFW_KEY_F6) {
       auto const selected{static_cast<darker::game::camera_mode>(key - GLFW_KEY_F1)};
       if(key >= GLFW_KEY_F5) {
@@ -1038,32 +1085,7 @@ auto main(int const argc, char const *const argv[])->int {
     if(action == GLFW_PRESS && (key == GLFW_KEY_F7 || key == GLFW_KEY_GRAVE_ACCENT)) host.pick_camera = true;
     if(action == GLFW_PRESS && key == GLFW_KEY_COMMA && host.camera.distance_step > 0) --host.camera.distance_step;
     if(action == GLFW_PRESS && key == GLFW_KEY_PERIOD && host.camera.distance_step < 5) ++host.camera.distance_step;
-    if((key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) && host.player.lifecycle.crashing) {
-      if(action == GLFW_PRESS) host.exit_requested = session_exit::death;
-      return;
-    }
     if(host.player.lifecycle.crashing) return;
-#ifndef NDEBUG
-    if(key == GLFW_KEY_K && action == GLFW_PRESS && host.developer_cheats && host.combat) {
-      host.combat->eliminate_active_enemies(host.clock);
-      return;
-    }
-#endif // NDEBUG
-    if(key == GLFW_KEY_Z && action == GLFW_PRESS && host.freeze_enabled) {
-      host.player.toggle_freeze();
-      return;
-    }
-    if(key == GLFW_KEY_X && action == GLFW_PRESS && host.front && host.front->level_skip_enabled()
-      && !(darker::game::has_player_flag(host.player.lifecycle.flags, darker::game::player_flag::dead))) {
-      // B926 restores C610 into C81E and requests the ordinary successful mission exit
-      if(modifiers & GLFW_MOD_SHIFT) {
-        if(!host.front->nightmare_selected()) host.exit_requested = session_exit::previous;
-        return;
-      }
-      host.hangar.return_site = host.hangar.next_return_site;
-      host.exit_requested = session_exit::completed;
-      return;
-    }
     using darker::audio::flight_sound;
     using darker::game::flight_command;
     switch(key) {
@@ -1131,6 +1153,11 @@ auto main(int const argc, char const *const argv[])->int {
   glfwSetCharCallback(window.get(), [](GLFWwindow *window, unsigned int code){
     auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};
     if(host.front && !host.options.active) host.front->character(code);
+  });
+  glfwSetScrollCallback(window.get(), [](GLFWwindow *const window, double, double const amount){
+    auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};
+    if(!host.focused || !host.mouse_enabled || !host.options.active) return;
+    host.options.key(amount > 0 ? darker::presentation::options_key::up : darker::presentation::options_key::down);
   });
   glfwSetCursorPosCallback(window.get(), [](GLFWwindow *const window, double const x, double const y){
     auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};
@@ -1258,7 +1285,7 @@ auto main(int const argc, char const *const argv[])->int {
   auto next_frame{std::chrono::steady_clock::now()};
   bool pause_reported{false};
   bool options_were_active{false};
-  std::optional<darker::presentation::display_preferences> preview_settings;
+  std::optional<darker::presentation::preferences> preview_settings;
   std::vector<framework::render::rgba_pixel> options_output;
   while(!glfwWindowShouldClose(window.get())) {
     host.weapon_selection_blocked = exchange.supplementary_active;
@@ -1402,12 +1429,12 @@ auto main(int const argc, char const *const argv[])->int {
                 = source[static_cast<size_t>(y * height / preview.height) * width + x * width / preview.width];
             }
           }
-          if(glfwGetKey(window.get(), GLFW_KEY_TAB) != GLFW_PRESS) {
+          if(host.options.capturing_key() || glfwGetKey(window.get(), GLFW_KEY_TAB) != GLFW_PRESS) {
             host.options.draw(options_output, canvas_width, canvas_height, font);
           }
           presenter.present(options_output, canvas_width, canvas_height);
         }
-        glfwSetWindowTitle(window.get(), "Darker - display options (F10)");
+        glfwSetWindowTitle(window.get(), "Darker - options (F10)");
       } else {
         pause_reported = false;
         host.mouse_started = false;
