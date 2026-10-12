@@ -23,7 +23,6 @@ struct city_draw_item {
   model_placement placement{};
   model_path path{model_path::direct};
   bool background{false};
-  bool force_flat{false};
   bool distant_point{false};
   std::optional<camera_basis> orientation{};
   uint8_t object_light{255};

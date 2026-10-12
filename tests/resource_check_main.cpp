@@ -305,10 +305,13 @@ auto main(int const argc, char const *const argv[])->int try {
       std::array<uint16_t, 10> const values{
         static_cast<uint16_t>(item->model_offset), static_cast<uint16_t>(item->placement.horizontal.whole), item->placement.horizontal.fraction,
         static_cast<uint16_t>(item->placement.vertical.whole), item->placement.vertical.fraction, static_cast<uint16_t>(item->placement.depth.whole), item->placement.depth.fraction,
-        static_cast<uint16_t>(item->placement.sorting_distance), static_cast<uint16_t>(item->path == darker::graphics::model_path::near_clipped ? 0x2c62 : item->force_flat ? 0x2ca9 : 0x2cb3),
+        static_cast<uint16_t>(item->placement.sorting_distance), static_cast<uint16_t>(item->path == darker::graphics::model_path::near_clipped ? 0x2c62 : 0x2cb3),
         static_cast<uint16_t>(item->background),
       };
-      matched = values == sample.result;
+      auto expected{sample.result};
+      // Redux uses the Gouraud mesh path even beyond the original flat cutoff.
+      if(expected[8] == 0x2ca9) expected[8] = 0x2cb3;
+      matched = values == expected;
     }
     if(!matched) throw std::runtime_error{std::format("City placement differs from native reference: bank {}, type {}, state {}", sample.model[0], sample.model[1], sample.model[2])};
   }

@@ -31,7 +31,6 @@ std::optional<city_draw_item> classify_model(model_placement const placement, re
   auto const diameter{word(header.extent * 2)};
   auto bound{word(placement.depth.whole - render_geometry::near_depth)};
   bool const near{bound <= diameter};
-  bool const force_flat{!near && (static_cast<render_geometry::coordinate_bits>(bound) >> 8) >= header.flat_distance};
   if(near && static_cast<render_geometry::coordinate_bits>(bound) >= static_cast<render_geometry::coordinate_bits>(diameter)) {
     if(word(bound + diameter) < 0) return std::nullopt;
     bound = -render_geometry::near_depth;
@@ -40,8 +39,7 @@ std::optional<city_draw_item> classify_model(model_placement const placement, re
   if(magnitude(placement.horizontal.whole) >= bound * cull_scale || magnitude(placement.vertical.whole) >= bound * cull_scale) return std::nullopt;
   return city_draw_item{
     .placement{placement},
-    .path{near ? model_path::near_clipped : model_path::direct},
-    .force_flat{force_flat}
+    .path{near ? model_path::near_clipped : model_path::direct}
   };
 }
 
@@ -99,8 +97,11 @@ std::optional<city_draw_item> place_scene_object(resources::geometry_bank const 
     item->orientation = orient_model(basis, object.pose.angles);
     item->object_light = object.light;
     item->draw_record = object.native_id ? static_cast<uint16_t>(object.native_id + 14) : 0;
-    item->distant_point = item->force_flat
-      && (static_cast<render_geometry::coordinate_bits>(placement.depth.whole - render_geometry::near_depth) >> 8) >= header.point_distance;
+    // Preserve the original dot transition: it required passing both LOD thresholds.
+    // The old flat-shading threshold no longer changes how meshes are shaded.
+    auto const depth_band{static_cast<render_geometry::coordinate_bits>(word(placement.depth.whole - render_geometry::near_depth)) >> 8};
+    item->distant_point = item->path == model_path::direct
+      && depth_band >= header.flat_distance && depth_band >= header.point_distance;
   }
   return item;
 }
@@ -277,7 +278,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
     retained_colours = colours;
     animation.cell_state = item.orientation ? 0 : cells[item.cell].state;
     draw_model(workspace, target, bank.model_pool(), item.model_offset, projection, colours, view.viewport, item.path, animation,
-      view.gouraud && !item.force_flat ? model_shading::gouraud : model_shading::flat,
+      view.gouraud ? model_shading::gouraud : model_shading::flat,
       item.orientation ? 0 : view.minimum_light_radius);
   }
   return items.size();
