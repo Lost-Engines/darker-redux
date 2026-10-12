@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <bit>
+#include <algorithm>
 #include "game/effects.h"
 #include "graphics/particles.h"
 #include "maths/world_coordinates.h"
@@ -70,6 +71,8 @@ TEST_CASE("Particle pixels follow native source selection and scanline masks", "
     for(size_t x{0}; x < 320; ++x) sheet.pixels[y * 320 + x] = static_cast<uint8_t>((y * 37 + x * 13) % 255 + 1);
   }
   for(auto const &v : darker::test_reference::particle_pixels) {
+    // Distant artwork now shrinks continuously instead of using the native dot cutoff.
+    if(v[0] > 4914) continue;
     CAPTURE(v);
     framework::render::indexed_cockpit_framebuffer frame{};
     darker::graphics::draw_particle(frame, sheet, {
@@ -102,4 +105,24 @@ TEST_CASE("Effect phases and stationary trails match original records", "[effect
     });
     CHECK(emitter.animation.encoded() == v[5]);
   }
+}
+
+TEST_CASE("Distant particles become dots according to projected pixel size", "[effects]") {
+  framework::render::indexed_cockpit_framebuffer sheet;
+  sheet.pixels.fill(99);
+  auto const count_pixels{[&](int const depth, double const focal_length) {
+    framework::render::indexed_cockpit_framebuffer frame{};
+    darker::graphics::draw_particle(frame, sheet, {
+      .x{160},
+      .y{80},
+      .depth{depth},
+    }, 0, {}, focal_length);
+    return std::ranges::count_if(frame.pixels, [](auto const pixel) { return pixel != 0; });
+  }};
+  CHECK(count_pixels(8190, 256) > 1);
+  CHECK(count_pixels(20000, 256) == 1);
+  CHECK(count_pixels(20000, 1024) > 1);
+  CHECK(count_pixels(80000, 1024) == 1);
+  // Scaling distance and focal length together leaves the projected footprint unchanged.
+  CHECK(count_pixels(10000, 256) == count_pixels(40000, 1024));
 }

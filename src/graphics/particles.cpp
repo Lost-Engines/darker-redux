@@ -1,6 +1,7 @@
 #include "graphics/particles.h"
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <stdexcept>
 #include "graphics/particle_tables.h"
 #include "graphics/near_clip.h"
@@ -81,20 +82,24 @@ void draw_particle(framework::render::indexed_surface target,
   /// 6AA6 selects discrete source artwork and masked rows, preserving even-X destination alignment
   unsigned int constexpr animation_phase_count{22};
   int constexpr near_plane_depth{32};
-  int constexpr point_sprite_depth{8190};
+  int constexpr smallest_sprite_depth{4914};
   int constexpr selector_table_base{0x6b34};
   int constexpr animation_column_table{0x6bc7};
   if(phase >= animation_phase_count || point.depth < near_plane_depth) return;
-  if(point.depth >= point_sprite_depth) {
-    if(viewport.contains(point.x, point.y)) target.pixels[point.y * target.stride + point.x] = particle_point_colours[phase];
-    return;
-  }
+  // Beyond the smallest baked sprite, continue shrinking in projected pixels rather
+  // than switching abruptly to a dot at the original fixed world distance.
+  double const scale{focal_length / render_geometry::focal_length
+    * std::min(1.0, static_cast<double>(smallest_sprite_depth) / point.depth)};
   // five baked sprite sizes, nearest first; these addresses identify records in the extracted native selector table
   int const table{point.depth < 1752 ? 0x6b9c : point.depth < 2454 ? 0x6b79 : point.depth < 3510   ? 0x6b5e : point.depth < 4914   ? 0x6b47 : 0x6b34};
   auto const at{[=](int const address){
     return particle_selectors[address - selector_table_base];
   }};
   int const radius{at(table + 10)};
+  if(radius * 2 * scale <= 1.0) {
+    if(viewport.contains(point.x, point.y)) target.pixels[point.y * target.stride + point.x] = particle_point_colours[phase];
+    return;
+  }
   int const x{point.x - radius}, y{point.y - radius};
   int const alignment{x & 2}, destination_x{x & ~1};
   // each parity record has five bytes: animation-column base and two source-coordinate pairs selected by X alignment
@@ -103,13 +108,12 @@ void draw_particle(framework::render::indexed_surface target,
   int const source_y{at(record + 2 + alignment)};
   // radius follows both parity records; subsequent byte pairs give each masked row's skip and width
   for(int row{0}; row < radius * 2; ++row) {
-    double const scale{focal_length / render_geometry::focal_length};
-    int const top{std::max(0, point.y + static_cast<int>((y + row - point.y) * scale))};
-    int const bottom{std::min(viewport.bottom, point.y + static_cast<int>((y + row + 1 - point.y) * scale))};
+    int const top{std::max(0, point.y + static_cast<int>(std::round((y + row - point.y) * scale)))};
+    int const bottom{std::min(viewport.bottom, point.y + static_cast<int>(std::round((y + row + 1 - point.y) * scale)))};
     int const skip{at(table + 11 + row * 2)}, width{at(table + 12 + row * 2)};
     for(int column{skip}; column < skip + width; ++column) {
-      int const left{std::max(0, point.x + static_cast<int>((destination_x + column - point.x) * scale))};
-      int const right{std::min(viewport.right + 1, point.x + static_cast<int>((destination_x + column + 1 - point.x) * scale))};
+      int const left{std::max(0, point.x + static_cast<int>(std::round((destination_x + column - point.x) * scale)))};
+      int const right{std::min(viewport.right + 1, point.x + static_cast<int>(std::round((destination_x + column + 1 - point.x) * scale)))};
       if(left >= right) continue;
       auto const colour{sheet.pixels[(source_y + row) * sheet.stride + source_x + column]};
       for(int output_y{top}; output_y < bottom; ++output_y) std::fill(target.row(output_y).begin() + left, target.row(output_y).begin() + right, colour);
