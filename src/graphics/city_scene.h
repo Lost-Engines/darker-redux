@@ -44,7 +44,7 @@ struct scene_object {
 };
 
 std::optional<city_draw_item> place_scene_object(resources::geometry_bank const &bank, scene_object const &object,
-  camera_basis const &basis, camera_position camera, bool underground = false, std::optional<world_image> image = std::nullopt, double cull_scale = 1);
+  camera_basis const &basis, camera_position camera, bool underground = false, std::optional<world_image> image = std::nullopt, double cull_scale = 1, double focal_length = render_geometry::focal_length);
 std::optional<screen_vertex> project_distant_object(model_placement placement, screen_vertex const &origin, raster_viewport viewport, uint8_t residue = 0, double focal_length = render_geometry::focal_length);
 
 struct city_view {
@@ -80,7 +80,6 @@ private:
   std::vector<uint16_t> candidates;
   std::vector<city_draw_item> items;
   std::array<uint8_t, game::city_map_cell_count> tunnel_visibility{};
-  model_colours retained_colours{};
   model_workspace workspace{};
 
 public:

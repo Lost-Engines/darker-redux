@@ -78,7 +78,7 @@ bool within_object_window(city_view const &view, maths::world_position const &po
 }
 
 std::optional<city_draw_item> place_scene_object(resources::geometry_bank const &bank, scene_object const &object,
-  camera_basis const &basis, camera_position camera, bool const underground, std::optional<world_image> const image, double const cull_scale) {
+  camera_basis const &basis, camera_position camera, bool const underground, std::optional<world_image> const image, double const cull_scale, double const focal_length) {
   /// 2F35 preserves the object's fractional origin before the same model extent cull as city geometry
   // retain two sub-word bits in projection units; subtracting from the camera adds the object's fractional displacement
   camera.column = static_cast<render_geometry::coordinate_bits>(camera.column - (object.pose.fractions.column >> render_geometry::camera_fraction_shift));
@@ -97,11 +97,10 @@ std::optional<city_draw_item> place_scene_object(resources::geometry_bank const 
     item->orientation = orient_model(basis, object.pose.angles);
     item->object_light = object.light;
     item->draw_record = object.native_id ? static_cast<uint16_t>(object.native_id + 14) : 0;
-    // Preserve the original dot transition: it required passing both LOD thresholds.
-    // The old flat-shading threshold no longer changes how meshes are shaded.
-    auto const depth_band{static_cast<render_geometry::coordinate_bits>(word(placement.depth.whole - render_geometry::near_depth)) >> 8};
+    // Keep resolvable geometry at any resolution/FOV; only subpixel bounds become a dot.
+    double constexpr dot_diameter_pixels{1};
     item->distant_point = item->path == model_path::direct
-      && depth_band >= header.flat_distance && depth_band >= header.point_distance;
+      && 2.0 * header.extent * focal_length <= dot_diameter_pixels * placement.depth.whole;
   }
   return item;
 }
@@ -236,7 +235,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   for(auto const &object : objects) {
     if(!within_object_window(view, object.pose.position)) continue;
     auto const place_object{[&](std::optional<world_image> const image) {
-      if(auto item{place_scene_object(bank, object, basis, camera, view.underground, image, cull_scale)}) items.push_back(*item);
+      if(auto item{place_scene_object(bank, object, basis, camera, view.underground, image, cull_scale, view.focal_length)}) items.push_back(*item);
     }};
     if(view.radius <= scene_limits::native_surface_radius_cells || (view.underground && !view.unrestricted_visibility)) place_object(std::nullopt);
     else visit_world_images(camera_column, camera_row,
@@ -254,8 +253,8 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
     if(item.distant_point) {
       if(auto const point{project_distant_object(item.placement, view.origin, view.viewport, item.projection_residue, view.focal_length)}) {
         auto const colour{bank.header_at(item.model_offset).point_colour};
-        // 2D71 reuses the last mesh's shade table; it does not calculate distance or fade again
-        target.pixels[static_cast<size_t>(point->y) * target.stride + point->x] = retained_colours.point_colour(colour);
+        auto const colours{lighting.colours(item.placement.depth.whole, item.path, item.object_light)};
+        target.pixels[static_cast<size_t>(point->y) * target.stride + point->x] = colours.point_colour(colour);
       }
       continue;
     }
@@ -275,7 +274,6 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
       light = cells[game::city_cell_index(column, row)].state;
     }
     auto const colours{lighting.colours(item.placement.depth.whole, item.path, light)};
-    retained_colours = colours;
     animation.cell_state = item.orientation ? 0 : cells[item.cell].state;
     draw_model(workspace, target, bank.model_pool(), item.model_offset, projection, colours, view.viewport, item.path, animation,
       view.gouraud ? model_shading::gouraud : model_shading::flat,

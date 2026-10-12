@@ -115,8 +115,8 @@ TEST_CASE("Maximum visibility includes each city cell once across the world seam
 }
 
 TEST_CASE("Distant objects with shade code 31 render without a preceding mesh", "[graphics][city]") {
-  // A complete special-model header with zero LOD thresholds selects the point
-  // path. No bytecode is needed, and an empty city leaves the shade latch zero.
+  // A zero-extent special model selects the point path without drawing bytecode.
+  // Its colour must come from its own lighting, even without a preceding mesh.
   std::vector<std::byte> bytes(17);
   bytes[1] = std::byte{1}; // one special model at pool offset zero
   bytes[4] = std::byte{11}; // pool size
@@ -137,8 +137,14 @@ TEST_CASE("Distant objects with shade code 31 render without a preceding mesh", 
     },
   }}};
   framework::render::indexed_cockpit_framebuffer frame{};
-  CHECK(renderer.draw(frame, bank, cells, view, 0x60, darker::graphics::distance_shading{}, {}, objects) == 1);
-  CHECK(frame.pixels[120 * 320 + 160] == 224);
+  darker::graphics::distance_shading const lighting{};
+  CHECK(renderer.draw(frame, bank, cells, view, 0x60, lighting, {}, objects) == 1);
+  auto const placed{darker::graphics::place_scene_object(bank, objects[0], darker::graphics::make_camera_basis({}), {
+    .row{4096 * darker::graphics::render_geometry::world_to_camera_scale},
+  })};
+  REQUIRE(placed);
+  auto const expected{lighting.colours(placed->placement.depth.whole, placed->path, 255).point_colour(255)};
+  CHECK(frame.pixels[120 * 320 + 160] == expected);
 }
 
 TEST_CASE("Wide views include farther world copies within the visible circle", "[graphics][city]") {
@@ -207,4 +213,32 @@ TEST_CASE("Buildings and moving objects remain visible in the farther forward wo
   CHECK(renderer.draw(frame, bank, cells, view, 0x60, lighting, {}, objects, &particles) == 4);
   view.radius = 128;
   CHECK(renderer.draw(frame, bank, cells, view, 0x60, lighting, {}, objects) == 0);
+}
+
+TEST_CASE("Moving models become dots only when their projected bounds are subpixel", "[graphics][city]") {
+  using namespace darker::graphics;
+  std::vector<std::byte> bytes(17);
+  bytes[1] = std::byte{1};
+  bytes[4] = std::byte{11};
+  bytes[15] = std::byte{32}; // model extent; deliberately zero original LOD cutoffs
+  darker::resources::geometry_bank const bank{std::move(bytes)};
+  scene_object const object{
+    .model_offset{0},
+    .pose{},
+  };
+  auto const basis{make_camera_basis({})};
+  auto const place{[&](unsigned int const depth, double const focal_length) {
+    return place_scene_object(bank, object, basis, {
+      .row{depth},
+    }, false, std::nullopt, 1, focal_length);
+  }};
+  auto const visible_mesh{place(16383, 256)};
+  REQUIRE(visible_mesh);
+  CHECK_FALSE(visible_mesh->distant_point);
+  auto const dot{place(16400, 256)};
+  REQUIRE(dot);
+  CHECK(dot->distant_point);
+  auto const high_resolution{place(16400, 1024)};
+  REQUIRE(high_resolution);
+  CHECK_FALSE(high_resolution->distant_point);
 }
