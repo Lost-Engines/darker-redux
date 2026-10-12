@@ -28,7 +28,7 @@ For prerequisites and build commands, see the [original project's build instruct
 
 ## Display options
 
-Press **F10** from the menus, briefings or flight to open the display options. The pilot-selection and run menus also have an **Options** link. The scene pauses while you adjust resolution, vertical FOV, draw distance, fog, distant fading, minimum light size and smooth shading. Changes appear immediately; hold **Tab** to hide the panel and inspect the scene.
+Press **F10** from the menus, briefings or flight to open the display options. The pilot-selection and run menus also have an **Options** link. The scene pauses while you adjust resolution, vertical FOV, draw distance, fog, distant fading, minimum light size and Gouraud shading. Changes appear immediately; hold **Tab** to hide the panel and inspect the scene.
 
 Use **Up/Down** to select a row, **Left/Right** to adjust it, and **Enter** to activate it. The mouse selects rows and the `<` / `>` controls adjust values. **Escape** cancels and restores the opening settings. **Apply and save** keeps your choices for future sessions; **Return without saving** keeps them for this session only. **Restore defaults** previews the recommended Redux settings and can still be cancelled. Changing render resolution leaves the window size unchanged. The scene remains paused if it was paused before opening options.
 

@@ -187,7 +187,7 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
   text("DISPLAY OPTIONS", 95, 15, 2);
   std::array<std::string, row_count> const labels{
     "Resolution", "Vertical field of view", "Draw distance", "Fog starts", "Fog reaches full shade",
-    "Fog curve", "Minimum light size", "Distant fade", "Smooth shading", "Restore defaults",
+    "Fog curve", "Minimum light size", "Distant fade", "Gouraud shading", "Restore defaults",
     "Apply and save", "Cancel changes", "Return without saving"
   };
   std::array<std::string, 9> const settings{
@@ -216,6 +216,8 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
   text(notice.empty() ? hints[selected] : std::string_view{notice}, 13, 201);
   text("Arrows: adjust   Enter: select   Esc: cancel", 26, 217);
   text("Hold Tab to preview the unobscured scene", 36, 225);
+  // Retain a faint scene silhouette without competing with the menu text.
+  unsigned int constexpr background_divisor{16};
   auto const viewport{framework::render::fit_viewport(width, height, 320, 240)};
   for(int y{0}; y < viewport.height; ++y) {
     int const source_y{y * 240 / viewport.height};
@@ -229,7 +231,7 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
         && source_y < first_row + static_cast<int>(selected + 1) * row_height - 1};
       if(code) pixel = code == 2 ? framework::render::rgba_pixel{238, 220, 184} : framework::render::rgba_pixel{174, 170, 186};
       else if(source_x == 7 || source_x == 312 || source_y == 7 || source_y == 233) pixel = {108, 100, 120};
-      else pixel = {static_cast<uint8_t>(pixel.r / 5 + (highlight ? 44 : 15)), static_cast<uint8_t>(pixel.g / 5 + (highlight ? 38 : 14)), static_cast<uint8_t>(pixel.b / 5 + (highlight ? 52 : 22))};
+      else pixel = {static_cast<uint8_t>(pixel.r / background_divisor + (highlight ? 44 : 15)), static_cast<uint8_t>(pixel.g / background_divisor + (highlight ? 38 : 14)), static_cast<uint8_t>(pixel.b / background_divisor + (highlight ? 52 : 22))};
     }
   }
 }
