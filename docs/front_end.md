@@ -198,7 +198,13 @@ Briefing and mission opcodes 36/37 set difficulty and score checkpoints. Opcode
 38 toggles the independent scripted altitude-hold bit; it consumes a height
 word only when enabling it, and does not cancel the player's manual hold bit.
 
-Late in the challenge, this enables a target height of **512 immediately before
+Redux deliberately ignores these Nightmare altitude commands when applying
+player flight state, while still decoding both toggles and the height operand.
+This removes the forced descent during the truck hunt without changing script
+progression or the player's A-key altitude hold. Campaign altitude commands
+retain their existing behaviour. The following describes the retail challenge.
+
+Late in the original challenge, this enables a target height of **512 immediately before
 extinguishing the queued beacon at (18,18)**. It can therefore feel like a
 persistent nose-down force when following the last lit beacons at greater
 altitude; it is separate from the ordinary low-speed nose-down assistance.

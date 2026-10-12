@@ -1518,6 +1518,9 @@ auto main(int const argc, char const *const argv[])->int {
             .text_cursor{front->consumed_text()}
           };
           context.set_altitude = [&](std::optional<uint16_t> const height){
+            // Redux: Nightmare's low-altitude truck hunt must not fight manual steering.
+            // Still decode both script toggles and their conditional height operand.
+            if(front->nightmare_selected()) return;
             host.player.scripted_altitude_hold = height.has_value();
             if(height) host.player.desired_height = *height;
           };

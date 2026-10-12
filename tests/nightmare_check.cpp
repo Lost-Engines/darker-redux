@@ -102,8 +102,8 @@ void check_nightmare(darker::resources::archive_set const &archives) {
   context.set_altitude = [&](std::optional<uint16_t> const height){
     ++altitude_changes;
     if(height && *height != 512) throw std::runtime_error{"Nightmare lost its late low-altitude target"};
-    player.scripted_altitude_hold = height.has_value();
-    if(height) player.desired_height = *height;
+    // Redux consumes the original commands without applying Nightmare's forced hold,
+    // matching the live host's callback. Keep counting both toggles to verify decoding.
   };
   for(uint32_t tick{8}; tick < 1000000 && !context.progress; tick += 8) {
     for(auto &actor : combat.actors) {
