@@ -45,6 +45,7 @@ private:
   void show_outcome(uint8_t outcome, uint8_t completed_objects);
 
 public:
+  bool options_requested{false};
   bool quit_requested{false};
   bool save_requested{false};
   front_end(resources::archive_set const &archives, resources::font_resource const &font, resources::campaign_resources &campaign, resources::save_file &save, bool skip_intro = false,

@@ -26,6 +26,14 @@ Read the downloaded manual and keep the city map handy: the briefings expect you
 
 For prerequisites and build commands, see the [original project's build instructions](https://github.com/Lost-Engines/darker-cpp#building-the-source-code). The same commands apply here. CI runs manually during Redux development, with an optional release step.
 
+## Display options
+
+Press **F10** from the menus, briefings or flight to open the display options. The pilot-selection and run menus also have an **Options** link. The scene pauses while you adjust resolution, vertical FOV, draw distance, fog, distant fading, minimum light size and smooth shading. Changes appear immediately; hold **Tab** to hide the panel and inspect the scene.
+
+Use **Up/Down** to select a row, **Left/Right** to adjust it, and **Enter** to activate it. The mouse selects rows and the `<` / `>` controls adjust values. **Escape** cancels and restores the opening settings. **Apply and save** keeps your choices for future sessions; **Return without saving** keeps them for this session only. **Restore defaults** previews the recommended Redux settings and can still be cancelled. Changing render resolution leaves the window size unchanged. The scene remains paused if it was paused before opening options.
+
+Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/darker-redux/options.cfg` when unset; Windows uses `%APPDATA%/darker-redux/options.cfg`. These are separate from the original game's saves. Explicit command-line options override saved preferences. Delete the file or apply **Restore defaults** to return to defaults. Menu text for these new Redux options is currently English.
+
 ## Redux improvements
 
 - **Resolution and field of view:** `--resolution 960x540` sets the software rendering resolution; `--scale` still controls window magnification. The default remains 320×240. `--fov 75` sets the full-canvas vertical field of view in degrees (15–140); `[` and `]` adjust it by five degrees during flight. The default preserves the original projection, approximately 50.2°. Wider aspect ratios show more horizontally. Sky and ground bands follow the horizon throughout wide-angle views, including steep pitch and bank angles, without the original fixed-angle cutoffs. Cockpits and instruments use uniform nearest-neighbour scaling based on display height, centred horizontally over the lower black band. Wider screens retain black margins beside the panel; narrower screens crop its sides. F4 removes the cockpit and bands for the full world view, retaining a centred HUD. Menus and briefings retain their native resolution. Higher resolutions increase software-rendering cost.

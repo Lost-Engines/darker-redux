@@ -377,6 +377,8 @@ configure_first_party(darker_game)
 add_library(darker_presentation STATIC
   src/presentation/player.cpp
   src/presentation/player.h
+  src/presentation/options_menu.cpp
+  src/presentation/options_menu.h
   src/presentation/front_end.cpp
   src/presentation/quit_confirmation.h
   src/presentation/front_end.h
@@ -490,6 +492,7 @@ if(BUILD_TESTING)
     tests/tunnel_visibility_test.cpp
     tests/camera_test.cpp
     tests/flight_camera_test.cpp
+    tests/options_menu_test.cpp
     tests/sky_ground_test.cpp
     tests/screen_primitives_test.cpp
     tests/near_clip_test.cpp

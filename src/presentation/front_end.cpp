@@ -325,6 +325,10 @@ void front_end::point(int const x, int const y) noexcept {
 
 void front_end::click(int const x, int const y) {
   /// Selection rows follow the original 36-pixel pitch; other screens expose their visible actions
+  if((current == screen::games && y >= 198 && y < 213) || (current == screen::run && y >= 228)) {
+    if(x >= 100 && x < 220) options_requested = true;
+    return;
+  }
   if(current == screen::games && x >= 48 && x < 272 && y >= 15 && y < 189 && (y - 15) % 36 < 30) {
     selected = static_cast<unsigned int>((y - 15) / 36);
     choose_game();
@@ -551,6 +555,9 @@ void front_end::draw(framework::render::cockpit_framebuffer &output) const {
     text(labels.yes, 133, question_y + 16, confirmation ? 126 : 125);
     text("/", 157, question_y + 16, 125);
     text(labels.no, 169, question_y + 16, confirmation ? 125 : 126);
+  }
+  if(current == screen::games || current == screen::run) {
+    centred("Options (F10)", current == screen::games ? 201 : 230, 126);
   }
   framework::render::expand_palette(frame, menu_palette.colours, output);
 }

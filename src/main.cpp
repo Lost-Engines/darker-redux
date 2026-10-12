@@ -58,6 +58,7 @@
 #include "platform/audio_output.h"
 #include "platform/framebuffer_presenter.h"
 #include "presentation/front_end.h"
+#include "presentation/options_menu.h"
 #include "presentation/menu_text.h"
 #include "presentation/quit_confirmation.h"
 #include "render/framebuffer.h"
@@ -85,6 +86,7 @@ int startup_failure(std::string_view const message) {
 enum class session_exit { none, menu, death, aborted, completed, previous };
 
 struct flight_host {
+  darker::presentation::options_menu options;
   double field_of_view{2 * std::atan(120.0 / 256.0) * 180 / std::numbers::pi};
   darker::game::player_flight player{};
   darker::audio::flight_sounds sounds;
@@ -114,6 +116,7 @@ struct flight_host {
   bool single_step{false};
   bool freeze_enabled{false};
   bool mouse_enabled{true};
+  bool menu_mouse_consumed{false};
   int resume_key{GLFW_KEY_UNKNOWN};
 
   bool key_down(GLFWwindow &window, int const key) const {
@@ -162,7 +165,7 @@ struct flight_host {
 
 auto main(int const argc, char const *const argv[])->int {
   /// Run the reconstructed city flight path while scenario, actors and remaining presentation systems are recovered
-  boost::program_options::options_description options{"Darker"};
+  boost::program_options::options_description options{"Darker (F10 opens display options)"};
   options.add_options()
     ("help,h", "show usage")
     ("data-dir", boost::program_options::value<std::string>(), "game directory: packs and DARKER.SAV (default: local installation, then user data directory)")
@@ -213,29 +216,52 @@ auto main(int const argc, char const *const argv[])->int {
   } catch(boost::program_options::error const &error) {
     return startup_failure(error.what());
   }
+  auto const preferences_file{darker::presentation::preferences_path()};
+  darker::presentation::display_preferences saved_preferences;
+  try {
+    saved_preferences = darker::presentation::read_preferences(preferences_file);
+  } catch(std::exception const &error) {
+    std::cerr << "WARNING: " << error.what() << "; using display defaults.\n";
+  }
+  // Explicit command-line values take precedence over saved preferences.
+  auto const saved_default{[&](char const *name, auto value){
+    if(!arguments.contains(name) || arguments[name].defaulted()) {
+      arguments.erase(name);
+      arguments.emplace(name, boost::program_options::variable_value{boost::any{value}, true});
+    }
+  }};
+  saved_default("resolution", std::to_string(saved_preferences.width) + "x" + std::to_string(saved_preferences.height));
+  saved_default("fov", saved_preferences.field_of_view);
+  saved_default("draw-distance", saved_preferences.draw_distance);
+  saved_default("fog-start", saved_preferences.fog_start);
+  saved_default("fade-distance", saved_preferences.fade_distance);
+  saved_default("fog-curve", saved_preferences.fog_curve);
+  saved_default("minimum-light-size", saved_preferences.minimum_light_size);
+  saved_default("fog-target", std::string{saved_preferences.background_fade ? "background" : "original"});
   auto const language_name{arguments["language"].as<std::string>()};
   if(language_name != "english" && language_name != "french" && language_name != "german") return startup_failure("--language must be english, french or german");
   auto const language{language_name == "english"  ? darker::resources::scenario_language::english
     : language_name == "french" ? darker::resources::scenario_language::french : darker::resources::scenario_language::german};
-  auto const draw_distance{arguments["draw-distance"].as<unsigned int>()};
-  auto const fog_start{arguments["fog-start"].as<double>()};
-  auto const fog_target{arguments["fog-target"].as<std::string>()};
+  auto draw_distance{arguments["draw-distance"].as<unsigned int>()};
+  auto fog_start{arguments["fog-start"].as<double>()};
+  auto fog_target{arguments["fog-target"].as<std::string>()};
   if(fog_target != "background" && fog_target != "original") return startup_failure("--fog-target must be background or original");
-  auto const fog_curve{arguments["fog-curve"].as<double>()};
+  auto fog_curve{arguments["fog-curve"].as<double>()};
   if(!std::isfinite(fog_curve) || fog_curve < 0) return startup_failure("--fog-curve must be finite and non-negative");
   if(draw_distance < darker::graphics::scene_limits::minimum_scan_radius_cells || draw_distance > darker::graphics::scene_limits::maximum_scan_radius_cells) {
     return startup_failure("--draw-distance must be between 2 and 182 map cells");
   }
+  auto const requested_fade{arguments["fade-distance"].as<double>()};
+  auto fade_distance{arguments["fade-distance"].defaulted() ? std::min(requested_fade, static_cast<double>(draw_distance)) : requested_fade};
+  if(arguments["fog-start"].defaulted()) fog_start = std::min(fog_start, fade_distance);
   if(!std::isfinite(fog_start) || fog_start < 0 || fog_start > draw_distance) {
     return startup_failure("--fog-start must be a finite distance between zero and --draw-distance");
   }
-  auto const requested_fade{arguments["fade-distance"].as<double>()};
-  auto const fade_distance{arguments["fade-distance"].defaulted() ? std::min(requested_fade, static_cast<double>(draw_distance)) : requested_fade};
   if(!std::isfinite(fade_distance) || fade_distance < fog_start || fade_distance > draw_distance) {
     return startup_failure("--fade-distance must be finite and between --fog-start and --draw-distance");
   }
 
-  double const minimum_light_size{arguments["minimum-light-size"].as<double>()};
+  double minimum_light_size{arguments["minimum-light-size"].as<double>()};
   if(!std::isfinite(minimum_light_size) || minimum_light_size < 0) {
     return startup_failure("--minimum-light-size must be finite and non-negative");
   }
@@ -442,13 +468,26 @@ auto main(int const argc, char const *const argv[])->int {
   update_fog_palette();
   darker::graphics::distance_shading const tunnel_lighting;
   host.field_of_view = initial_fov;
+  host.gouraud = saved_preferences.gouraud;
+  host.options.values = {
+    .width{display_width},
+    .height{display_height},
+    .field_of_view{initial_fov},
+    .draw_distance{draw_distance},
+    .fog_start{fog_start},
+    .fade_distance{fade_distance},
+    .fog_curve{fog_curve},
+    .minimum_light_size{minimum_light_size},
+    .background_fade{fog_target == "background"},
+    .gouraud{host.gouraud}
+  };
   framework::render::indexed_cockpit_framebuffer display{};
   std::vector<uint8_t> world_pixels(static_cast<size_t>(display_width) * display_height);
-  framework::render::indexed_surface const world{world_pixels, display_width, display_height, static_cast<size_t>(display_width)};
   std::vector<framework::render::rgba_pixel> world_output(world_pixels.size());
   bool presenting_front{false};
   framework::render::cockpit_framebuffer output;
   auto const render{[&](uint16_t const clock, bool const enlarged, uint16_t const frame_step = 0){
+    framework::render::indexed_surface const world{world_pixels, display_width, display_height, static_cast<size_t>(display_width)};
     presenting_front = front && front->active();
     if(presenting_front) {
       front->draw(output);
@@ -794,6 +833,28 @@ auto main(int const argc, char const *const argv[])->int {
       return;
     }
     if(key == host.resume_key) return;
+    if(host.options.active) {
+      using darker::presentation::options_key;
+      switch(key) {
+      case GLFW_KEY_UP: host.options.key(options_key::up); break;
+      case GLFW_KEY_DOWN: host.options.key(options_key::down); break;
+      case GLFW_KEY_LEFT: host.options.key(options_key::left); break;
+      case GLFW_KEY_RIGHT: host.options.key(options_key::right); break;
+      case GLFW_KEY_KP_ENTER:
+      case GLFW_KEY_ENTER: if(action == GLFW_PRESS) host.options.key(options_key::accept); break;
+      case GLFW_KEY_F10:
+      case GLFW_KEY_ESCAPE: host.options.key(options_key::cancel); break;
+      }
+      host.resume_key = !host.options.active || host.options.save_requested ? key : GLFW_KEY_UNKNOWN;
+      return;
+    }
+    if(key == GLFW_KEY_F10 && action == GLFW_PRESS) {
+      host.options.values.field_of_view = host.field_of_view;
+      host.options.values.gouraud = host.gouraud;
+      host.options.open();
+      glfwSetInputMode(window, GLFW_CURSOR, host.cursor_mode(false));
+      return;
+    }
     if(host.front && host.front->active()) {
       using darker::presentation::front_key;
       if(action != GLFW_PRESS && key != GLFW_KEY_BACKSPACE) return;
@@ -995,25 +1056,58 @@ auto main(int const argc, char const *const argv[])->int {
     opl_name == "dosbox" ? darker::audio::fm_backend::dosbox : darker::audio::fm_backend::nuked};
   glfwSetCharCallback(window.get(), [](GLFWwindow *window, unsigned int code){
     auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};
-    if(host.front) host.front->character(code);
+    if(host.front && !host.options.active) host.front->character(code);
   });
   glfwSetCursorPosCallback(window.get(), [](GLFWwindow *const window, double const x, double const y){
     auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};
-    if(!host.mouse_enabled || !host.front || !host.front->active()) return;
+    if(!host.mouse_enabled || (!host.options.active && (!host.front || !host.front->active()))) return;
     int width{0}, height{0};
     glfwGetWindowSize(window, &width, &height);
+    if(host.options.active) {
+      int pixels_width{}, pixels_height{};
+      glfwGetFramebufferSize(window, &pixels_width, &pixels_height);
+      auto const panel{framework::render::fit_viewport(pixels_width, pixels_height, 320, 240)};
+      if(width > 0 && height > 0 && panel.width > 0 && panel.height > 0) {
+        int const column{static_cast<int>((x * pixels_width / width - panel.x) * 320 / panel.width)};
+        int const row{static_cast<int>((y * pixels_height / height - panel.y) * 240 / panel.height)};
+        host.options.point(column, row);
+      }
+      return;
+    }
     auto const viewport{framework::render::fit_viewport(width, height, framework::render::display_layout::width, framework::render::display_layout::height)};
-    if(viewport.width > 0 && viewport.height > 0) host.front->point(static_cast<int>((x - viewport.x) * framework::render::display_layout::width / viewport.width), static_cast<int>((y - viewport.y) * framework::render::display_layout::height / viewport.height));
+    if(viewport.width > 0 && viewport.height > 0) {
+      int const column{static_cast<int>((x - viewport.x) * 320 / viewport.width)};
+      int const row{static_cast<int>((y - viewport.y) * 240 / viewport.height)};
+      if(host.options.active) host.options.point(column, row);
+      else host.front->point(column, row);
+    }
   });
   glfwSetMouseButtonCallback(window.get(), [](GLFWwindow *window, int button, int action, int){
     auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};
-    if(!host.mouse_enabled || !host.front || !host.front->active() || button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS) return;
+    if(!host.mouse_enabled || (!host.options.active && (!host.front || !host.front->active())) || button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS) return;
     int width{0}, height{0};
     double x{0}, y{0};
     glfwGetWindowSize(window, &width, &height);
     glfwGetCursorPos(window, &x, &y);
+    if(host.options.active) {
+      int pixels_width{}, pixels_height{};
+      glfwGetFramebufferSize(window, &pixels_width, &pixels_height);
+      auto const panel{framework::render::fit_viewport(pixels_width, pixels_height, 320, 240)};
+      if(width > 0 && height > 0 && panel.width > 0 && panel.height > 0) {
+        int const column{static_cast<int>((x * pixels_width / width - panel.x) * 320 / panel.width)};
+        int const row{static_cast<int>((y * pixels_height / height - panel.y) * 240 / panel.height)};
+        host.options.click(column, row);
+        host.menu_mouse_consumed = true;
+      }
+      return;
+    }
     auto const viewport{framework::render::fit_viewport(width, height, framework::render::display_layout::width, framework::render::display_layout::height)};
-    if(viewport.width > 0 && viewport.height > 0) host.front->click(static_cast<int>((x - viewport.x) * framework::render::display_layout::width / viewport.width), static_cast<int>((y - viewport.y) * framework::render::display_layout::height / viewport.height));
+    if(viewport.width > 0 && viewport.height > 0) {
+      int const column{static_cast<int>((x - viewport.x) * 320 / viewport.width)};
+      int const row{static_cast<int>((y - viewport.y) * 240 / viewport.height)};
+      if(host.options.active) host.options.click(column, row);
+      else host.front->click(column, row);
+    }
   });
   std::unique_ptr<framework::platform::audio_output> audio_device;
   if(!arguments.contains("mute")) {
@@ -1089,6 +1183,9 @@ auto main(int const argc, char const *const argv[])->int {
     std::chrono::duration<double>{800.0 * 527.0 / 25'175'000.0})};
   auto next_frame{std::chrono::steady_clock::now()};
   bool pause_reported{false};
+  bool options_were_active{false};
+  std::optional<darker::presentation::display_preferences> preview_settings;
+  std::vector<framework::render::rgba_pixel> options_output;
   while(!glfwWindowShouldClose(window.get())) {
     host.weapon_selection_blocked = exchange.supplementary_active;
     glfwPollEvents();
@@ -1163,6 +1260,91 @@ auto main(int const argc, char const *const argv[])->int {
     if(seconds > 0 && elapsed >= seconds) break;
 #endif // NDEBUG
     auto const interrupts{static_cast<uint64_t>(elapsed * (1193180.0 / 2386))};
+    if(front && std::exchange(front->options_requested, false)) {
+      host.options.open();
+      glfwSetInputMode(window.get(), GLFW_CURSOR, host.cursor_mode(false));
+    }
+    if(host.options.active || options_were_active) {
+      auto const &settings{host.options.values};
+      if(host.options.active && !options_were_active) {
+        preview_settings.reset();
+        host.primary_held = false;
+        host.secondary_held = false;
+        if(audio_device) audio.publish({});
+      }
+      if(display_width != settings.width || display_height != settings.height) {
+        // The borrowed indexed_surface is constructed anew in render(), after any storage changes.
+        std::vector<uint8_t> resized_pixels(static_cast<size_t>(settings.width) * settings.height);
+        std::vector<framework::render::rgba_pixel> resized_output(resized_pixels.size());
+        world_pixels.swap(resized_pixels);
+        world_output.swap(resized_output);
+        display_width = settings.width;
+        display_height = settings.height;
+      }
+      if(draw_distance != settings.draw_distance || fog_start != settings.fog_start
+        || fade_distance != settings.fade_distance || fog_curve != settings.fog_curve
+        || (fog_target == "background") != settings.background_fade) {
+        draw_distance = settings.draw_distance;
+        fog_start = settings.fog_start;
+        fade_distance = settings.fade_distance;
+        fog_curve = settings.fog_curve;
+        fog_target = settings.background_fade ? "background" : "original";
+        update_fog_palette();
+        scene = {};
+      }
+      host.field_of_view = settings.field_of_view;
+      host.gouraud = settings.gouraud;
+      minimum_light_size = settings.minimum_light_size;
+      if(std::exchange(host.options.save_requested, false)) {
+        try {
+          darker::presentation::write_preferences(preferences_file, settings);
+          host.options.active = false;
+        } catch(std::exception const &error) {
+          std::cerr << "WARNING: " << error.what() << '\n';
+          host.options.notice = "Could not save settings. Check file permissions.";
+        }
+      }
+      previous_interrupts = interrupts;
+      if(!preview_settings || *preview_settings != settings) {
+        render(host.clock, false);
+        preview_settings = settings;
+      }
+      if(host.options.active) {
+        int const width{presenting_front ? 320 : display_width};
+        int const height{presenting_front ? 240 : display_height};
+        auto const source{presenting_front ? std::span<framework::render::rgba_pixel const>{output.pixels}
+          : std::span<framework::render::rgba_pixel const>{world_output}};
+        int canvas_width{}, canvas_height{};
+        glfwGetFramebufferSize(window.get(), &canvas_width, &canvas_height);
+        if(canvas_width > 0 && canvas_height > 0) {
+          options_output.resize(static_cast<size_t>(canvas_width) * canvas_height);
+          std::ranges::fill(options_output, framework::render::rgba_pixel{});
+          auto const preview{framework::render::fit_viewport(canvas_width, canvas_height, width, height)};
+          for(int y{0}; y < preview.height; ++y) {
+            for(int x{0}; x < preview.width; ++x) {
+              options_output[static_cast<size_t>(y + preview.y) * canvas_width + x + preview.x]
+                = source[static_cast<size_t>(y * height / preview.height) * width + x * width / preview.width];
+            }
+          }
+          if(glfwGetKey(window.get(), GLFW_KEY_TAB) != GLFW_PRESS) {
+            host.options.draw(options_output, canvas_width, canvas_height, font);
+          }
+          presenter.present(options_output, canvas_width, canvas_height);
+        }
+        glfwSetWindowTitle(window.get(), "Darker - display options (F10)");
+      } else {
+        pause_reported = false;
+        host.mouse_started = false;
+        glfwSetInputMode(window.get(), GLFW_CURSOR, host.cursor_mode(!host.briefing && !host.paused));
+        if(presenting_front) presenter.present(output);
+        else presenter.present(world_output, display_width, display_height);
+      }
+      options_were_active = host.options.active;
+      continue;
+    }
+    // Include F9 and bracket-key changes in the snapshot taken when the menu next opens.
+    host.options.values.field_of_view = host.field_of_view;
+    host.options.values.gouraud = host.gouraud;
     bool const single_step{std::exchange(host.single_step, false)};
     if(host.paused && !single_step) {
       // keep the last software frame intact and exclude paused wall time from the PIT clock
@@ -1377,7 +1559,8 @@ auto main(int const argc, char const *const argv[])->int {
     auto const previous_cells{caero_state ? caero_state->energy.boost >> 13 : 0};
     darker::game::city_collision_result contact;
     std::optional<darker::maths::world_position> player_start;
-    bool const primary_held{host.key_down(*window, GLFW_KEY_SPACE) || (host.mouse_enabled && !host.paused && glfwGetMouseButton(window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)};
+    if(host.menu_mouse_consumed && glfwGetMouseButton(window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) host.menu_mouse_consumed = false;
+    bool const primary_held{host.key_down(*window, GLFW_KEY_SPACE) || (host.mouse_enabled && !host.paused && !host.menu_mouse_consumed && glfwGetMouseButton(window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)};
     bool const secondary_held{host.key_down(*window, GLFW_KEY_LEFT_ALT) || host.key_down(*window, GLFW_KEY_RIGHT_ALT)
       || (host.mouse_enabled && !host.paused && glfwGetMouseButton(window.get(), GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)};
     bool const was_crashing{host.player.lifecycle.crashing};
