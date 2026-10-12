@@ -25,6 +25,7 @@ struct model_colours {
   static unsigned int constexpr ramp_mask{0xe0};
   static unsigned int constexpr shade_mask{0x1f};
   std::array<uint8_t, shade_count> shades{};
+  static unsigned int constexpr beacon_strength_mask{0x0f}; // low nibble of F0h | (beacon strength >> 4)
   uint8_t dynamic{0};
   // 2D71 uses all five shade bits without the polygon dynamic-colour branch.
   // Its last four indices spill into the following contiguous shade row.

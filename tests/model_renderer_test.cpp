@@ -115,3 +115,40 @@ TEST_CASE("City light minimum enlarges distant discs without shrinking nearby di
     model[15] = std::byte{0};
   }
 }
+
+TEST_CASE("Powered streetlight discs fade out without leaving minimum-size dots", "[graphics][models]") {
+  using namespace darker::graphics;
+  std::array<std::byte, 17> model{};
+  model[11] = std::byte{0x97};
+  model[12] = std::byte{0x22};
+  model[13] = std::byte{28}; // streetlight's authored dynamic colour
+  model[14] = std::byte{1};
+  model[16] = std::byte{0x0d};
+  projection_parameters const projection{
+    .depth{
+      .whole{256},
+    },
+    .origin{160, 100},
+  };
+  for(auto const path : {model_path::direct, model_path::near_clipped}) {
+    for(unsigned int const minimum : {0u, 3u}) {
+      uint8_t previous{0};
+      for(unsigned int strength{0}; strength <= model_colours::beacon_strength_mask; ++strength) {
+        framework::render::indexed_cockpit_framebuffer frame{};
+        frame.pixels.fill(99);
+        model_colours colours{};
+        colours.shades.back() = 1; // distant, fully fog-darkened ramp
+        colours.dynamic = static_cast<uint8_t>(0xf0 | strength);
+        draw_model(frame, model, 0, projection, colours, {}, path, {}, model_shading::flat, minimum);
+        if(strength == 0) {
+          CHECK(std::ranges::all_of(frame.pixels, [](uint8_t const pixel) { return pixel == 99; }));
+        } else {
+          auto const shade{frame.pixels[100 * 320 + 160]};
+          CHECK(shade >= previous);
+          CHECK(shade < 28);
+          previous = shade;
+        }
+      }
+    }
+  }
+}
