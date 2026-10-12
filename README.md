@@ -1,6 +1,6 @@
 # Darker Redux
 
-An enhanced version of [Darker's faithful C++ reconstruction](https://github.com/Lost-Engines/darker-cpp), using the original 1995 game's assets. Redux improves presentation and repairs original-game defects; the faithful project remains the reference for original behaviour.
+An enhanced version of the Lost Engines [faithful C++ reconstruction of Darker](https://github.com/Lost-Engines/darker-cpp), using the original 1995 game's assets. Redux improves presentation and repairs original-game defects; the faithful project remains the reference for original behaviour.
 
 Explore the reverse engineering, maps and models at [Lost Engines](https://lostengines.com/darker).
 
