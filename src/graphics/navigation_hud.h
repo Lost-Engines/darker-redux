@@ -54,8 +54,8 @@ void draw_radar_contacts(framework::render::indexed_cockpit_framebuffer &target,
 void draw_navigation_contact(framework::render::indexed_cockpit_framebuffer const &cache,
   framework::render::indexed_cockpit_framebuffer &target, pixel_position const &destination,
   uint8_t height, uint8_t reference_height);
-void draw_enlarged_radar_surround(framework::render::indexed_cockpit_framebuffer &target, uint16_t heading);
+void draw_enlarged_radar_surround(framework::render::indexed_cockpit_framebuffer &target, uint16_t heading, uint8_t background = 8);
 void draw_enlarged_radar(framework::render::indexed_cockpit_framebuffer const &cache,
-  framework::render::indexed_cockpit_framebuffer &target, radar_view_state view, std::span<radar_contact const> contacts);
+  framework::render::indexed_cockpit_framebuffer &target, radar_view_state view, std::span<radar_contact const> contacts, uint8_t background = 8);
 
 } // namespace darker::graphics

@@ -708,15 +708,24 @@ auto main(int const argc, char const *const argv[])->int {
         {164, static_cast<int16_t>(sight_y + combat->skimma.aim_offset)}, 14, 14);
     }
     // Native 54F0–55BE draws the enlarged Caero radar in every camera mode.
-    if(enlarged) darker::graphics::draw_enlarged_radar(cache, display, navigation, contacts);
-    darker::graphics::draw_missile_camera_indicator(display, clock, combat->missile_camera_enabled, watched != nullptr);
+    // Two reserved layer values distinguish untouched pixels from the translucent
+    // backdrop; actual radar contacts retain their full palette colours.
+    uint8_t constexpr radar_clear{254};
+    uint8_t constexpr radar_backdrop{255};
+    framework::render::indexed_cockpit_framebuffer radar_layer;
+    if(enlarged) {
+      radar_layer.pixels.fill(radar_clear);
+      darker::graphics::draw_enlarged_radar(cache, radar_layer, navigation, contacts, radar_backdrop);
+    }
+    auto &foreground{enlarged ? radar_layer : display};
+    darker::graphics::draw_missile_camera_indicator(foreground, clock, combat->missile_camera_enabled, watched != nullptr);
     for(size_t const channel : {1u, 0u, 2u}) {
       if(auto const &message{messages[channel]}) {
         auto const width{static_cast<uint16_t>(message->width + (message->alignment == darker::game::message_alignment::centre
           && message->width < context.message_setting ? 256 : 0))};
         int const x{message->alignment == darker::game::message_alignment::left    ? 12
           : message->alignment == darker::game::message_alignment::right ? 308 - width : (321 - width) / 2};
-        darker::graphics::draw_message(display, font, darker::resources::font_face::compact,
+        darker::graphics::draw_message(foreground, font, darker::resources::font_face::compact,
           message->text.subspan(message->offset, message->length), {x, 231}, width, {
             .ink{24},
             .edge{18}
@@ -725,7 +734,7 @@ auto main(int const argc, char const *const argv[])->int {
     }
     if(host.quit_prompt.visible(clock)) {
       auto const &prompt{darker::presentation::original_menu_text.at(static_cast<unsigned int>(language)).flight_quit};
-      darker::graphics::draw_text(display, font, darker::resources::font_face::compact,
+      darker::graphics::draw_text(foreground, font, darker::resources::font_face::compact,
         std::as_bytes(std::span{prompt.text}), {prompt.x, 120}, {
           .ink{22},
           .edge{95}
@@ -754,7 +763,21 @@ auto main(int const argc, char const *const argv[])->int {
           auto const overlay{display.pixels[source_y * framework::render::display_layout::width + source_x]};
           if(overlay != 255 || artwork_mask.pixels[source_y * framework::render::display_layout::width + source_x] != 0) colour = overlay;
         }
-        world_output[static_cast<size_t>(y) * display_width + x] = game_palette.colours[colour];
+        auto pixel{game_palette.colours[colour]};
+        if(enlarged && x >= overlay_left && x < overlay_left + overlay_width) {
+          int const source_x{(x - overlay_left) * framework::render::display_layout::width / overlay_width};
+          auto const radar{radar_layer.pixels[source_y * framework::render::display_layout::width + source_x]};
+          if(radar == radar_backdrop) {
+            // Half-opacity original dark backing keeps the contacts readable.
+            auto const &backdrop{game_palette.colours[8]};
+            pixel.r = static_cast<uint8_t>((unsigned(pixel.r) + backdrop.r) / 2);
+            pixel.g = static_cast<uint8_t>((unsigned(pixel.g) + backdrop.g) / 2);
+            pixel.b = static_cast<uint8_t>((unsigned(pixel.b) + backdrop.b) / 2);
+          } else if(radar != radar_clear) {
+            pixel = game_palette.colours[radar];
+          }
+        }
+        world_output[static_cast<size_t>(y) * display_width + x] = pixel;
       }
     }
     return count;

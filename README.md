@@ -36,6 +36,8 @@ Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/d
 
 ## Redux improvements
 
+- **Transparent enlarged radar:** hold Insert or keypad 0 to overlay the radar with a half-opacity backdrop. Contacts, heading and coordinates remain opaque, including in F4 and external views.
+
 - **Falling wrecks:** fatally damaged aircraft remain visible until they hit terrain or a building, instead of fading away when the original damage timer expires. Their original falling motion, smoke and impact effects are retained. Cleanup and mission kill credit now wait for the impact and its short cleanup timer; scripted departures retain their original expiry behaviour.
 
 - **Resolution and field of view:** `--resolution 960x540` sets the software rendering resolution; `--scale` still controls window magnification. The default remains 320×240. `--fov 75` sets the full-canvas vertical field of view in degrees (15–140); `[` and `]` adjust it by five degrees during flight. The default preserves the original projection, approximately 50.2°. Wider aspect ratios show more horizontally. Sky and ground bands follow the horizon throughout wide-angle views, including steep pitch and bank angles, without the original fixed-angle cutoffs. Cockpits and instruments use uniform nearest-neighbour scaling based on display height, centred horizontally over the lower black band. Wider screens retain black margins beside the panel; narrower screens crop its sides. F4 removes the cockpit and bands for the full world view, retaining a centred HUD. Menus and briefings retain their native resolution. Higher resolutions increase software-rendering cost.

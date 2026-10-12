@@ -155,7 +155,7 @@ void draw_navigation_contact(framework::render::indexed_cockpit_framebuffer cons
   draw_contact_symbol(target, destination, colour);
 }
 
-void draw_enlarged_radar_surround(framework::render::indexed_cockpit_framebuffer &target, uint16_t const heading) {
+void draw_enlarged_radar_surround(framework::render::indexed_cockpit_framebuffer &target, uint16_t const heading, uint8_t const background) {
   /// A5D6/A712 construct exclusive-right spans symmetric about two central scanlines
   std::array<int, 63> half_widths{};
   int x{63};
@@ -169,11 +169,11 @@ void draw_enlarged_radar_surround(framework::render::indexed_cockpit_framebuffer
     error += x--;
     half_widths[x] = y;
   } while(y < x);
-  std::fill_n(target.pixels.begin() + 40 * display_layout::width + 56, 40, 8);
+  std::fill_n(target.pixels.begin() + 40 * display_layout::width + 56, 40, background);
   for(int row{0}; row < 63; ++row) {
     int const width{half_widths[row]};
     for(int const destination : {107 - row, 108 + row}) {
-      std::fill_n(target.pixels.begin() + destination * display_layout::width + 76 - width, width * 2, 8);
+      std::fill_n(target.pixels.begin() + destination * display_layout::width + 76 - width, width * 2, background);
     }
   }
   draw_contact_symbol(target, {74, 105}, 139);
@@ -183,9 +183,9 @@ void draw_enlarged_radar_surround(framework::render::indexed_cockpit_framebuffer
 }
 
 void draw_enlarged_radar(framework::render::indexed_cockpit_framebuffer const &cache,
-  framework::render::indexed_cockpit_framebuffer &target, radar_view_state const view, std::span<radar_contact const> const contacts) {
+  framework::render::indexed_cockpit_framebuffer &target, radar_view_state const view, std::span<radar_contact const> const contacts, uint8_t const background) {
   /// Assemble the normal Caero mono enlarged view without changing the underlying cockpit surface
-  draw_enlarged_radar_surround(target, view.heading);
+  draw_enlarged_radar_surround(target, view.heading, background);
   for(auto const &contact : contacts) {
     if(auto const pixel{project_radar_contact(view.player, view.heading, contact, radar_scale::enlarged)}) {
       draw_contact_symbol(target, pixel->position, pixel->colour);
