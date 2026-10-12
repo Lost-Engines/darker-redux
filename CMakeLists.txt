@@ -175,6 +175,8 @@ target_include_directories(darker_resources PUBLIC src)
 configure_first_party(darker_resources)
 
 add_library(darker_maths STATIC
+  src/maths/render_sine.cpp
+  src/maths/render_sine.h
   src/maths/view_basis.cpp
   src/maths/view_basis.h
 )

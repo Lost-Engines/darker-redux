@@ -255,7 +255,7 @@ auto main(int const argc, char const *const argv[])->int try {
       .slot{sample.slot}
     })};
     darker::graphics::projection_parameters const projection{
-      .axes{darker::graphics::make_camera_basis({
+      .axes{darker::maths::make_view_basis({
         .heading{static_cast<uint16_t>(sample.heading)},
         .pitch{static_cast<uint16_t>(sample.pitch)}
       })},
@@ -284,7 +284,7 @@ auto main(int const argc, char const *const argv[])->int try {
       .archive{0},
       .slot{sample.model[0]}
     })};
-    auto const basis{darker::graphics::make_camera_basis({
+    auto const basis{darker::maths::make_view_basis({
       .heading{sample.angles[0]},
       .pitch{sample.angles[1]},
       .roll{sample.angles[2]}
@@ -317,7 +317,7 @@ auto main(int const argc, char const *const argv[])->int try {
   }
   {
     darker::resources::geometry_bank const bank{archives.load({0, 32})};
-    auto const basis{darker::graphics::make_camera_basis({})};
+    auto const basis{darker::maths::make_view_basis({})};
     for(auto const &sample : darker::test_reference::object_sorting_samples) {
       auto const item{darker::graphics::place_scene_object(bank,
         {
@@ -346,7 +346,7 @@ auto main(int const argc, char const *const argv[])->int try {
       .slot{sample.slot}
     })};
     darker::graphics::projection_parameters const projection{
-      .axes{darker::graphics::make_camera_basis({
+      .axes{darker::maths::make_view_basis({
         .heading{static_cast<uint16_t>(sample.heading)},
         .pitch{61440}
       })},

@@ -8,9 +8,9 @@
 
 namespace darker::game {
 
-maths::world_position camera_ray_end(object_pose const &camera) noexcept {
+maths::world_position camera_ray_end(object_pose const &camera, maths::angle_precision const precision) noexcept {
   /// 2591 casts from the rendered camera along its installed depth coefficients
-  auto const basis{maths::make_view_basis(camera.angles)};
+  auto const basis{maths::make_view_basis(camera.angles, precision)};
   return {static_cast<uint16_t>(camera.position.column + (basis[1].depth >> 3)),
     static_cast<uint16_t>(camera.position.row - (basis[0].depth >> 3)),
     static_cast<uint16_t>(((std::bit_cast<int16_t>(camera.position.height) >> 1) - (basis[2].depth >> 1)) * 2)};

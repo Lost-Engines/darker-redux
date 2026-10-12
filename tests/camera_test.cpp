@@ -1,5 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <bit>
+#include <cmath>
+#include <numbers>
+#include "maths/render_sine.h"
 #include "graphics/camera.h"
 #include "reference/camera_samples.h"
 #include "reference/object_camera_samples.h"
@@ -9,7 +12,7 @@ TEST_CASE("Camera coefficients and model origins match native fixed-point transf
   size_t index{0};
   for(auto const &sample : darker::test_reference::camera_samples) {
     CAPTURE(index);
-    auto const basis{darker::graphics::make_camera_basis({
+    auto const basis{darker::maths::make_view_basis({
       .heading{sample.angles[0]},
       .pitch{sample.angles[1]},
       .roll{sample.angles[2]}
@@ -62,7 +65,7 @@ TEST_CASE("Object attitude axes match native camera composition", "[graphics][ca
     };
   }};
   for(auto const &sample : darker::test_reference::object_camera_samples) {
-    auto const basis{darker::graphics::orient_model(darker::graphics::make_camera_basis(angles(sample.camera)), angles(sample.object))};
+    auto const basis{darker::graphics::orient_model(darker::maths::make_view_basis(angles(sample.camera)), angles(sample.object), darker::maths::angle_precision::original)};
     for(size_t i{0}; i < basis.size(); ++i) {
       CAPTURE(sample.camera, sample.object, i);
       CHECK(basis[i].horizontal == sample.axes[i * 3]);
@@ -100,4 +103,34 @@ TEST_CASE("Wide camera placement retains distant geometry and the actual world p
     .row{1024},
   }, {})};
   CHECK(darker::graphics::render_geometry::wrap_coordinate(behind.depth.whole) == -1024);
+}
+
+TEST_CASE("Full angle sine table is rounded mathematical sine with symmetric peaks", "[graphics][camera]") {
+  using namespace darker::maths;
+  CHECK(render_sine(0) == 0);
+  CHECK(render_sine(16384) == 32767);
+  CHECK(render_sine(32768) == 0);
+  CHECK(render_sine(49152) == -32767);
+  for(unsigned int angle{0}; angle < angle_format::full_turn; ++angle) {
+    auto const value{render_sine(static_cast<uint16_t>(angle))};
+    auto const expected{32767 * std::sin(angle * 2 * std::numbers::pi / angle_format::full_turn)};
+    CHECK(std::abs(value - expected) <= 0.500001);
+    CHECK(render_sine(static_cast<uint16_t>(angle + angle_format::half_turn)) == -value);
+    CHECK(render_cosine(static_cast<uint16_t>(angle)) == render_sine(static_cast<uint16_t>(angle + angle_format::quarter_turn)));
+  }
+  CHECK(original_sine[256] == 32766); // retain the source quirk for simulation
+}
+
+TEST_CASE("Camera and model rotations resolve steps inside one original sine phase", "[graphics][camera]") {
+  using namespace darker::graphics;
+  auto const base{make_camera_basis({})};
+  auto const turned{make_camera_basis({.heading{16}})};
+  auto const pitched{make_camera_basis({.pitch{16}})};
+  auto const rolled{make_camera_basis({.roll{16}})};
+  CHECK(base[0].horizontal != turned[0].horizontal);
+  CHECK(base[2].depth != pitched[2].depth);
+  CHECK(base[2].horizontal != rolled[2].horizontal);
+  auto const object_base{orient_model(base, {})};
+  auto const object_turned{orient_model(base, {.heading{16}})};
+  CHECK(object_base[0].horizontal != object_turned[0].horizontal);
 }

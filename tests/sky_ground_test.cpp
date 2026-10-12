@@ -13,7 +13,7 @@ TEST_CASE("Sky and ground bands match native horizon projection", "[graphics][ba
     darker::graphics::draw_sky_ground(frame, {
       .pitch{sample.pitch},
       .roll{sample.roll}
-    }, {160, static_cast<int16_t>(sample.height / 2)}, sample.height);
+    }, {160, static_cast<int16_t>(sample.height / 2)}, sample.height, darker::graphics::render_geometry::focal_length, darker::maths::angle_precision::original);
     uint64_t hash{14695981039346656037ull};
     for(int i{0}; i < sample.height * 320; ++i) {
       hash ^= frame.pixels[i];
@@ -64,4 +64,12 @@ TEST_CASE("Wide views retain the horizon beyond the native pitch cutoffs", "[gra
     uint8_t const expected{pitch == 16384 ? uint8_t{28} : uint8_t{127}};
     CHECK(std::ranges::all_of(pixels, [expected](uint8_t value) { return value == expected; }));
   }
+}
+
+TEST_CASE("High resolution horizon moves within a single original angle phase", "[graphics][background]") {
+  int constexpr width{960}, height{1080};
+  std::vector<uint8_t> first(width * height), second(width * height);
+  darker::graphics::draw_sky_ground({first, width, height, width}, {}, {width / 2, height / 2}, height, 1152);
+  darker::graphics::draw_sky_ground({second, width, height, width}, {.pitch{16}}, {width / 2, height / 2}, height, 1152);
+  CHECK(first != second);
 }

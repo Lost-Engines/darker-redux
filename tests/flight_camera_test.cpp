@@ -20,6 +20,7 @@ TEST_CASE("Player camera position and distance smoothing match native views", "[
     for(size_t i{0}; i < 2; ++i) player.fractions[i] = static_cast<uint8_t>(sample.fractions[i]);
     auto const &v{sample.input};
     darker::game::flight_camera camera{
+      .precision{darker::maths::angle_precision::original},
       .mode{static_cast<darker::game::camera_mode>(v[0])},
       .distance_step{static_cast<uint8_t>(v[2])},
       .distance{static_cast<uint16_t>(v[3])}
@@ -36,6 +37,7 @@ TEST_CASE("Tab look and recentering follow original camera controls", "[game][ca
   for(auto const &sample : darker::test_reference::camera_look_samples) {
     auto const &v{sample.input};
     darker::game::flight_camera camera{
+      .precision{darker::maths::angle_precision::original},
       .mode{static_cast<darker::game::camera_mode>(v[6])},
       .look_heading{static_cast<uint16_t>(v[0])},
       .look_pitch{static_cast<uint16_t>(v[1])}
@@ -61,6 +63,7 @@ TEST_CASE("Dropped cameras retain original anchors and tracking angles", "[game]
       player.position[i] = static_cast<uint16_t>(sample.player[i]);
     }
     darker::game::flight_camera camera;
+    camera.precision = darker::maths::angle_precision::original;
     camera.drop(static_cast<darker::game::camera_mode>(sample.mode[0]), anchor);
     auto const result{camera.view(player, 1)};
     CAPTURE(sample.anchor, sample.player, sample.mode);
@@ -89,6 +92,7 @@ TEST_CASE("Missile camera positions match native attached and impact views", "[g
     for(size_t axis{0}; axis < 2; ++axis) shot.fractions[axis] = static_cast<uint8_t>(sample.fractions[axis]);
     auto const &v{sample.input};
     darker::game::flight_camera camera{
+      .precision{darker::maths::angle_precision::original},
       .mode{static_cast<darker::game::camera_mode>(v[0])},
       .distance_step{static_cast<uint8_t>(v[2])},
       .distance{static_cast<uint16_t>(v[3])}
@@ -115,6 +119,7 @@ TEST_CASE("Underground following and death views retain the player position", "[
     for(size_t i{0}; i < 2; ++i) player.fractions[i] = static_cast<uint8_t>(sample.fractions[i]);
     for(auto const mode : {darker::game::camera_mode::behind, darker::game::camera_mode::level}) {
       darker::game::flight_camera camera{
+        .precision{darker::maths::angle_precision::original},
         .mode{mode},
         .distance_step{static_cast<uint8_t>(sample.input[2])},
         .distance{static_cast<uint16_t>(sample.input[3])}
@@ -136,7 +141,7 @@ TEST_CASE("F7 rays and range rejection match native camera selection", "[game][c
       camera.position[axis] = static_cast<uint16_t>(sample.position[axis]);
       target.position[axis] = static_cast<uint16_t>(sample.target[axis]);
     }
-    auto const end{darker::game::camera_ray_end(camera)};
+    auto const end{darker::game::camera_ray_end(camera, darker::maths::angle_precision::original)};
     CAPTURE(sample.position, sample.angles, sample.target);
     CHECK(std::array<int, 3>{end[0], end[1], end[2]} == sample.end);
     CHECK(darker::game::camera_target_in_range(camera, target) == (sample.accepted[0] != 0));
@@ -155,6 +160,7 @@ TEST_CASE("F7 follows live and destroyed objects at the original distances", "[g
     for(size_t axis{0}; axis < 2; ++axis) object.fractions[axis] = static_cast<uint8_t>(sample.fractions[axis]);
     auto const &v{sample.input};
     darker::game::flight_camera camera{
+      .precision{darker::maths::angle_precision::original},
       .mode{darker::game::camera_mode::object},
       .distance_step{static_cast<uint8_t>(v[1])},
       .distance{static_cast<uint16_t>(v[2])}
@@ -165,4 +171,17 @@ TEST_CASE("F7 follows live and destroyed objects at the original distances", "[g
     CHECK(std::array<int, 9>{result.position.column, result.position.row, result.position.height, result.fractions.column, result.fractions.row,
       result.angles.heading, result.angles.pitch, result.angles.roll, camera.distance} == sample.output);
   }
+}
+
+TEST_CASE("Rendered camera retains angle bits below the original table phase", "[game][camera]") {
+  darker::game::flight_camera camera;
+  darker::game::object_pose player;
+  player.angles = {
+    .heading{17},
+    .pitch{23},
+    .roll{31},
+  };
+  auto const result{camera.view(player, 0)};
+  CHECK(result.angles == player.angles);
+  CHECK(player.angles.heading == 17);
 }

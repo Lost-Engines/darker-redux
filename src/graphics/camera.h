@@ -33,9 +33,9 @@ struct model_placement {
 
 using camera_basis = maths::view_basis;                                        // model components A, B and C; map column/row use B and -A
 
-camera_basis orient_model(camera_basis const &camera, camera_angles angles) noexcept;
+camera_basis orient_model(camera_basis const &camera, camera_angles angles, maths::angle_precision precision = maths::angle_precision::full) noexcept;
 
-camera_basis make_camera_basis(camera_angles angles) noexcept;
+camera_basis make_camera_basis(camera_angles angles, maths::angle_precision precision = maths::angle_precision::full) noexcept;
 model_placement place_model(camera_basis const &basis, camera_position camera, model_origin origin, std::optional<world_image> image = std::nullopt) noexcept;
 
 } // namespace darker::graphics

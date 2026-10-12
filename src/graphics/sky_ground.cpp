@@ -6,11 +6,12 @@
 #include <stdexcept>
 #include "graphics/screen_layout.h"
 #include "maths/angle.h"
+#include "maths/render_sine.h"
 
 namespace darker::graphics {
 
-void draw_sky_ground(framework::render::indexed_surface target, camera_angles const angles, screen_vertex const &origin, int const bottom, double const focal_length) {
-  /// Reconstruct B409's indexed sky/ground bands using its rounded angles, integer projection and B71A colour sequence
+void draw_sky_ground(framework::render::indexed_surface target, camera_angles const angles, screen_vertex const &origin, int const bottom, double const focal_length, maths::angle_precision const precision) {
+  /// Keep B71A's palette bands while resolving the horizon at full angular precision
   if(bottom < 0 || bottom > target.height) throw std::invalid_argument{"Sky/ground viewport exceeds the framebuffer"};
   std::array<uint8_t, 17> constexpr colours{28, 29, 30, 31, 60, 61, 62, 63, 252, 92, 93, 94, 95, 124, 125, 126, ground_background_colour};
   std::array<int, 16> constexpr offsets{74, 56, 42, 30, 20, 12, 6, 2, -2, -6, -12, -20, -30, -42, -56, -74};
@@ -19,13 +20,15 @@ void draw_sky_ground(framework::render::indexed_surface target, camera_angles co
   // The native shortcuts assume a narrow viewport. For other projections,
   // classify view rays against the horizon plane instead: no pitch cutoff or
   // tangent singularity, even when looking past straight up/down or banking.
-  bool const native_projection{target.width <= 320 && bottom <= 240 && focal_length == render_geometry::focal_length};
+  bool const native_projection{precision == maths::angle_precision::original && target.width <= 320 && bottom <= 240 && focal_length == render_geometry::focal_length};
   if(!native_projection) {
     double constexpr sine_scale{32768.0};
-    double const pitch_sine{maths::original_sine[pitch] / sine_scale};
-    double const pitch_cosine{maths::phase_cosine(pitch) / sine_scale};
-    double const horizontal{pitch_cosine * maths::original_sine[roll] / sine_scale};
-    double const vertical{pitch_cosine * maths::phase_cosine(roll) / sine_scale};
+    auto const sine{precision == maths::angle_precision::full ? maths::render_sine : maths::angle_sine};
+    auto const cosine{precision == maths::angle_precision::full ? maths::render_cosine : maths::angle_cosine};
+    double const pitch_sine{sine(angles.pitch) / sine_scale};
+    double const pitch_cosine{cosine(angles.pitch) / sine_scale};
+    double const horizontal{pitch_cosine * sine(angles.roll) / sine_scale};
+    double const vertical{pitch_cosine * cosine(angles.roll) / sine_scale};
     std::array<double, offsets.size()> boundaries{};
     for(unsigned int i{0}; i < offsets.size(); ++i) boundaries[i] = -offsets[i] * focal_length / (2 * render_geometry::focal_length);
     for(int y{0}; y < bottom; ++y) {

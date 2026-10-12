@@ -1,6 +1,7 @@
 #include "maths/view_basis.h"
 #include <bit>
 #include "maths/angle.h"
+#include "maths/render_sine.h"
 
 namespace darker::maths {
 namespace {
@@ -20,7 +21,11 @@ struct angle_components {
   int16_t cosine;
 };
 
-angle_components components(uint16_t const angle) noexcept {
+angle_components components(uint16_t const angle, angle_precision const precision) noexcept {
+  if(precision == angle_precision::full) return {
+    .sine{render_sine(angle)},
+    .cosine{render_cosine(angle)},
+  };
   /// The camera caller rounds by fifteen before selecting a 1024-entry phase
   auto const phase{view_angle_phase(angle)};
   return {
@@ -31,11 +36,11 @@ angle_components components(uint16_t const angle) noexcept {
 
 } // anonymous namespace
 
-view_basis make_view_basis(attitude_angles const angles) noexcept {
+view_basis make_view_basis(attitude_angles const angles, angle_precision const precision) noexcept {
   /// Translate 1D63's ordered fixed-point products and 1E40's local-axis installation
-  auto const pitch{components(angles.pitch)};
-  auto const roll{components(angles.roll)};
-  auto const heading{components(angles.heading)};
+  auto const pitch{components(angles.pitch, precision)};
+  auto const roll{components(angles.roll, precision)};
+  auto const heading{components(angles.heading, precision)};
   auto const heading_sine_roll_sine{multiply(heading.sine, roll.sine)};
   auto const heading_cosine_roll_sine{multiply(heading.cosine, roll.sine)};
   auto const heading_sine_roll_cosine{multiply(heading.sine, roll.cosine)};

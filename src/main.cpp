@@ -522,7 +522,7 @@ auto main(int const argc, char const *const argv[])->int {
         return diameter <= 1 ? 0u : static_cast<unsigned int>(std::ceil(diameter / 2));
       }()},
     };
-    combat->targeting_basis = darker::maths::make_view_basis(view.angles);
+    combat->targeting_basis = darker::maths::make_view_basis(view.angles, darker::maths::angle_precision::full);
     view.underground = host.player.tunnel.has_value();
     view.unrestricted_visibility = host.player.noclip;
     view.radius = view.underground ? darker::graphics::scene_limits::tunnel_radius_cells : draw_distance;

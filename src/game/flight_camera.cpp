@@ -6,6 +6,7 @@
 #include "game/angular_motion.h"
 #include "maths/direction.h"
 #include "maths/angle.h"
+#include "maths/render_sine.h"
 
 namespace darker::game {
 namespace {
@@ -93,7 +94,7 @@ object_pose flight_camera::view(object_pose const &player, game_duration const f
   if(following && missile) result.angles.pitch = static_cast<uint16_t>(result.angles.pitch - 0x800);
   if(following && landed && !missile) result.angles.pitch = static_cast<uint16_t>(result.angles.pitch - 1024);
   normalise_attitude(result.angles);
-  for(auto *angle : {&result.angles.heading, &result.angles.pitch, &result.angles.roll}) {
+  if(precision == maths::angle_precision::original) for(auto *angle : {&result.angles.heading, &result.angles.pitch, &result.angles.roll}) {
     *angle = static_cast<uint16_t>(static_cast<uint16_t>(*angle + 15) & 0xffc0);
   }
   if(!following) return result;
@@ -108,20 +109,19 @@ object_pose flight_camera::view(object_pose const &player, game_duration const f
     int const next{word(old + (old < target ? frame_step * 8 : -frame_step * 8))};
     distance = static_cast<uint16_t>(old < target ? std::min(next, target) : std::max(next, target));
   }
-  auto pitch{result.angles.pitch >> 6};
-  auto const heading{result.angles.heading >> 6};
-  int const vertical{(word(distance) * maths::original_sine[pitch]) >> 16};
+  auto const sine{precision == maths::angle_precision::full ? maths::render_sine : maths::angle_sine};
+  auto const cosine{precision == maths::angle_precision::full ? maths::render_cosine : maths::angle_cosine};
+  int const vertical{(word(distance) * sine(result.angles.pitch)) >> 16};
   auto height{word(result.position.height + (distance >> 4) - vertical)};
   if(height < 82 && vertical != 0 && !landed) {
-    auto const index{maths::direction_index(static_cast<uint16_t>((vertical + pitch * 2) * 2), distance)};
-    pitch = index >> 1;
+    auto const index{maths::direction_index(static_cast<uint16_t>((vertical + (result.angles.pitch >> 6) * 2) * 2), distance)};
     result.angles.pitch = static_cast<uint16_t>(index * 32);
     height = 82;
   }
   result.position.height = static_cast<uint16_t>(height);
-  int const horizontal{((distance >> 2) * maths::phase_cosine(pitch)) >> 16};
-  displace_object(result, 0, (horizontal * maths::original_sine[heading]) >> 8);
-  displace_object(result, 1, (horizontal * maths::phase_cosine(heading)) >> 8);
+  int const horizontal{((distance >> 2) * cosine(result.angles.pitch)) >> 16};
+  displace_object(result, 0, (horizontal * sine(result.angles.heading)) >> 8);
+  displace_object(result, 1, (horizontal * cosine(result.angles.heading)) >> 8);
   return result;
 }
 

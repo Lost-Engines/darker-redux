@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include "maths/angle.h"
 
 namespace darker::maths {
 
@@ -20,6 +21,6 @@ struct view_axis {
 };
 
 using view_basis = std::array<view_axis, 3>;
-view_basis make_view_basis(attitude_angles angles) noexcept;
+view_basis make_view_basis(attitude_angles angles, angle_precision precision = angle_precision::original) noexcept;
 
 } // namespace darker::maths

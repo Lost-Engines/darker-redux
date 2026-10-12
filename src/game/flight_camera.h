@@ -12,6 +12,7 @@ enum class camera_mode { cockpit, behind, level, fullscreen, tracking, fixed, ob
 enum class camera_subject { player, missile, missile_effect, object, object_effect, absent_object };
 
 struct flight_camera {
+  maths::angle_precision precision{maths::angle_precision::full}; // original mode supports native reference verification
   camera_mode mode{camera_mode::cockpit};
   uint8_t distance_step{1};
   uint16_t distance{0x8000};

@@ -2,6 +2,7 @@
 #include <bit>
 #include "vectorstorm/matrix/matrix3.h"
 #include "maths/angle.h"
+#include "maths/render_sine.h"
 
 namespace darker::graphics {
 namespace {
@@ -31,19 +32,19 @@ render_geometry::sorting_distance magnitude(render_geometry::coordinate const va
 
 } // anonymous namespace
 
-camera_basis make_camera_basis(camera_angles const angles) noexcept {
-  /// Share the native camera transform with weapon targeting
-  return maths::make_view_basis(angles);
+camera_basis make_camera_basis(camera_angles const angles, maths::angle_precision const precision) noexcept {
+  /// Share the selected fixed-point camera transform with visual targeting
+  return maths::make_view_basis(angles, precision);
 }
 
-camera_basis orient_model(camera_basis const &camera, camera_angles const angles) noexcept {
-  /// 1E9E composes unrounded object attitude with the current camera, preserving each intermediate fixed-point product
-  auto const heading{maths::angle_phase(static_cast<uint16_t>(maths::angle_format::half_turn - angles.heading))};
-  auto const pitch{maths::angle_phase(angles.pitch)};
-  auto const roll{maths::angle_phase(angles.roll)};
-  auto const hs{maths::original_sine[heading]}, hc{maths::phase_cosine(heading)};
-  auto const ps{maths::original_sine[pitch]}, pc{maths::phase_cosine(pitch)};
-  auto const rs{maths::original_sine[roll]}, rc{maths::phase_cosine(roll)};
+camera_basis orient_model(camera_basis const &camera, camera_angles const angles, maths::angle_precision const precision) noexcept {
+  /// Compose full-resolution object attitude with the camera, retaining 1E9E's fixed-point products
+  auto const sine{precision == maths::angle_precision::full ? maths::render_sine : maths::angle_sine};
+  auto const cosine{precision == maths::angle_precision::full ? maths::render_cosine : maths::angle_cosine};
+  auto const heading{static_cast<uint16_t>(maths::angle_format::half_turn - angles.heading)};
+  auto const hs{sine(heading)}, hc{cosine(heading)};
+  auto const ps{sine(angles.pitch)}, pc{cosine(angles.pitch)};
+  auto const rs{sine(angles.roll)}, rc{cosine(angles.roll)};
   auto const hsrs{multiply(hs, rs)}, hcrs{multiply(hc, rs)};
   auto const hsrc{multiply(hs, rc)}, hcrc{multiply(hc, rc)};
   mat3<int16_t> const axes{

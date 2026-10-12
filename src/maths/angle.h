@@ -5,6 +5,8 @@
 
 namespace darker::maths {
 
+enum class angle_precision { original, full };
+
 struct angle_format {
   using angle = uint16_t;
   static unsigned int constexpr full_turn{65536};
