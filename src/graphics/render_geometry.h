@@ -67,8 +67,8 @@ struct render_geometry {
 struct scene_limits {
   static int constexpr world_period_cells{1 << (std::numeric_limits<maths::world_format::position_component>::digits - maths::world_format::cell_fraction_bits)};
   static unsigned int constexpr native_surface_radius_cells{15};
-  static unsigned int constexpr surface_radius_cells{100};
-  static unsigned int constexpr surface_fade_cells{90};
+  static unsigned int constexpr surface_radius_cells{90};
+  static unsigned int constexpr surface_fade_cells{32};
   static unsigned int constexpr tunnel_radius_cells{8};
   static unsigned int constexpr minimum_scan_radius_cells{2};
   static unsigned int constexpr maximum_scan_radius_cells{182};                  // covers the diagonal of the 256-cell wrapping world (nearest image is at most 128 cells per axis)
