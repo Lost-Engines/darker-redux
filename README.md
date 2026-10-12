@@ -26,6 +26,20 @@ Read the downloaded manual and keep the city map handy: the briefings expect you
 
 For prerequisites and build commands, see the [original project's build instructions](https://github.com/Lost-Engines/darker-cpp#building-the-source-code). The same commands apply here.
 
+For optimised developer playtesting with debug symbols, assertions and developer cheats:
+
+```sh
+cmake -S . -B build-relwithdebinfo -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build-relwithdebinfo --parallel
+./build-relwithdebinfo/darker --cheats-dev
+```
+
+Redux's `RelWithDebInfo` deliberately keeps `NDEBUG` undefined in project code.
+Release builds still omit developer cheats; Debug remains unoptimised for stepping
+through code. With a multi-configuration generator, add `--config RelWithDebInfo`
+to the build command and run the executable from that configuration's directory.
+
+
 ## Redux improvements
 
 ### In-game menu
@@ -63,4 +77,4 @@ All of these repairs happen in memory. Original packs and saves are not rewritte
 
 ### Developer additions
 
-- **Developer cheats (Debug only):** launch with `--cheats-dev`, then press **K** during flight to eliminate active aircraft and ground/static mission targets. Normal objective credit and cleanup run on the next simulation update; reserve waves and uncounted ground escorts are preserved. This switch and key handler are absent from Release builds.
+- **Developer cheats (Debug / RelWithDebInfo):** launch with `--cheats-dev`, then press **K** during flight to eliminate active aircraft and ground/static mission targets. Normal objective credit and cleanup run on the next simulation update; reserve waves and uncounted ground escorts are preserved. This switch and key handler are absent from Release builds.
