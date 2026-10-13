@@ -3,7 +3,7 @@
 `flight_controls_state::update` reconstructs the ordinary keyboard/mouse path at
 `7AD6–7BC4` and its response helpers `7C04`, `7C50` and `7C73`. It produces the
 bank and pitch drives consumed by the flight callbacks. Platform event capture,
-joystick and VR orientation are separate integration work.
+joystick input is now integrated in Redux; VR orientation remains separate.
 
 Each axis retains separate keyboard and mouse targets, the previous mouse
 counter and the published midpoint reference. Arrow keys initially select a
@@ -60,18 +60,43 @@ counts explain the observed playtest still needs a matched live trace. A slow
 and fast sweep over the same physical distance would help distinguish speed-
 dependent packet delivery from a position limit.
 
-## Native joystick support status
+## Redux joystick input
 
-Neither native reconstruction currently polls a joystick or gamepad. The retail
-manual lists joystick steering on page 17 and configurable joystick A/B fire
-buttons on page 22, alongside mouse and keyboard button masks. The 1995 demo's
-instructions additionally describe automatic calibration, J to recalibrate, and
-fire buttons as menu acceptance.
+Redux polls GLFW joysticks on the main thread. Recognised gamepads use GLFW's
+standard mapping; other joysticks expose raw axes and buttons (including hats
+reported by GLFW as buttons). Standard gamepad triggers become buttons 16/17
+at half travel. The default left stick supplies bank/pitch, with positive Y
+pulling the nose up. Device indices and axis/button numbers are displayed
+one-based; saved indices are zero-based. Auto chooses the first present device.
+Explicit device slots are retained when disconnected, rather than silently
+switching to another controller. Slots may change if devices are reordered.
 
-The retail steering code at 7B7D–7BC4 enters its joystick fallback only when the
-preceding keyboard/mouse path supplies no drive and the device flags permit it.
-It reads two retained axes, smooths each against its previous sample, applies
-the calibrated response through 7BCA, and scales the result by the simulation
-step. This is a distinct analogue path, not mouse movement or digital arrows.
-Implementing host joystick input remains separate from the Redux keyboard and
-mouse preferences.
+The controls submenu saves device selection, axes, inversion, extra dead zone,
+sensitivity and action bindings. Missing axes/buttons produce neutral input.
+The device name and live axis readings aid setup. GLFW supplies normalised axes,
+so there is no emulated DOS gameport calibration procedure. The optional host
+dead zone (default 5%) precedes the original response's own centre dead zone.
+
+The retail code at 7B7D–7BC4 enters its joystick fallback only when preceding
+keyboard/mouse steering supplies no drive. 7BCA averages current and previous
+axis readings, removes the inner 1/16 of calibrated travel and saturates at
+0x0f00; 7BA6/7BBD scale the signed result by the simulation timestep. Redux
+normalises host axes to ±32767 and uses that as the calibrated extent. The
+native-reference generator captures 256 complete fallback updates, including
+signed wrapping and asymmetric rounding. Keyboard/mouse fixtures remain intact.
+
+Physical button edges and held states are distinct. Button actions share the
+existing flight command paths; brake, firing, radar and look-around remain
+held actions. Connection/focus changes and menu transitions consume held buttons
+until release. Button capture suppresses flight/menu commands, and pausing can
+be cancelled by a new button press without executing its assigned action.
+Joystick input is disabled while the window is unfocused. These behaviours
+have automated coverage; physical-device playtesting is still pending.
+
+The retail manual lists joystick steering on page 17 and configurable joystick
+A/B buttons on page 22. The 1995 demo additionally documents automatic
+calibration, J to recalibrate, and fire buttons for menu acceptance.
+
+This implementation is currently Redux-only. Backport the verified analogue
+input path to darker-cpp after interactive testing; the faithful project still
+has no host joystick polling.

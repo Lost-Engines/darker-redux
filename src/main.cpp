@@ -124,10 +124,21 @@ struct flight_host {
   bool mouse_captured{false};
   bool menu_mouse_consumed{false};
   int resume_key{GLFW_KEY_UNKNOWN};
+  darker::input::joystick_sample joystick;
+  darker::input::joystick_buttons joystick_buttons;
+  bool joystick_dispatch{false};
+  int joystick_menu_direction{0};
+  int joystick_context{-1};
+  std::optional<darker::input::joystick_preferences> previous_joystick_settings;
 
   bool key_down(GLFWwindow &window, int const key) const {
     /// A resume key remains consumed through repeats and held-key polling until its release
     int const binding{options.values.controls.binding_for_command(key)};
+    if(focused && !paused) {
+      auto const descriptions{darker::input::control_descriptions()};
+      auto const found{std::ranges::find(descriptions, darker::input::normalise_key(key), &darker::input::control_description::default_key)};
+      if(found != descriptions.end() && joystick_buttons.down(options.values.joystick.buttons[found - descriptions.begin()])) return true;
+    }
     if(!focused || paused || binding == GLFW_KEY_UNKNOWN || binding == darker::input::normalise_key(resume_key)) return false;
     if(glfwGetKey(&window, binding) == GLFW_PRESS) return true;
     // Retain the original paired modifiers and keypad aliases.
@@ -173,6 +184,9 @@ struct flight_host {
       .look_around{down(GLFW_KEY_TAB)},
       .mouse_x{mouse.x},
       .mouse_y{mouse.y},
+      .joystick_enabled{joystick.device >= 0},
+      .joystick_bank{darker::input::joystick_axis(joystick, options.values.joystick.bank_axis, options.values.joystick.invert_bank, options.values.joystick)},
+      .joystick_pitch{darker::input::joystick_axis(joystick, options.values.joystick.pitch_axis, options.values.joystick.invert_pitch, options.values.joystick)},
     };
   }
 };
@@ -518,7 +532,8 @@ auto main(int const argc, char const *const argv[])->int {
     .gouraud{host.gouraud},
     .music_volume{saved_preferences.music_volume},
     .effects_volume{saved_preferences.effects_volume},
-    .controls{saved_preferences.controls}
+    .controls{saved_preferences.controls},
+    .joystick{saved_preferences.joystick}
   };
   framework::render::indexed_cockpit_framebuffer display{};
   std::vector<uint8_t> world_pixels(static_cast<size_t>(display_width) * display_height);
@@ -905,7 +920,7 @@ auto main(int const argc, char const *const argv[])->int {
     host.player.controls.pitch.previous_mouse = 0;
   });
 
-  glfwSetKeyCallback(window.get(), [](GLFWwindow *const window, int key, int, int const action, int const modifiers){
+  auto const key_callback{+[](GLFWwindow *const window, int key, int, int const action, int const modifiers){
     auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};
     if(action == GLFW_RELEASE) {
       if(key == host.resume_key) host.resume_key = GLFW_KEY_UNKNOWN;
@@ -1060,7 +1075,7 @@ auto main(int const argc, char const *const argv[])->int {
         return;
       }
     }
-    key = host.options.values.controls.command_key(key);
+    if(!host.joystick_dispatch) key = host.options.values.controls.command_key(key);
     if(key == GLFW_KEY_UNKNOWN) return;
     if(action == GLFW_PRESS && (key == GLFW_KEY_LEFT_BRACKET || key == GLFW_KEY_RIGHT_BRACKET)) {
       host.field_of_view = std::clamp(host.field_of_view + (key == GLFW_KEY_RIGHT_BRACKET ? 5.0 : -5.0), 15.0, 140.0);
@@ -1148,7 +1163,8 @@ auto main(int const argc, char const *const argv[])->int {
       default:
         break;
     }
-  });
+  }};
+  glfwSetKeyCallback(window.get(), key_callback);
   framework::platform::framebuffer_presenter presenter{*window};
   darker::audio::fm_stream audio{framework::platform::audio_output::sample_rate,
     opl_name == "dosbox" ? darker::audio::fm_backend::dosbox : darker::audio::fm_backend::nuked};
@@ -1300,6 +1316,76 @@ auto main(int const argc, char const *const argv[])->int {
       continue;
     }
     next_frame = frame_time + display_interval;
+    auto sample{darker::input::poll_joystick(host.options.values.joystick.device)};
+    bool const settings_changed{!host.previous_joystick_settings || *host.previous_joystick_settings != host.options.values.joystick};
+    if(settings_changed || sample.device != host.joystick.device) {
+      host.player.controls.bank.previous_joystick = host.player.controls.pitch.previous_joystick = 0;
+      host.joystick_buttons.suppress();
+      host.previous_joystick_settings = host.options.values.joystick;
+    }
+    host.joystick = std::move(sample);
+    host.options.joystick_status = host.joystick;
+    host.joystick_buttons.update(host.joystick, host.focused);
+    int const joystick_context{host.options.active ? 1 : host.front && host.front->active() ? 2 : host.paused ? 3 : 0};
+    if(joystick_context != host.joystick_context || settings_changed) {
+      host.joystick_buttons.suppress();
+      host.joystick_menu_direction = 0;
+      host.joystick_context = joystick_context;
+    }
+    auto const joystick_key{[&](int const key){
+      host.joystick_dispatch = true;
+      key_callback(window.get(), key, 0, GLFW_PRESS, 0);
+      key_callback(window.get(), key, 0, GLFW_RELEASE, 0);
+      host.joystick_dispatch = false;
+    }};
+    if(host.focused && host.options.capturing_button()) {
+      for(unsigned int button{0}; button < host.joystick.buttons.size(); ++button) {
+        if(host.joystick_buttons.pushed(static_cast<int>(button))) {
+          host.options.capture_button(static_cast<int>(button));
+          host.joystick_buttons.suppress();
+          break;
+        }
+      }
+    } else if(host.focused && !host.options.capturing_key()) {
+      auto const &bindings{host.options.values.joystick.buttons};
+      if(joystick_context == 1 || joystick_context == 2) {
+        int const axis{host.options.values.joystick.pitch_axis};
+        float const value{axis >= 0 && static_cast<unsigned int>(axis) < host.joystick.axes.size() ? host.joystick.axes[axis] : 0.0f};
+        int const bank_axis{host.options.values.joystick.bank_axis};
+        float const horizontal{bank_axis >= 0 && static_cast<unsigned int>(bank_axis) < host.joystick.axes.size() ? host.joystick.axes[bank_axis] : 0.0f};
+        int const direction{value > 0.5f ? 1 : value < -0.5f ? -1
+          : joystick_context == 1 && horizontal > 0.5f ? 2 : joystick_context == 1 && horizontal < -0.5f ? -2 : 0};
+        if(direction && direction != host.joystick_menu_direction) {
+          joystick_key(direction == 1 ? GLFW_KEY_DOWN : direction == -1 ? GLFW_KEY_UP : direction == 2 ? GLFW_KEY_RIGHT : GLFW_KEY_LEFT);
+        }
+        host.joystick_menu_direction = direction;
+        if(host.joystick_buttons.pushed(bindings[std::to_underlying(darker::input::control_action::primary)])) {
+          joystick_key(GLFW_KEY_ENTER);
+          host.joystick_buttons.suppress();
+        } else if(host.joystick_buttons.pushed(bindings[std::to_underlying(darker::input::control_action::secondary)])) {
+          joystick_key(GLFW_KEY_ESCAPE);
+          host.joystick_buttons.suppress();
+        }
+      } else if(joystick_context == 3) {
+        for(unsigned int button{0}; button < host.joystick.buttons.size(); ++button) {
+          if(host.joystick_buttons.pushed(static_cast<int>(button))) {
+            joystick_key(GLFW_KEY_SPACE);
+            host.joystick_buttons.suppress();
+            break;
+          }
+        }
+      } else if((host.player.lifecycle.crashing || host.hangar.returning == darker::game::hangar_return_phase::complete)
+        && host.joystick_buttons.pushed(bindings[std::to_underlying(darker::input::control_action::primary)])) {
+        joystick_key(GLFW_KEY_ENTER);
+        host.joystick_buttons.suppress();
+      } else {
+        auto const descriptions{darker::input::control_descriptions()};
+        for(unsigned int action{0}; action < bindings.size(); ++action) {
+          if(host.joystick_buttons.pushed(bindings[action])) joystick_key(descriptions[action].default_key);
+        }
+      }
+    }
+
     if(host.exit_requested != session_exit::none) {
       bool const previous_level{host.exit_requested == session_exit::previous};
       if(previous_level) debug_session = true;

@@ -10,9 +10,12 @@ struct steering_axis_state {
   uint16_t mouse_target{0};
   uint16_t previous_mouse{0};
   uint16_t reference{0};
+  int16_t previous_joystick{0};
 
   uint16_t keyboard(bool negative, bool positive, bool control, game_duration step) noexcept;
   uint16_t mouse(uint16_t position, uint16_t sensitivity, game_duration step) noexcept;
+
+  uint16_t joystick(int16_t position, game_duration step) noexcept;
 
 private:
   uint16_t filtered_drive(uint16_t previous, uint16_t target, game_duration step) noexcept;
@@ -38,6 +41,9 @@ struct flight_controls_input {
   uint16_t mouse_x{0};                                                         // original accumulated mouse-motion counters
   uint16_t mouse_y{0};
   uint16_t mouse_sensitivity{12};
+  bool joystick_enabled{false};
+  int16_t joystick_bank{0};
+  int16_t joystick_pitch{0};
 };
 
 struct flight_steering {

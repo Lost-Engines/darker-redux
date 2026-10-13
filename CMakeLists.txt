@@ -382,6 +382,8 @@ target_include_directories(darker_game PUBLIC src)
 configure_first_party(darker_game)
 
 add_library(darker_presentation STATIC
+  src/input/joystick.cpp
+  src/input/joystick.h
   src/input/control_preferences.cpp
   src/input/control_preferences.h
   src/presentation/player.cpp

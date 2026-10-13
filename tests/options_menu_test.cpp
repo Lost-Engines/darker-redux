@@ -56,9 +56,14 @@ TEST_CASE("Display preferences round-trip and reject malformed values", "[option
   saved.controls.mouse_sensitivity = 1.7;
   saved.controls.invert_mouse = true;
   saved.controls.keys[0] = 'J';
+  saved.joystick.device = 2;
+  saved.joystick.bank_axis = 3;
+  saved.joystick.invert_pitch = true;
+  saved.joystick.deadzone_percent = 12;
+  saved.joystick.buttons[0] = 12;
   darker::presentation::write_preferences(path, saved);
   CHECK(darker::presentation::read_preferences(path) == saved);
-  for(auto const bad : {"fov=nan", "width=12", "draw-distance=999", "fog-start=100", "gouraud=2", "fog-curve=12garbage", "mouse-sensitivity=0", "mouse-sensitivity=nan", "invert-mouse=2", "bind.left=69", "bind.left=256", "music-volume=101", "effects-volume=-1", "mouse-primary=1", "mouse-secondary=8"}) {
+  for(auto const bad : {"fov=nan", "width=12", "draw-distance=999", "fog-start=100", "gouraud=2", "fog-curve=12garbage", "mouse-sensitivity=0", "mouse-sensitivity=nan", "invert-mouse=2", "bind.left=69", "bind.left=256", "music-volume=101", "effects-volume=-1", "mouse-primary=1", "mouse-secondary=8", "joystick-device=16", "joystick-bank-axis=1", "joystick-deadzone=51", "joystick-sensitivity=0", "joystick-button.left=0"}) {
     { std::ofstream output{path}; output << bad << '\n'; }
     CHECK_THROWS(darker::presentation::read_preferences(path));
   }
@@ -75,6 +80,7 @@ TEST_CASE("Control bindings preserve defaults and report conflicting assignments
   menu.key(options_key::down);
   menu.key(options_key::accept);
   CHECK(menu.values.controls.invert_mouse);
+  menu.key(options_key::down);
   menu.key(options_key::down);
   menu.key(options_key::down);
   menu.key(options_key::down); // Bank left.
@@ -101,7 +107,7 @@ TEST_CASE("Control capture can cancel, clear and reassign a previously occupied 
   options_menu menu;
   menu.open();
   menu.click(30, 35 + 9 * 11);
-  for(int i{0}; i < 4; ++i) menu.key(options_key::down);
+  for(int i{0}; i < 5; ++i) menu.key(options_key::down);
   menu.key(options_key::accept);
   menu.capture_key(256); // Escape cancels only capture.
   CHECK_FALSE(menu.capturing_key());
@@ -211,4 +217,29 @@ TEST_CASE("Mouse firing buttons swap occupied assignments and allow disabling", 
   menu.key(options_key::left);
   CHECK(menu.values.controls.secondary_mouse_button == -1);
   CHECK(menu.values.controls.valid());
+}
+
+TEST_CASE("Joystick menu captures buttons, reports conflicts and saves its settings", "[options][joystick]") {
+  options_menu menu;
+  menu.open();
+  menu.click(30, 35 + 9 * 11);
+  menu.click(30, 35 + 4 * 11);
+  menu.key(options_key::right);
+  CHECK(menu.values.joystick.device == 0);
+  for(int i{0}; i < 7; ++i) menu.key(options_key::down);
+  menu.key(options_key::accept);
+  REQUIRE(menu.capturing_button());
+  menu.capture_button(0);
+  CHECK(menu.capturing_button());
+  CHECK_FALSE(menu.notice.empty());
+  menu.capture_button(10);
+  CHECK_FALSE(menu.capturing_button());
+  CHECK(menu.values.joystick.buttons[0] == 10);
+  menu.key(options_key::accept);
+  menu.capture_key(261);
+  CHECK(menu.values.joystick.buttons[0] == -1);
+  menu.click(30, 187);
+  menu.click(30, 187);
+  menu.key(options_key::cancel);
+  CHECK(menu.values.joystick.device == darker::input::joystick_automatic);
 }

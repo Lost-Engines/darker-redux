@@ -5,6 +5,7 @@
 #include <numbers>
 #include "graphics/model_lighting.h"
 #include "input/control_preferences.h"
+#include "input/joystick.h"
 #include <span>
 #include <string>
 #include "render/framebuffer.h"
@@ -26,6 +27,7 @@ struct preferences {
   unsigned int music_volume{100};
   unsigned int effects_volume{100};
   input::control_preferences controls;
+  input::joystick_preferences joystick;
 
   bool valid() const noexcept;
   bool operator==(preferences const&) const = default;
@@ -43,6 +45,9 @@ class options_menu {
   unsigned int scroll{0};
   bool controls_page{false};
   bool audio_page{false};
+  bool joystick_page{false};
+  bool binding_list() const noexcept;
+  unsigned int binding_defaults() const noexcept;
   bool binding_pending{false};
   unsigned int list_rows() const noexcept;
   unsigned int page_size() const noexcept;
@@ -56,11 +61,14 @@ public:
   bool active{false};
   bool save_requested{false};
   std::string notice;
+  input::joystick_sample joystick_status;
 
   void open();
   void key(options_key key);
   bool capturing_key() const noexcept;
   void capture_key(int key);
+  bool capturing_button() const noexcept;
+  void capture_button(int button);
   void wheel(int direction);
   void point(int x, int y);
   void click(int x, int y);

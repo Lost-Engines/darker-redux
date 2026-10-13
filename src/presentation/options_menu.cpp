@@ -27,9 +27,10 @@ constexpr int scrollbar_right{310};
 constexpr unsigned int control_visible_rows{12};
 constexpr int list_bottom{first_row + row_height * static_cast<int>(control_visible_rows)};
 constexpr int footer_top{176};
-constexpr unsigned int mouse_setting_count{4};
+constexpr unsigned int mouse_setting_count{5};
 constexpr unsigned int controls_defaults{mouse_setting_count + std::to_underlying(input::control_action::count)};
-constexpr unsigned int controls_back{controls_defaults + 1};
+constexpr unsigned int joystick_setting_count{7};
+constexpr unsigned int joystick_defaults{joystick_setting_count + std::to_underlying(input::control_action::count)};
 constexpr std::array<std::array<int, 2>, 9> resolutions{{
   {320, 240}, {640, 480}, {960, 540}, {1280, 720}, {1280, 960},
   {1600, 900}, {1920, 1080}, {2560, 1440}, {3840, 2160}
@@ -51,7 +52,7 @@ bool preferences::valid() const noexcept {
     && std::isfinite(fog_start) && std::isfinite(fade_distance)
     && fog_start >= 0 && fade_distance >= fog_start && fade_distance <= draw_distance
     && std::isfinite(fog_curve) && fog_curve >= 0
-    && std::isfinite(minimum_light_size) && minimum_light_size >= 0 && music_volume <= 100 && effects_volume <= 100 && controls.valid();
+    && std::isfinite(minimum_light_size) && minimum_light_size >= 0 && music_volume <= 100 && effects_volume <= 100 && controls.valid() && joystick.valid();
 }
 
 std::filesystem::path preferences_path() {
@@ -91,6 +92,19 @@ preferences read_preferences(std::filesystem::path const &path) {
     else if(name == "mouse-secondary") value >> result.controls.secondary_mouse_button;
     else if(name == "mouse-sensitivity") value >> result.controls.mouse_sensitivity;
     else if(name == "invert-mouse") value >> result.controls.invert_mouse;
+    else if(name == "joystick-device") value >> result.joystick.device;
+    else if(name == "joystick-bank-axis") value >> result.joystick.bank_axis;
+    else if(name == "joystick-pitch-axis") value >> result.joystick.pitch_axis;
+    else if(name == "joystick-invert-bank") value >> result.joystick.invert_bank;
+    else if(name == "joystick-invert-pitch") value >> result.joystick.invert_pitch;
+    else if(name == "joystick-deadzone") value >> result.joystick.deadzone_percent;
+    else if(name == "joystick-sensitivity") value >> result.joystick.sensitivity_percent;
+    else if(name.starts_with("joystick-button.")) {
+      auto const descriptions{input::control_descriptions()};
+      auto const found{std::ranges::find(descriptions, std::string_view{name}.substr(16), &input::control_description::name)};
+      if(found == descriptions.end()) continue;
+      value >> result.joystick.buttons[static_cast<unsigned int>(found - descriptions.begin())];
+    }
     else if(name.starts_with("bind.")) {
       auto const descriptions{input::control_descriptions()};
       auto const found{std::ranges::find(descriptions, std::string_view{name}.substr(5), &input::control_description::name)};
@@ -119,9 +133,14 @@ void write_preferences(std::filesystem::path const &path, preferences const &val
     << "\nmouse-primary=" << value.controls.primary_mouse_button << "\nmouse-secondary=" << value.controls.secondary_mouse_button << '\n';
   output << "mouse-sensitivity=" << value.controls.mouse_sensitivity
     << "\ninvert-mouse=" << value.controls.invert_mouse << '\n';
+  output << "joystick-device=" << value.joystick.device
+    << "\njoystick-bank-axis=" << value.joystick.bank_axis << "\njoystick-pitch-axis=" << value.joystick.pitch_axis
+    << "\njoystick-invert-bank=" << value.joystick.invert_bank << "\njoystick-invert-pitch=" << value.joystick.invert_pitch
+    << "\njoystick-deadzone=" << value.joystick.deadzone_percent << "\njoystick-sensitivity=" << value.joystick.sensitivity_percent << '\n';
   auto const descriptions{input::control_descriptions()};
   for(unsigned int i{0}; i < descriptions.size(); ++i) {
     output << "bind." << descriptions[i].name << '=' << value.controls.keys[i] << '\n';
+    output << "joystick-button." << descriptions[i].name << '=' << value.joystick.buttons[i] << '\n';
   }
   output.close();
   if(!output) throw std::runtime_error{"Cannot save preferences to " + path.string()};
@@ -135,24 +154,44 @@ void options_menu::open() {
   scroll = 0;
   controls_page = false;
   audio_page = false;
+  joystick_page = false;
+  binding_pending = false;
+  notice.clear();
+}
+
+bool options_menu::binding_list() const noexcept { return controls_page || joystick_page; }
+unsigned int options_menu::binding_defaults() const noexcept { return joystick_page ? joystick_defaults : controls_defaults; }
+bool options_menu::capturing_button() const noexcept { return joystick_page && binding_pending; }
+
+void options_menu::capture_button(int const button) {
+  if(!capturing_button() || button < -1 || button >= static_cast<int>(input::joystick_button_limit)) return;
+  auto const action{selected - joystick_setting_count};
+  if(button >= 0) {
+    auto const found{std::ranges::find(values.joystick.buttons, button)};
+    if(found != values.joystick.buttons.end() && static_cast<unsigned int>(found - values.joystick.buttons.begin()) != action) {
+      notice = "In use: " + std::string{input::control_descriptions()[found - values.joystick.buttons.begin()].label};
+      return;
+    }
+  }
+  values.joystick.buttons[action] = button;
   binding_pending = false;
   notice.clear();
 }
 
 unsigned int options_menu::rows() const noexcept {
-  return controls_page ? controls_back + 1 : audio_page ? 4 : row_count;
+  return binding_list() ? binding_defaults() + 2 : audio_page ? 4 : row_count;
 }
 
 unsigned int options_menu::list_rows() const noexcept {
-  return controls_page ? controls_defaults : rows();
+  return binding_list() ? binding_defaults() : rows();
 }
 
 unsigned int options_menu::page_size() const noexcept {
-  return controls_page ? control_visible_rows : std::min(visible_rows, rows());
+  return binding_list() ? control_visible_rows : std::min(visible_rows, rows());
 }
 
 int options_menu::selection_y() const noexcept {
-  if(controls_page && selected >= controls_defaults) return footer_top + static_cast<int>(selected - controls_defaults) * row_height;
+  if(binding_list() && selected >= binding_defaults()) return footer_top + static_cast<int>(selected - binding_defaults()) * row_height;
   return first_row + static_cast<int>(selected - scroll) * row_height;
 }
 
@@ -164,7 +203,7 @@ void options_menu::keep_visible() noexcept {
 
 void options_menu::wheel(int const direction) {
   if(!active || binding_pending || direction == 0) return;
-  if(controls_page) {
+  if(binding_list()) {
     scroll = static_cast<unsigned int>(std::clamp(static_cast<int>(scroll) + direction, 0, static_cast<int>(list_rows() - page_size())));
     if(selected < list_rows()) selected = std::clamp(selected, scroll, scroll + page_size() - 1);
   } else {
@@ -181,6 +220,10 @@ void options_menu::capture_key(int const physical_key) {
   if(physical_key == GLFW_KEY_ESCAPE) {
     binding_pending = false;
     notice.clear();
+    return;
+  }
+  if(joystick_page) {
+    if(physical_key == GLFW_KEY_DELETE) capture_button(-1);
     return;
   }
   int const key{physical_key == GLFW_KEY_DELETE ? GLFW_KEY_UNKNOWN : input::normalise_key(physical_key)};
@@ -200,6 +243,22 @@ void options_menu::capture_key(int const physical_key) {
 }
 
 void options_menu::adjust(int const direction) {
+  if(joystick_page) {
+    auto &settings{values.joystick};
+    if(selected == 0) settings.device = std::clamp(settings.device + direction, input::joystick_disabled, 15);
+    if(selected == 1 || selected == 2) {
+      auto &axis{selected == 1 ? settings.bank_axis : settings.pitch_axis};
+      auto &other{selected == 1 ? settings.pitch_axis : settings.bank_axis};
+      int const previous{axis};
+      axis = std::clamp(axis + direction, 0, 31);
+      if(axis == other) other = previous;
+    }
+    if(selected == 3) settings.invert_bank = !settings.invert_bank;
+    if(selected == 4) settings.invert_pitch = !settings.invert_pitch;
+    if(selected == 5) settings.deadzone_percent = static_cast<unsigned int>(std::clamp(static_cast<int>(settings.deadzone_percent) + direction, 0, 50));
+    if(selected == 6) settings.sensitivity_percent = static_cast<unsigned int>(std::clamp(static_cast<int>(settings.sensitivity_percent) + direction * 5, 25, 200));
+    return;
+  }
   if(audio_page) {
     if(selected < 2) {
       auto &volume{selected == 0 ? values.music_volume : values.effects_volume};
@@ -258,11 +317,18 @@ void options_menu::key(options_key const key) {
   switch(key) {
   case options_key::up: selected = (selected + rows() - 1) % rows(); break;
   case options_key::down: selected = (selected + 1) % rows(); break;
-  case options_key::left: if(selected < (controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(-1); break;
-  case options_key::right: if(selected < (controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(1); break;
+  case options_key::left: if(selected < (joystick_page ? joystick_setting_count : controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(-1); break;
+  case options_key::right: if(selected < (joystick_page ? joystick_setting_count : controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(1); break;
   case options_key::page_up: selected = selected > page_size() ? selected - page_size() : 0; break;
   case options_key::page_down: selected = std::min(selected + page_size(), list_rows() - 1); break;
   case options_key::cancel:
+    if(joystick_page) {
+      joystick_page = false;
+      controls_page = true;
+      selected = 4;
+      scroll = 0;
+      break;
+    }
     if(audio_page) {
       audio_page = false;
       selected = std::to_underlying(option_row::audio);
@@ -280,6 +346,13 @@ void options_menu::key(options_key const key) {
     active = false;
     break;
   case options_key::accept:
+    if(joystick_page) {
+      if(selected < joystick_setting_count) adjust(1);
+      else if(selected < joystick_defaults) binding_pending = true;
+      else if(selected == joystick_defaults) values.joystick = input::joystick_preferences{};
+      else { joystick_page = false; controls_page = true; selected = 4; scroll = 0; }
+      break;
+    }
     if(audio_page) {
       if(selected < 2) adjust(1);
       else if(selected == 2) { values.music_volume = 100; values.effects_volume = 100; }
@@ -287,7 +360,8 @@ void options_menu::key(options_key const key) {
       break;
     }
     if(controls_page) {
-      if(selected < mouse_setting_count) adjust(1);
+      if(selected == 4) { controls_page = false; joystick_page = true; selected = 0; scroll = 0; }
+      else if(selected < mouse_setting_count) adjust(1);
       else if(selected < controls_defaults) binding_pending = true;
       else if(selected == controls_defaults) values.controls = input::control_preferences{};
       else {
@@ -297,7 +371,7 @@ void options_menu::key(options_key const key) {
       }
       break;
     }
-    if(selected < (controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(1);
+    if(selected < (joystick_page ? joystick_setting_count : controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(1);
     else if(selected == std::to_underlying(option_row::controls)) {
       controls_page = true;
       selected = 0;
@@ -316,9 +390,9 @@ void options_menu::key(options_key const key) {
 }
 
 void options_menu::point(int const x, int const y) {
-  if(binding_pending || x < 12 || x >= (controls_page ? scrollbar_left : 308)) return;
-  if(controls_page && y >= footer_top && y < footer_top + 2 * row_height) {
-    selected = controls_defaults + static_cast<unsigned int>((y - footer_top) / row_height);
+  if(binding_pending || x < 12 || x >= (binding_list() ? scrollbar_left : 308)) return;
+  if(binding_list() && y >= footer_top && y < footer_top + 2 * row_height) {
+    selected = binding_defaults() + static_cast<unsigned int>((y - footer_top) / row_height);
   } else if(y >= first_row && y < first_row + static_cast<int>(page_size()) * row_height) {
     selected = scroll + static_cast<unsigned int>((y - first_row) / row_height);
   }
@@ -326,18 +400,18 @@ void options_menu::point(int const x, int const y) {
 
 void options_menu::click(int const x, int const y) {
   if(binding_pending) return;
-  if(controls_page && x >= scrollbar_left && x <= scrollbar_right && y >= first_row && y < list_bottom) {
+  if(binding_list() && x >= scrollbar_left && x <= scrollbar_right && y >= first_row && y < list_bottom) {
     // Clicking the track positions the visible window directly, including both endpoints.
     scroll = static_cast<unsigned int>(y - first_row) * (list_rows() - page_size()) / (list_bottom - first_row - 1);
     if(selected < list_rows()) selected = std::clamp(selected, scroll, scroll + page_size() - 1);
     return;
   }
-  if(x < 12 || x >= (controls_page ? scrollbar_left : 308)) return;
+  if(x < 12 || x >= (binding_list() ? scrollbar_left : 308)) return;
   bool const in_list{y >= first_row && y < first_row + static_cast<int>(page_size()) * row_height};
-  bool const in_footer{controls_page && y >= footer_top && y < footer_top + 2 * row_height};
+  bool const in_footer{binding_list() && y >= footer_top && y < footer_top + 2 * row_height};
   if(!in_list && !in_footer) return;
   point(x, y);
-  key(selected < (controls_page ? mouse_setting_count : audio_page ? 2 : setting_count) && x < 235 && x >= 190 ? options_key::left : options_key::accept);
+  key(selected < (joystick_page ? joystick_setting_count : controls_page ? mouse_setting_count : audio_page ? 2 : setting_count) && x < 235 && x >= 190 ? options_key::left : options_key::accept);
 }
 
 void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int const width, int const height,
@@ -350,8 +424,8 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
         .edge{0}
       });
   }};
-  text(controls_page ? "CONTROLS" : audio_page ? "SOUND" : "OPTIONS", 125, 15, 2);
-  if(controls_page) {
+  text(joystick_page ? "JOYSTICK" : controls_page ? "CONTROLS" : audio_page ? "SOUND" : "OPTIONS", 125, 15, 2);
+  if(binding_list()) {
     text(std::to_string(scroll + 1) + "-" + std::to_string(std::min(scroll + page_size(), list_rows())) + "/" + std::to_string(list_rows()), 252, 15);
   }
   std::array<std::string, row_count> const labels{
@@ -366,6 +440,31 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
   };
   for(unsigned int row{scroll}; row < std::min(scroll + page_size(), list_rows()); ++row) {
     int const y{first_row + static_cast<int>(row - scroll) * row_height};
+    if(joystick_page) {
+      auto const &settings{values.joystick};
+      std::string label, value;
+      if(row < joystick_setting_count) {
+        std::array<std::string_view, joystick_setting_count> constexpr labels{"Device", "Bank axis", "Pitch axis", "Invert bank", "Invert pitch", "Extra dead zone", "Sensitivity"};
+        label = labels[row];
+        switch(row) {
+        case 0: value = settings.device == input::joystick_disabled ? "Off" : settings.device == input::joystick_automatic ? "Auto" : "Device " + std::to_string(settings.device + 1); break;
+        case 1: value = std::to_string(settings.bank_axis + 1); break;
+        case 2: value = std::to_string(settings.pitch_axis + 1); break;
+        case 3: value = settings.invert_bank ? "On" : "Off"; break;
+        case 4: value = settings.invert_pitch ? "On" : "Off"; break;
+        case 5: value = std::to_string(settings.deadzone_percent) + "%"; break;
+        case 6: value = std::to_string(settings.sensitivity_percent) + "%"; break;
+        }
+      } else {
+        auto const action{row - joystick_setting_count};
+        label = input::control_descriptions()[action].label;
+        int const button{settings.buttons[action]};
+        value = binding_pending && row == selected ? "Press button" : button < 0 ? "Unbound" : "Button " + std::to_string(button + 1);
+      }
+      text(label, 20, y, row == selected ? 2 : 1);
+      text(value, 220, y, row == selected ? 2 : 1);
+      continue;
+    }
     if(audio_page) {
       std::array<std::string_view, 4> constexpr audio_labels{"Music volume", "Effects volume", "Restore sound defaults", "Back to options"};
       text(audio_labels[row], 20, y, row == selected ? 2 : 1);
@@ -386,6 +485,7 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
         int const button{row == 2 ? values.controls.primary_mouse_button : values.controls.secondary_mouse_button};
         value = button < 0 ? "Off" : button == 0 ? "Left" : button == 1 ? "Right" : button == 2 ? "Middle" : "Button " + std::to_string(button + 1);
       }
+      else if(row == 4) label = "Joystick / gamepad...";
       else if(row < controls_defaults) {
         auto const action{row - mouse_setting_count};
         label = input::control_descriptions()[action].label;
@@ -402,9 +502,9 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
       text(">", 294, y);
     }
   }
-  if(controls_page) {
-    text("Restore control defaults", 20, footer_top, selected == controls_defaults ? 2 : 1);
-    text("Back to options", 20, footer_top + row_height, selected == controls_back ? 2 : 1);
+  if(binding_list()) {
+    text(joystick_page ? "Restore joystick defaults" : "Restore control defaults", 20, footer_top, selected == binding_defaults() ? 2 : 1);
+    text(joystick_page ? "Back to controls" : "Back to options", 20, footer_top + row_height, selected == binding_defaults() + 1 ? 2 : 1);
   }
   std::array<std::string_view, row_count> constexpr hints{
     "Render resolution; window size stays unchanged.", "Vertical angle in degrees. Original: 50.2.",
@@ -415,18 +515,29 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
     "Save these settings for future sessions.", "Restore the settings from when this menu opened.",
     "Keep changes until you quit, without saving."
   };
-  std::string_view const hint{controls_page
+  std::string joystick_hint;
+  if(joystick_page) {
+    if(binding_pending) joystick_hint = "Press button; Delete clears; Esc cancels.";
+    else if(joystick_status.device < 0) joystick_hint = "No device connected (or input is off).";
+    else if(selected == 1 || selected == 2) {
+      auto const axis{selected == 1 ? values.joystick.bank_axis : values.joystick.pitch_axis};
+      joystick_hint = static_cast<unsigned int>(axis) < joystick_status.axes.size()
+        ? "Axis " + std::to_string(axis + 1) + ": " + std::to_string(static_cast<int>(joystick_status.axes[axis] * 100)) + "%"
+        : "This device does not have that axis.";
+    } else joystick_hint = std::to_string(joystick_status.device + 1) + ": " + joystick_status.name.substr(0, 37);
+  }
+  std::string_view const hint{joystick_page ? std::string_view{joystick_hint} : controls_page
     ? (binding_pending ? "Press a key; Delete clears; Esc cancels."
       : "Mouse buttons affect flight; menus use left.")
     : audio_page ? "Changes apply immediately. Zero mutes." : hints[selected]};
   text(notice.empty() ? hint : std::string_view{notice}, 13, 201);
-  text(controls_page || audio_page ? "Arrows: navigate   Enter: change   Esc: back" : "Arrows: adjust   Enter: select   Esc: cancel", 22, 217);
-  text(controls_page ? "PgUp/PgDn: scroll   Changes save via Options" : audio_page ? "Changes save via Options" : "Hold Tab to preview the unobscured scene", 20, 225);
+  text(binding_list() || audio_page ? "Arrows: navigate   Enter: change   Esc: back" : "Arrows: adjust   Enter: select   Esc: cancel", 22, 217);
+  text(binding_list() ? "PgUp/PgDn: scroll   Changes save via Options" : audio_page ? "Changes save via Options" : "Hold Tab to preview the unobscured scene", 20, 225);
   // Retain a faint scene silhouette without competing with the menu text.
   unsigned int constexpr background_divisor{16};
   int const track_height{list_bottom - first_row};
   int const thumb_height{track_height * static_cast<int>(page_size()) / static_cast<int>(list_rows())};
-  int const thumb_top{first_row + (controls_page ? (track_height - thumb_height) * static_cast<int>(scroll) / static_cast<int>(list_rows() - page_size()) : 0)};
+  int const thumb_top{first_row + (binding_list() ? (track_height - thumb_height) * static_cast<int>(scroll) / static_cast<int>(list_rows() - page_size()) : 0)};
   auto const viewport{framework::render::fit_viewport(width, height, 320, 240)};
   for(int y{0}; y < viewport.height; ++y) {
     int const source_y{y * 240 / viewport.height};
@@ -436,14 +547,14 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
       if(source_x < 7 || source_x >= 313) continue;
       auto &pixel{pixels[static_cast<size_t>(y + viewport.y) * width + x + viewport.x]};
       auto const code{ink.pixels[static_cast<unsigned int>(source_y * 320 + source_x)]};
-      bool const highlight{(!controls_page || source_x < scrollbar_left)
+      bool const highlight{(!binding_list() || source_x < scrollbar_left)
         && source_y >= selection_y() - 1 && source_y < selection_y() + row_height - 1};
       if(code) pixel = code == 2 ? framework::render::rgba_pixel{238, 220, 184} : framework::render::rgba_pixel{174, 170, 186};
-      else if(controls_page && source_x >= scrollbar_left && source_x <= scrollbar_right && source_y >= first_row && source_y < list_bottom) {
+      else if(binding_list() && source_x >= scrollbar_left && source_x <= scrollbar_right && source_y >= first_row && source_y < list_bottom) {
         pixel = source_y >= thumb_top && source_y < thumb_top + thumb_height
           ? framework::render::rgba_pixel{174, 170, 186} : framework::render::rgba_pixel{55, 48, 64};
       }
-      else if(controls_page && source_y == footer_top - 5 && source_x >= 12 && source_x < 308) pixel = {108, 100, 120};
+      else if(binding_list() && source_y == footer_top - 5 && source_x >= 12 && source_x < 308) pixel = {108, 100, 120};
       else if(source_x == 7 || source_x == 312 || source_y == 7 || source_y == 233) pixel = {108, 100, 120};
       else pixel = {static_cast<uint8_t>(pixel.r / background_divisor + (highlight ? 44 : 15)), static_cast<uint8_t>(pixel.g / background_divisor + (highlight ? 38 : 14)), static_cast<uint8_t>(pixel.b / background_divisor + (highlight ? 52 : 22))};
     }

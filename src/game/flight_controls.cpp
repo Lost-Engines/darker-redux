@@ -1,6 +1,7 @@
 #include "game/flight_controls.h"
 #include <algorithm>
 #include <bit>
+#include <cstdlib>
 
 namespace darker::game {
 namespace {
@@ -59,8 +60,24 @@ uint16_t steering_axis_state::mouse(uint16_t const position, uint16_t const sens
   return filtered_drive(previous, target, step);
 }
 
+uint16_t steering_axis_state::joystick(int16_t const position, game_duration const step) noexcept {
+  // 7BCA averages current/previous samples, then removes the inner 1/16 of
+  // calibrated travel. Full deflection is 0x0f00, scaled by timestep at 7BA6.
+  int const midpoint{word(previous_joystick + (word(position - previous_joystick) >> 1))};
+  previous_joystick = position;
+  int constexpr calibrated_extent{32767};
+  int constexpr response_scale{4096};
+  int constexpr centre_deadzone{256};
+  int constexpr maximum_response{response_scale - centre_deadzone};
+  int const magnitude{std::abs(midpoint)};
+  int const response{magnitude >= calibrated_extent ? maximum_response
+    : std::max(0, magnitude * response_scale / calibrated_extent - centre_deadzone)};
+  reference = static_cast<uint16_t>(midpoint < 0 ? -response : response);
+  return static_cast<uint16_t>((word(reference) * word(static_cast<uint16_t>(step << 8))) >> 16);
+}
+
 flight_steering flight_controls_state::update(flight_controls_input const input, game_duration const frame_step) noexcept {
-  /// 7AD6 gives nonzero keyboard drive priority over ordinary mouse processing; joystick/VR sources are separate paths
+  /// 7AD6 gives nonzero keyboard drive priority over ordinary mouse processing; joystick is the final fallback; VR orientation remains separate
   flight_steering result{
     .bank{bank.keyboard(input.left, input.right, input.control, frame_step)},
     .pitch{pitch.keyboard(input.up, input.down, input.control, frame_step)},
@@ -68,6 +85,12 @@ flight_steering flight_controls_state::update(flight_controls_input const input,
   if(result.bank != 0 || result.pitch != 0) return result;
   result.bank = bank.mouse(input.mouse_x, input.mouse_sensitivity, frame_step);
   result.pitch = pitch.mouse(static_cast<uint16_t>(-input.mouse_y), input.mouse_sensitivity, frame_step);
+  if(result.bank == 0 && result.pitch == 0 && input.joystick_enabled) {
+    result.bank = bank.joystick(input.joystick_bank, frame_step);
+    result.pitch = pitch.joystick(input.joystick_pitch, frame_step);
+  } else if(!input.joystick_enabled) {
+    bank.previous_joystick = pitch.previous_joystick = 0;
+  }
   return result;
 }
 
