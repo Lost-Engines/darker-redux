@@ -1,3 +1,4 @@
+#include "input/joystick_options.h"
 #include <charconv>
 #include <numbers>
 #include <algorithm>
@@ -236,6 +237,7 @@ auto main(int const argc, char const *const argv[])->int {
     ("seconds", boost::program_options::value<double>()->default_value(0.0), "developer use: close after this many seconds; zero disables the time limit")
     ("screenshot", boost::program_options::value<std::string>(), "developer use: save a screenshot of the initial scene as a PPM image, then exit without opening a window");
 #endif // NDEBUG
+  darker::input::add_joystick_options(options);
   boost::program_options::variables_map arguments;
   try {
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, options), arguments);
@@ -253,6 +255,11 @@ auto main(int const argc, char const *const argv[])->int {
     saved_preferences = darker::presentation::read_preferences(preferences_file);
   } catch(std::exception const &error) {
     std::cerr << "WARNING: " << error.what() << "; using default settings.\n";
+  }
+  try {
+    saved_preferences.joystick = darker::input::apply_joystick_options(saved_preferences.joystick, arguments);
+  } catch(std::invalid_argument const &error) {
+    return startup_failure(error.what());
   }
   // Explicit command-line values take precedence over saved preferences.
   auto const saved_default{[&](char const *name, auto value){

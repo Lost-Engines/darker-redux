@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <fstream>
+#include <boost/program_options.hpp>
+#include "input/joystick_options.h"
 #include "presentation/options_menu.h"
 
 using darker::presentation::preferences;
@@ -242,4 +244,51 @@ TEST_CASE("Joystick menu captures buttons, reports conflicts and saves its setti
   menu.click(30, 187);
   menu.key(options_key::cancel);
   CHECK(menu.values.joystick.device == darker::input::joystick_automatic);
+}
+
+namespace {
+darker::input::joystick_preferences joystick_arguments(std::vector<std::string> const &args,
+  darker::input::joystick_preferences const &base = {}) {
+  boost::program_options::options_description options;
+  darker::input::add_joystick_options(options);
+  boost::program_options::variables_map parsed;
+  boost::program_options::store(boost::program_options::command_line_parser(args).options(options).run(), parsed);
+  boost::program_options::notify(parsed);
+  return darker::input::apply_joystick_options(base, parsed);
+}
+}
+
+TEST_CASE("Joystick command line overrides only explicitly supplied settings", "[options][joystick]") {
+  darker::input::joystick_preferences saved;
+  saved.device = 3;
+  saved.deadzone_percent = 8;
+  saved.invert_pitch = true;
+  CHECK(joystick_arguments({}, saved) == saved);
+  auto const changed{joystick_arguments({"--joystick=off", "--joystick-invert-pitch=false", "--joystick-invert-bank", "--joystick-sensitivity=125"}, saved)};
+  CHECK(changed.device == darker::input::joystick_disabled);
+  CHECK_FALSE(changed.invert_pitch);
+  CHECK(changed.invert_bank);
+  CHECK(changed.sensitivity_percent == 125);
+  CHECK(changed.deadzone_percent == 8);
+  CHECK(saved.device == 3);
+  CHECK(joystick_arguments({"--joystick=auto"}, saved).device == darker::input::joystick_automatic);
+  CHECK(joystick_arguments({"--joystick=16"}).device == 15);
+  CHECK(joystick_arguments({}).deadzone_percent == 0);
+}
+
+TEST_CASE("Joystick CLI applies axis and button swaps together and validates conflicts", "[options][joystick]") {
+  auto const settings{joystick_arguments({"--joystick-bank-axis=2", "--joystick-pitch-axis=1",
+    "--joystick-button=primary=2", "--joystick-button=secondary=1", "--joystick-button=engine=off"})};
+  CHECK(settings.bank_axis == 1);
+  CHECK(settings.pitch_axis == 0);
+  CHECK(settings.buttons[std::to_underlying(darker::input::control_action::primary)] == 1);
+  CHECK(settings.buttons[std::to_underlying(darker::input::control_action::secondary)] == 0);
+  CHECK(settings.buttons[std::to_underlying(darker::input::control_action::engine)] == -1);
+  for(auto const argument : {"--joystick=0", "--joystick=17", "--joystick=1junk", "--joystick-bank-axis=2",
+    "--joystick-pitch-axis=33", "--joystick-deadzone=51", "--joystick-sensitivity=24",
+    "--joystick-button=primary", "--joystick-button=bogus=1", "--joystick-button=primary=2",
+    "--joystick-button=primary=0", "--joystick-button=primary=129"}) {
+    CAPTURE(argument);
+    CHECK_THROWS(joystick_arguments({argument}));
+  }
 }

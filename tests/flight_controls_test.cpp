@@ -66,6 +66,7 @@ TEST_CASE("Host joystick axes handle missing axes, inversion, deadzone and satur
     .axes{0.02f, -1.0f, 0.5f}
   };
   darker::input::joystick_preferences settings;
+  settings.deadzone_percent = 5;
   CHECK(darker::input::joystick_axis(sample, 0, false, settings) == 0);
   CHECK(darker::input::joystick_axis(sample, 1, false, settings) == -32767);
   CHECK(darker::input::joystick_axis(sample, 1, true, settings) == 32767);

@@ -382,6 +382,8 @@ target_include_directories(darker_game PUBLIC src)
 configure_first_party(darker_game)
 
 add_library(darker_presentation STATIC
+  src/input/joystick_options.cpp
+  src/input/joystick_options.h
   src/input/joystick.cpp
   src/input/joystick.h
   src/input/control_preferences.cpp
@@ -395,7 +397,7 @@ add_library(darker_presentation STATIC
   src/presentation/front_end.h
 )
 target_include_directories(darker_presentation PUBLIC src)
-target_link_libraries(darker_presentation PUBLIC darker_game darker_graphics darker_resources PRIVATE glfw)
+target_link_libraries(darker_presentation PUBLIC darker_game darker_graphics darker_resources PRIVATE glfw Boost::program_options)
 configure_first_party(darker_presentation)
 
 add_executable(darker src/main.cpp)

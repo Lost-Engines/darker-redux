@@ -75,7 +75,7 @@ The controls submenu saves device selection, axes, inversion, extra dead zone,
 sensitivity and action bindings. Missing axes/buttons produce neutral input.
 The device name and live axis readings aid setup. GLFW supplies normalised axes,
 so there is no emulated DOS gameport calibration procedure. The optional host
-dead zone (default 5%) precedes the original response's own centre dead zone.
+dead zone (default 0%) precedes the original response's own centre dead zone.
 
 The retail code at 7B7D–7BC4 enters its joystick fallback only when preceding
 keyboard/mouse steering supplies no drive. 7BCA averages current and previous
@@ -100,3 +100,28 @@ calibration, J to recalibrate, and fire buttons for menu acceptance.
 This implementation is currently Redux-only. Backport the verified analogue
 input path to darker-cpp after interactive testing; the faithful project still
 has no host joystick polling.
+
+### Joystick command-line configuration
+
+The shared input option parser applies explicit arguments over a supplied
+`joystick_preferences` value. Redux supplies saved settings; the faithful
+backport can supply defaults without depending on the options menu. Device,
+axis and button numbers are one-based at the CLI, just as in the menu.
+
+- `--joystick=auto|off|N` selects automatic detection, disables input, or selects
+  device 1–16.
+- `--joystick-bank-axis=N` and `--joystick-pitch-axis=N` select axes 1–32.
+  Specify both to swap the default first and second axes.
+- `--joystick-invert-bank[=true|false]` and
+  `--joystick-invert-pitch[=true|false]` override inversion in either direction.
+- `--joystick-deadzone=N` adds 0–50% host dead zone before the original response;
+  the new default is zero. Previously saved values remain in effect unless
+  overridden. `--joystick-sensitivity=N` sets 25–200% scaling (default 100%).
+- Repeat `--joystick-button=ACTION=N` or `--joystick-button=ACTION=off` to
+  configure buttons 1–128. Action names are listed in `--help` and match the
+  saved binding names. All assignments are applied before checking conflicts,
+  so paired swaps are independent of argument order.
+
+Arguments do not rewrite preferences. The menu shows their effective values;
+subsequent adjustments are allowed, and Apply and save explicitly persists them.
+No DOS calibration operation or J-key emulation is introduced.

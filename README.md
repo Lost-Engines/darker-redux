@@ -50,6 +50,16 @@ Open **Controls** to rebind flight, weapon and camera keys, adjust mouse sensiti
 
 **Controls → Joystick / gamepad** selects a device (Auto uses the first connected device), bank/pitch axes, inversion, sensitivity and extra dead zone. Axis numbers start at 1; select an axis row to see its live reading. Select a flight action and press Enter, then the desired joystick button; Delete clears it. Recognised gamepads use a standard layout, including triggers as buttons 16/17. Other joysticks use their reported axis/button numbers. Defaults use the first two axes and buttons 1/2 for firing, 3 for boost, 4 for engine/shield, 5 for brake, 6 for look-around and 7 for radar. In menus, the pitch axis moves the selection, the bank axis adjusts options, and primary/secondary fire accept/go back. Use F10 to open settings, and **Apply and save** to retain them.
 
+Joystick setup is also available entirely from the command line. Explicit arguments override saved settings; omitted options retain them. For example:
+
+```sh
+./darker --joystick=1 --joystick-pitch-axis=2 --joystick-invert-pitch --joystick-deadzone=0
+./darker --joystick=off
+./darker --joystick-button=primary=2 --joystick-button=secondary=1
+```
+
+Use `--help` for axis, sensitivity and button options. With no saved settings, the first available joystick is selected automatically and the original centre dead zone applies, with no extra dead zone or calibration required.
+
 **Sound** provides separate music and effects volumes, applied immediately across all music engines. Zero mutes that channel; **Apply and save** retains the settings. Command-line `--mute` and `--music=none` still disable their respective audio paths.
 
 Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/darker-redux/options.cfg` when unset; Windows uses `%APPDATA%/darker-redux/options.cfg`. These are separate from the original game's saves. Explicit command-line options override saved preferences. Delete the file or apply **Restore defaults** to return to defaults. Menu text for these new Redux options is currently English.

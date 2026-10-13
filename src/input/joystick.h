@@ -17,7 +17,7 @@ struct joystick_preferences {
   int pitch_axis{1};
   bool invert_bank{false};
   bool invert_pitch{false};
-  unsigned int deadzone_percent{5};
+  unsigned int deadzone_percent{0};
   unsigned int sensitivity_percent{100};
   std::array<int, static_cast<unsigned int>(control_action::count)> buttons;
 
