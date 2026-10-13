@@ -400,6 +400,35 @@ void check_presentations(darker::resources::archive_set const &archives) {
   darker::resources::save_file command_saves;
   darker::presentation::front_end commands{archives, font, campaign, command_saves};
   using darker::presentation::front_key;
+  // Startup navigation must visibly follow keys/stick, not a stationary mouse.
+  {
+    darker::resources::save_file navigation_saves;
+    for(auto &pilot : navigation_saves.pilots) { pilot.stage = 1; pilot.set_name("Navigation"); }
+    darker::presentation::front_end navigation{archives, font, campaign, navigation_saves, true};
+    navigation.point(100, 20);
+    framework::render::cockpit_framebuffer before, after;
+    navigation.draw(before);
+    navigation.key(front_key::down);
+    navigation.draw(after);
+    if(before.pixels == after.pixels) throw std::runtime_error{"Pilot navigation has no visible selection"};
+    navigation.key(front_key::accept);
+    if(&navigation.selected_pilot() != &navigation_saves.pilots[1]) throw std::runtime_error{"Trigger selected the mouse pilot instead of the navigated pilot"};
+    navigation.point(100, 160); // Mouse stays over Start while the stick selects Erase.
+    navigation.key(front_key::down);
+    navigation.key(front_key::down);
+    navigation.key(front_key::accept);
+    navigation.key(front_key::yes);
+    if(navigation_saves.pilots[1].stage != 0 || navigation_saves.pilots[0].stage != 1) throw std::runtime_error{"Navigated Erase did not act on the selected pilot"};
+    navigation.key(front_key::one);
+    navigation.key(front_key::down);
+    navigation.key(front_key::accept); // Select game.
+    navigation.key(front_key::nightmare);
+    if(!navigation.nightmare_selected()) throw std::runtime_error{"Navigated Select did not return to pilot selection"};
+    navigation.key(front_key::up); // Wrap Start to Quit.
+    navigation.key(front_key::accept);
+    navigation.key(front_key::yes);
+    if(!navigation.quit_requested) throw std::runtime_error{"Navigated Quit did not open confirmation"};
+  }
   commands.key(front_key::accept);
   commands.advance(1024);
   commands.key(front_key::accept);

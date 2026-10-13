@@ -90,6 +90,12 @@ when selecting the joystick fallback: negative mouse rounding can otherwise
 leave a permanent -1 drive that blocks the joystick. Mouse filtering itself and
 keyboard priority are unchanged. Keyboard/mouse fixtures remain intact.
 
+Redux adds visible keyboard/stick selection to the startup pilot list and
+Start/Select/Erase/Quit actions. Selection highlighting follows the last input
+method; a stationary mouse does not override stick navigation. The retail menu
+handler at 0800–0848 accepts joystick button presses as carriage return (081D–0836),
+but does not use the flight-axis readings for menu navigation.
+
 Physical button edges and held states are distinct. Button actions share the
 existing flight command paths; brake, firing, radar and look-around remain
 held actions. Connection/focus changes and menu transitions consume held buttons
