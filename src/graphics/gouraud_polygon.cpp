@@ -89,7 +89,7 @@ void step_edge(edge_walker &edge) noexcept {
   edge.shade = static_cast<uint16_t>(edge.shade + edge.shade_step);
 }
 
-void draw_span(framework::render::indexed_surface target, int const y, int const left, int const right, int const first, int const last, framework::render::colour_translation const *const colours) {
+void draw_span(framework::render::indexed_surface target, int const y, int const left, int const right, int const first, int const last, framework::render::colour_translation const *const colours, lighten_blend const *const blend) {
   /// AE93 chooses per-pixel steps or repeated colour bands using integer quotient/remainder distribution
   auto const translate{[colours](int const index) {
     auto const colour{static_cast<uint8_t>(index)};
@@ -101,12 +101,13 @@ void draw_span(framework::render::indexed_surface target, int const y, int const
   int const difference{(last - first) * direction};
   auto output{target.pixels.begin() + y * target.stride + left};
   if(difference == 0) {
-    std::fill_n(output, width, translate(first));
+    fill_polygon_span({output, static_cast<size_t>(width)}, translate(first), blend);
   } else if(difference >= width) {
     int const divisor{width + 1}, step{difference / divisor}, remainder{difference % divisor};
     int error{divisor / 2}, colour{first};
     for(int i{0}; i < width; ++i) {
-      *output++ = translate(colour);
+      *output = blend ? (*blend)(translate(colour), *output) : translate(colour);
+      ++output;
       error -= remainder;
       bool const borrow{error < 0};
       if(borrow) error += divisor;
@@ -120,13 +121,13 @@ void draw_span(framework::render::indexed_surface target, int const y, int const
       bool const borrow{error < 0};
       if(borrow) error += bands;
       int const count{step + (borrow ? 1 : 0)};
-      std::fill_n(output, count, translate(first + direction * band));
+      fill_polygon_span({output, static_cast<size_t>(count)}, translate(first + direction * band), blend);
       output += count;
     }
   }
 }
 
-void rasterise(framework::render::indexed_surface target, std::span<shaded_vertex const> const points, int const right, framework::render::colour_translation const *const colours) {
+void rasterise(framework::render::indexed_surface target, std::span<shaded_vertex const> const points, int const right, framework::render::colour_translation const *const colours, lighten_blend const *const blend) {
   /// Walk the original edges and shade spans after visibility and clipping are resolved
   auto const first_point{std::min_element(points.begin(), points.end(), [](auto const &a, auto const &b){
     return a.position.y < b.position.y;
@@ -151,14 +152,14 @@ void rasterise(framework::render::indexed_surface target, std::span<shaded_verte
     step_edge(right_edge);
     int const left{std::clamp(left_edge.x, 0, right + 1)};
     int const end{std::clamp(right_edge.x, left, right + 1)};
-    draw_span(target, y, left, end, left_edge.shade >> 8, right_edge.shade >> 8, colours);
+    draw_span(target, y, left, end, left_edge.shade >> 8, right_edge.shade >> 8, colours, blend);
   }
 }
 
 } // anonymous namespace
 
 void draw_gouraud_polygon(framework::render::indexed_surface target,
-  std::span<shaded_vertex const> const vertices, raster_viewport const viewport, framework::render::colour_translation const *const colours) {
+  std::span<shaded_vertex const> const vertices, raster_viewport const viewport, framework::render::colour_translation const *const colours, lighten_blend const *const blend) {
   auto const [right, bottom]{viewport};
   /// Translate the original convex palette-index Gouraud path into a contiguous indexed framebuffer
   if(vertices.size() < 3) return;
@@ -180,7 +181,7 @@ void draw_gouraud_polygon(framework::render::indexed_surface target,
   // often occupy only a few pixels, so buffer housekeeping otherwise dominates.
   if(leftmost->position.x >= 0 && rightmost->position.x <= right
     && top->position.y >= 0 && lowest->position.y <= bottom) {
-    rasterise(target, vertices, right, colours);
+    rasterise(target, vertices, right, colours, blend);
     return;
   }
   polygon_buffer first{}, second{};
@@ -192,7 +193,7 @@ void draw_gouraud_polygon(framework::render::indexed_surface target,
     points = std::span{*output}.first(count);
     output = output == &first ? &second : &first;
   }
-  rasterise(target, points, right, colours);
+  rasterise(target, points, right, colours, blend);
 }
 
 } // namespace darker::graphics

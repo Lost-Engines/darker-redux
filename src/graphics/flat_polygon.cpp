@@ -84,7 +84,7 @@ void step_edge(edge_walker &edge) noexcept {
   edge.fraction = fraction & raster_arithmetic::edge_fraction_mask;
 }
 
-void rasterise(framework::render::indexed_surface target, std::span<screen_vertex const> const points, uint8_t const colour, int const right) {
+void rasterise(framework::render::indexed_surface target, std::span<screen_vertex const> const points, uint8_t const colour, int const right, lighten_blend const *const blend) {
   /// Walk the original edges and shade spans after visibility and clipping are resolved
   auto const first_point{std::min_element(points.begin(), points.end(), [](auto const &a, auto const &b){
     return a.y < b.y;
@@ -109,7 +109,7 @@ void rasterise(framework::render::indexed_surface target, std::span<screen_verte
     step_edge(right_edge);
     auto const left{std::clamp(left_edge.x, 0, right + 1)};
     auto const end{std::clamp(right_edge.x, left, right + 1)};
-    std::fill(target.pixels.begin() + y * target.stride + left, target.pixels.begin() + y * target.stride + end, colour);
+    fill_polygon_span(target.pixels.subspan(y * target.stride + left, end - left), colour, blend);
   }
 }
 
@@ -123,7 +123,7 @@ bool back_facing(screen_vertex const &origin, screen_vertex const &next, screen_
 }
 
 void draw_flat_polygon(framework::render::indexed_surface target, std::span<screen_vertex const> const vertices,
-  uint8_t const colour, raster_viewport const viewport) {
+  uint8_t const colour, raster_viewport const viewport, lighten_blend const *const blend) {
   auto const [right, bottom]{viewport};
   /// Translate A1B6's convex flat-fill path to indexed pixels; VGA plane masks become contiguous spans
   if(vertices.size() < 3) return;
@@ -147,7 +147,7 @@ void draw_flat_polygon(framework::render::indexed_surface target, std::span<scre
   // often occupy only a few pixels, so buffer housekeeping otherwise dominates.
   if(leftmost->x >= 0 && rightmost->x <= right
     && top->y >= 0 && lowest->y <= bottom) {
-    rasterise(target, vertices, colour, right);
+    rasterise(target, vertices, colour, right, blend);
     return;
   }
   polygon_buffer first{}, second{};
@@ -159,7 +159,7 @@ void draw_flat_polygon(framework::render::indexed_surface target, std::span<scre
     points = std::span{*output}.first(count);
     output = output == &first ? &second : &first;
   }
-  rasterise(target, points, colour, right);
+  rasterise(target, points, colour, right, blend);
 }
 
 } // namespace darker::graphics

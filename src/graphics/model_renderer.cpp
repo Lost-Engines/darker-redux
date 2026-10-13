@@ -7,6 +7,7 @@
 #include "graphics/screen_layout.h"
 #include "graphics/screen_primitives.h"
 #include "maths/sine_table.h"
+#include "vectorstorm/vector/vector3.h"
 
 namespace darker::graphics {
 namespace {
@@ -83,6 +84,8 @@ private:
   unsigned int minimum_disc_radius;
   model_workspace &workspace;
   std::array<bool, 256> defined{};
+  std::array<bool, polygon_vertex_limit> on_ground{};
+  vec3<int> local_position{};
   size_t cursor{0};
   unsigned int instructions{0};
 
@@ -117,6 +120,10 @@ private:
     workspace.camera_vertices[cursor] = projection.transform();
     last_depth = signed_word(workspace.camera_vertices[cursor].depth >> render_geometry::fraction_bits);
     if(path == model_path::direct) workspace.vertices[cursor] = project_vertex(workspace.camera_vertices[cursor], screen_origin, focal_length);
+    if(colours.ground_light_blend) {
+      workspace.ground_vertices[cursor] = vec2<int>{local_position.x, local_position.y};
+      on_ground[cursor] = local_position.z == 0;
+    }
     defined[cursor++] = true;
   }
 
@@ -158,12 +165,29 @@ private:
       workspace.vertices[cursor] = project_vertex(result, screen_origin, focal_length);
     }
     workspace.camera_vertices[cursor] = result;
+    on_ground[cursor] = false; // animated/interpolated vertices are not static ground light spill
     defined[cursor++] = true;
   }
 
-  void set(size_t const axis, size_t &position) {
+  void set_component(unsigned int const axis, int16_t const value) {
+    projection.set_component(axis, value);
+    if(colours.ground_light_blend) local_position[axis] = value;
+  }
+
+  void zero_component(unsigned int const axis) {
+    projection.zero_component(axis);
+    if(colours.ground_light_blend) local_position[axis] = 0;
+  }
+
+  void negate_component(unsigned int const axis) {
+    projection.negate_component(axis);
+    if(colours.ground_light_blend) local_position[axis] = -local_position[axis];
+  }
+
+  void set(unsigned int const axis, size_t &position) {
     /// Replace one cached coordinate contribution from its signed operand
-    projection.set_component(axis, std::bit_cast<int16_t>(word(position)));
+    auto const value{std::bit_cast<int16_t>(word(position))};
+    set_component(axis, value);
   }
 
   uint8_t colour(uint8_t const source, bool const luminous_disc = false) const noexcept {
@@ -208,7 +232,7 @@ public:
         emit_interpolated();
         break;
       case model_opcode::set_animated_c:
-        projection.set_component(2, parameter(position));
+        set_component(2, parameter(position));
         break;
       case model_opcode::disc:
         {
@@ -271,45 +295,45 @@ public:
         }
         break;
       case model_opcode::zero_c:
-        projection.zero_component(2);
+        zero_component(2);
         break;
       case model_opcode::zero_a:
-        projection.zero_component(0);
+        zero_component(0);
         break;
       case model_opcode::zero_b:
-        projection.zero_component(1);
+        zero_component(1);
         break;
       case model_opcode::negate_c:
-        projection.negate_component(2);
+        negate_component(2);
         break;
       case model_opcode::negate_a:
-        projection.negate_component(0);
+        negate_component(0);
         break;
       case model_opcode::negate_b:
-        projection.negate_component(1);
+        negate_component(1);
         break;
       case model_opcode::zero_c_and_emit:
-        projection.zero_component(2);
+        zero_component(2);
         emit();
         break;
       case model_opcode::zero_a_and_emit:
-        projection.zero_component(0);
+        zero_component(0);
         emit();
         break;
       case model_opcode::zero_b_and_emit:
-        projection.zero_component(1);
+        zero_component(1);
         emit();
         break;
       case model_opcode::negate_c_and_emit:
-        projection.negate_component(2);
+        negate_component(2);
         emit();
         break;
       case model_opcode::negate_a_and_emit:
-        projection.negate_component(0);
+        negate_component(0);
         emit();
         break;
       case model_opcode::negate_b_and_emit:
-        projection.negate_component(1);
+        negate_component(1);
         emit();
         break;
       case model_opcode::set_bc_and_emit:
@@ -360,9 +384,19 @@ public:
           unsigned int const count{static_cast<unsigned int>(opcode == model_opcode::flat_polygon || opcode == model_opcode::shaded_polygon ? byte(position) : shaded ? std::to_underlying(opcode) - 12 : std::to_underlying(opcode)) + 1};
           auto const source_colour{byte(position)};
           auto const index{colour(source_colour)};
+          bool ground_face{colours.ground_light_blend != nullptr};
+          vec2<int> first_ground{}, previous_ground{};
+          int64_t ground_area{0};
           for(unsigned int i{0}; i < count; ++i) {
             auto const source{byte(position)};
             if(!defined[source]) throw std::invalid_argument{"Model face references an undefined vertex"};
+            if(ground_face) {
+              ground_face = on_ground[source];
+              auto const &point{workspace.ground_vertices[source]};
+              if(i == 0) first_ground = vec2<int>{point};
+              else ground_area += int64_t{previous_ground.x} * point.y - int64_t{previous_ground.y} * point.x;
+              previous_ground = vec2<int>{point};
+            }
             if(path == model_path::near_clipped) workspace.camera_face[i] = workspace.camera_vertices[source];
             else workspace.face[i] = workspace.vertices[source];
             if(shaded) {
@@ -379,15 +413,18 @@ public:
               }
             }
           }
+          ground_area += int64_t{previous_ground.x} * first_ground.y - int64_t{previous_ground.y} * first_ground.x;
+          // Positive authored XY winding faces upward (model Z points down).
+          auto const *blend{ground_face && ground_area > 0 ? colours.ground_light_blend : nullptr};
           if(shaded && shading == model_shading::gouraud) {
             auto const projected_count{path == model_path::near_clipped
               ? clip_near_shaded_polygon(std::span{workspace.camera_face}.first(count), std::span{workspace.vertex_shades}.first(count), screen_origin, workspace.shaded_face, focal_length) : count};
-            draw_gouraud_polygon(target, std::span{workspace.shaded_face}.first(projected_count), viewport, colours.fog);
+            draw_gouraud_polygon(target, std::span{workspace.shaded_face}.first(projected_count), viewport, colours.fog, blend);
             break;
           }
           auto const projected_count{path == model_path::near_clipped
             ? clip_near_polygon(std::span{workspace.camera_face}.first(count), screen_origin, workspace.face, focal_length) : count};
-          draw_flat_polygon(target, std::span{workspace.face}.first(projected_count), index, viewport);
+          draw_flat_polygon(target, std::span{workspace.face}.first(projected_count), index, viewport, blend);
         }
         break;
       case model_opcode::skip_back_facing:

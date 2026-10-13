@@ -5,6 +5,7 @@
 #include <span>
 #include "vectorstorm/vector/vector2.h"
 #include "graphics/raster_viewport.h"
+#include "graphics/palette_blend.h"
 #include "graphics/render_geometry.h"
 #include "render/indexed_framebuffer.h"
 
@@ -18,6 +19,6 @@ inline unsigned int constexpr clipped_polygon_vertex_limit{polygon_vertex_limit 
 bool back_facing(screen_vertex const &origin, screen_vertex const &next, screen_vertex const &previous) noexcept;
 
 void draw_flat_polygon(framework::render::indexed_surface target, std::span<screen_vertex const> vertices,
-  uint8_t colour, raster_viewport viewport = {});
+  uint8_t colour, raster_viewport viewport = {}, lighten_blend const *blend = nullptr);
 
 } // namespace darker::graphics

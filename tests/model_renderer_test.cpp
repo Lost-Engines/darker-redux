@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <span>
 #include <stdexcept>
+#include <vector>
 #include "graphics/model_renderer.h"
 #include "reference/model_renderer_samples.h"
 
@@ -174,6 +175,61 @@ TEST_CASE("Fountain lamps retain luminous shading while reflections stay dim", "
       CHECK(pixel(27) == 17); // full-strength luminous colour at maximum natural darkening
       CHECK(pixel(147) == 129); // original purple reflection ramp, ordinarily shaded
       if(power == 15) CHECK(pixel(27) == pixel(28));
+    }
+  }
+}
+
+TEST_CASE("Light-spill models blend only upward ground faces", "[graphics][models][light-spill]") {
+  using namespace darker::graphics;
+  framework::render::colour_palette palette{};
+  palette[1] = framework::render::rgba_pixel{200, 200, 200, 255};
+  palette[2] = framework::render::rgba_pixel{50, 50, 50, 255};
+  lighten_blend const blend{palette};
+  model_colours colours{
+    .ground_light_blend{&blend},
+  };
+  colours.shades[2] = 2;
+  projection_parameters const projection{
+    .axes{{
+      {.horizontal{16384}},
+      {.vertical{16384}},
+      {},
+    }},
+    .depth{
+      .whole{256},
+    },
+    .origin{160, 100},
+  };
+  model_workspace workspace;
+  for(bool const ground : {true, false}) {
+    for(bool const upward : {true, false}) {
+      for(auto const path : {model_path::direct, model_path::near_clipped}) {
+        CAPTURE(ground, upward, path);
+        std::vector<std::byte> model(11);
+        auto byte = [&](unsigned int value) { model.push_back(static_cast<std::byte>(value)); };
+        auto word = [&](int value) {
+          byte(static_cast<uint16_t>(value) & 255);
+          byte(static_cast<uint16_t>(value) >> 8);
+        };
+        for(auto const &point : std::array{vec2<int>{-40, -40}, vec2<int>{40, -40}, vec2<int>{40, 40}, vec2<int>{-40, 40}}) {
+          byte(0x8e); // set C, A, B and emit
+          word(ground ? 0 : -100);
+          word(point.x);
+          word(point.y);
+        }
+        byte(0x03); // flat quad
+        byte(2);
+        for(unsigned int i{0}; i < 4; ++i) byte(upward ? i : 3 - i);
+        byte(0x0d);
+        framework::render::indexed_cockpit_framebuffer frame{};
+        frame.pixels.fill(1);
+        auto facing_projection{projection};
+        facing_projection.axes[0].horizontal = upward ? 16384 : -16384;
+        draw_model(workspace, frame, model, 0, facing_projection, colours, {}, path);
+        auto const changed{std::ranges::count(frame.pixels, 2)};
+        if(ground && upward) REQUIRE(changed == 0);
+        else REQUIRE(changed > 0);
+      }
     }
   }
 }

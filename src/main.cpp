@@ -512,7 +512,9 @@ auto main(int const argc, char const *const argv[])->int {
   auto initial_cells{cells};
   darker::graphics::city_renderer scene;
   darker::graphics::distance_shading surface_lighting;
+  darker::graphics::lighten_blend ground_light_blend{game_palette.colours};
   auto const update_fog_palette{[&] {
+    ground_light_blend = darker::graphics::lighten_blend{game_palette.colours};
     surface_lighting = darker::graphics::distance_shading{darker::graphics::fog_range{
       .start_cells{fog_start},
       .end_cells{world_mode == world_kind::delphi ? fade_distance : static_cast<double>(draw_distance)},
@@ -630,6 +632,7 @@ auto main(int const argc, char const *const argv[])->int {
     view.underground = host.player.tunnel.has_value();
     view.unrestricted_visibility = host.player.noclip;
     view.radius = view.underground ? darker::graphics::scene_limits::tunnel_radius_cells : draw_distance;
+    view.ground_light_blend = world_mode == world_kind::delphi ? &ground_light_blend : nullptr;
     view.beacon_lighting = darker::resources::profile(world_mode).beacon_lighting;
     view.gouraud = host.gouraud;
     darker::graphics::model_animation animation;

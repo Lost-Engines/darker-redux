@@ -273,7 +273,17 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
       auto const row{((item.cell / game::city_map_size.column + game::beacon_spacing_cells / 2) / game::beacon_spacing_cells) * game::beacon_spacing_cells};
       light = cells[game::city_cell_index(column, row)].state;
     }
-    auto const colours{lighting.colours(item.placement.depth.whole, item.path, light)};
+    auto colours{lighting.colours(item.placement.depth.whole, item.path, light)};
+    if(!item.orientation && view.ground_light_blend) {
+      // Delphi streetlights, satellite doorway, and four approach-light orientations.
+      // The interpreter further restricts this to upward faces exactly on local Z=0.
+      switch(cells[item.cell].type) {
+      case 11: case 13: case 18: case 20: case 22: case 24:
+        colours.ground_light_blend = view.ground_light_blend;
+        break;
+      default: break;
+      }
+    }
     animation.cell_state = item.orientation ? 0 : cells[item.cell].state;
     draw_model(workspace, target, bank.model_pool(), item.model_offset, projection, colours, view.viewport, item.path, animation,
       view.gouraud ? model_shading::gouraud : model_shading::flat,

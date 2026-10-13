@@ -26,6 +26,7 @@ struct model_colours {
   static unsigned int constexpr shade_mask{0x1f};
   std::array<uint8_t, shade_count> shades{};
   uint8_t dynamic{0};
+  lighten_blend const *ground_light_blend{nullptr}; // only upward ground-plane faces in identified light-spill models
   // 2D71 uses all five shade bits without the polygon dynamic-colour branch.
   // Its last four indices spill into the following contiguous shade row.
   std::array<uint8_t, shade_mask + 1 - shade_count> point_shade_tail{};
@@ -47,6 +48,7 @@ struct model_colours {
 // the interpreter separately resets its vertex-validity flags for each model.
 struct model_workspace {
   std::array<camera_vertex, polygon_vertex_limit> camera_vertices{};
+  std::array<vec2<int>, polygon_vertex_limit> ground_vertices{};
   std::array<screen_vertex, polygon_vertex_limit> vertices{};
   std::array<screen_vertex, clipped_polygon_vertex_limit> face{};
   std::array<shaded_vertex, clipped_polygon_vertex_limit> shaded_face{};

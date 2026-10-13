@@ -61,6 +61,7 @@ struct city_view {
   };
   double focal_length{render_geometry::focal_length};
   unsigned int minimum_light_radius{0}; // render pixels; zero retains the native single-pixel minimum
+  lighten_blend const *ground_light_blend{nullptr}; // Delphi ground light-spill blending; borrowed palette table
   bool beacon_lighting{true};
   bool gouraud{true};
   bool underground{false};
