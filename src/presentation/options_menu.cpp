@@ -97,7 +97,8 @@ preferences read_preferences(std::filesystem::path const &path) {
     else if(name == "joystick-pitch-axis") value >> result.joystick.pitch_axis;
     else if(name == "joystick-invert-bank") value >> result.joystick.invert_bank;
     else if(name == "joystick-invert-pitch") value >> result.joystick.invert_pitch;
-    else if(name == "joystick-deadzone") value >> result.joystick.deadzone_percent;
+    // The former joystick-deadzone key added a second threshold; do not reinterpret it.
+    else if(name == "joystick-deadzone-percent") value >> result.joystick.deadzone_percent;
     else if(name == "joystick-sensitivity") value >> result.joystick.sensitivity_percent;
     else if(name.starts_with("joystick-button.")) {
       auto const descriptions{input::control_descriptions()};
@@ -136,7 +137,7 @@ void write_preferences(std::filesystem::path const &path, preferences const &val
   output << "joystick-device=" << value.joystick.device
     << "\njoystick-bank-axis=" << value.joystick.bank_axis << "\njoystick-pitch-axis=" << value.joystick.pitch_axis
     << "\njoystick-invert-bank=" << value.joystick.invert_bank << "\njoystick-invert-pitch=" << value.joystick.invert_pitch
-    << "\njoystick-deadzone=" << value.joystick.deadzone_percent << "\njoystick-sensitivity=" << value.joystick.sensitivity_percent << '\n';
+    << "\njoystick-deadzone-percent=" << value.joystick.deadzone_percent << "\njoystick-sensitivity=" << value.joystick.sensitivity_percent << '\n';
   auto const descriptions{input::control_descriptions()};
   for(unsigned int i{0}; i < descriptions.size(); ++i) {
     output << "bind." << descriptions[i].name << '=' << value.controls.keys[i] << '\n';
@@ -255,7 +256,7 @@ void options_menu::adjust(int const direction) {
     }
     if(selected == 3) settings.invert_bank = !settings.invert_bank;
     if(selected == 4) settings.invert_pitch = !settings.invert_pitch;
-    if(selected == 5) settings.deadzone_percent = static_cast<unsigned int>(std::clamp(static_cast<int>(settings.deadzone_percent) + direction, 0, 50));
+    if(selected == 5) settings.deadzone_percent = std::clamp(std::round(settings.deadzone_percent * 4 + direction) / 4, 0.0, 50.0);
     if(selected == 6) settings.sensitivity_percent = static_cast<unsigned int>(std::clamp(static_cast<int>(settings.sensitivity_percent) + direction * 5, 25, 200));
     return;
   }
@@ -444,7 +445,7 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
       auto const &settings{values.joystick};
       std::string label, value;
       if(row < joystick_setting_count) {
-        std::array<std::string_view, joystick_setting_count> constexpr labels{"Device", "Bank axis", "Pitch axis", "Invert bank", "Invert pitch", "Extra dead zone", "Sensitivity"};
+        std::array<std::string_view, joystick_setting_count> constexpr labels{"Device", "Bank axis", "Pitch axis", "Invert bank", "Invert pitch", "Dead zone", "Sensitivity"};
         label = labels[row];
         switch(row) {
         case 0: value = settings.device == input::joystick_disabled ? "Off" : settings.device == input::joystick_automatic ? "Auto" : "Device " + std::to_string(settings.device + 1); break;
@@ -452,7 +453,7 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
         case 2: value = std::to_string(settings.pitch_axis + 1); break;
         case 3: value = settings.invert_bank ? "On" : "Off"; break;
         case 4: value = settings.invert_pitch ? "On" : "Off"; break;
-        case 5: value = std::to_string(settings.deadzone_percent) + "%"; break;
+        case 5: value = number(settings.deadzone_percent) + "%"; break;
         case 6: value = std::to_string(settings.sensitivity_percent) + "%"; break;
         }
       } else {

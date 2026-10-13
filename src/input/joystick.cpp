@@ -20,7 +20,7 @@ joystick_preferences::joystick_preferences() {
 bool joystick_preferences::valid() const noexcept {
   if(device < joystick_disabled || device > GLFW_JOYSTICK_LAST
     || bank_axis < 0 || bank_axis > 31 || pitch_axis < 0 || pitch_axis > 31
-    || bank_axis == pitch_axis || deadzone_percent > 50
+    || bank_axis == pitch_axis || !std::isfinite(deadzone_percent) || deadzone_percent < 0 || deadzone_percent > 50
     || sensitivity_percent < 25 || sensitivity_percent > 200) return false;
   for(unsigned int i{0}; i < buttons.size(); ++i) {
     if(buttons[i] < -1 || buttons[i] >= static_cast<int>(joystick_button_limit)) return false;
@@ -67,9 +67,7 @@ int16_t joystick_axis(joystick_sample const &sample, int const axis, bool const 
   if(axis < 0 || static_cast<unsigned int>(axis) >= sample.axes.size()) return 0;
   double const raw{sample.axes[static_cast<unsigned int>(axis)]};
   if(!std::isfinite(raw)) return 0;
-  double const deadzone{preferences.deadzone_percent / 100.0};
-  double const magnitude{std::clamp((std::abs(raw) - deadzone) / (1.0 - deadzone)
-    * preferences.sensitivity_percent / 100.0, 0.0, 1.0)};
+  double const magnitude{std::clamp(std::abs(raw) * preferences.sensitivity_percent / 100.0, 0.0, 1.0)};
   return static_cast<int16_t>(std::lround(std::copysign(magnitude * 32767, invert ? -raw : raw)));
 }
 

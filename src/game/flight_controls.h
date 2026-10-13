@@ -5,6 +5,9 @@
 
 namespace darker::game {
 
+inline constexpr uint16_t joystick_response_scale{4096};
+inline constexpr uint16_t original_joystick_deadzone{256};
+
 struct steering_axis_state {
   uint16_t keyboard_target{0};
   uint16_t mouse_target{0};
@@ -15,7 +18,7 @@ struct steering_axis_state {
   uint16_t keyboard(bool negative, bool positive, bool control, game_duration step) noexcept;
   uint16_t mouse(uint16_t position, uint16_t sensitivity, game_duration step) noexcept;
 
-  uint16_t joystick(int16_t position, game_duration step) noexcept;
+  uint16_t joystick(int16_t position, game_duration step, uint16_t deadzone = original_joystick_deadzone) noexcept;
 
 private:
   uint16_t filtered_drive(uint16_t previous, uint16_t target, game_duration step) noexcept;
@@ -44,6 +47,7 @@ struct flight_controls_input {
   bool joystick_enabled{false};
   int16_t joystick_bank{0};
   int16_t joystick_pitch{0};
+  uint16_t joystick_deadzone{original_joystick_deadzone};
 };
 
 struct flight_steering {

@@ -71,11 +71,13 @@ one-based; saved indices are zero-based. Auto chooses the first present device.
 Explicit device slots are retained when disconnected, rather than silently
 switching to another controller. Slots may change if devices are reordered.
 
-The controls submenu saves device selection, axes, inversion, extra dead zone,
+The controls submenu saves device selection, axes, inversion, dead zone,
 sensitivity and action bindings. Missing axes/buttons produce neutral input.
 The device name and live axis readings aid setup. GLFW supplies normalised axes,
-so there is no emulated DOS gameport calibration procedure. The optional host
-dead zone (default 0%) precedes the original response's own centre dead zone.
+so there is no emulated DOS gameport calibration procedure. The configurable centre dead zone defaults to the original 6.25%. It is applied
+once, after the original sample averaging. The menu adjusts it in 0.25 percentage
+point steps; the CLI accepts fractional percentages. Changing the threshold
+rescales the remaining response to retain the original full-deflection force.
 
 The retail code at 7B7D–7BC4 enters its joystick fallback only when preceding
 keyboard/mouse steering supplies no drive. 7BCA averages current and previous
@@ -114,9 +116,12 @@ axis and button numbers are one-based at the CLI, just as in the menu.
   Specify both to swap the default first and second axes.
 - `--joystick-invert-bank[=true|false]` and
   `--joystick-invert-pitch[=true|false]` override inversion in either direction.
-- `--joystick-deadzone=N` adds 0–50% host dead zone before the original response;
-  the new default is zero. Previously saved values remain in effect unless
-  overridden. `--joystick-sensitivity=N` sets 25–200% scaling (default 100%).
+- `--joystick-deadzone=N` changes the original centre threshold directly,
+  accepting 0–50% (default 6.25%). Zero disables the dead zone.
+  `--joystick-sensitivity=N` sets 25–200% scaling (default 100%).
+  Preferences store the threshold as `joystick-deadzone-percent`; the obsolete
+  additive `joystick-deadzone` preference is ignored, restoring the original
+  default instead of misinterpreting an earlier extra threshold.
 - Repeat `--joystick-button=ACTION=N` or `--joystick-button=ACTION=off` to
   configure buttons 1–128. Action names are listed in `--help` and match the
   saved binding names. All assignments are applied before checking conflicts,

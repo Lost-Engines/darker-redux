@@ -48,17 +48,17 @@ Press **F10** from the menus, briefings or flight to open the options. The pilot
 
 Open **Controls** to rebind flight, weapon and camera keys, adjust mouse sensitivity, or invert vertical mouse movement. Select a binding and press **Enter**, then the new key; **Delete** clears it and **Escape** cancels. Conflicting keys are flagged. Use the mouse wheel or **Page Up/Page Down** to scroll. Choose **Back to options**, then **Apply and save** to keep your changes. The mouse fire-button settings select left, right, middle or extra buttons, or disable mouse firing; swapping an occupied button swaps the two actions. Menus always use the left button.
 
-**Controls → Joystick / gamepad** selects a device (Auto uses the first connected device), bank/pitch axes, inversion, sensitivity and extra dead zone. Axis numbers start at 1; select an axis row to see its live reading. Select a flight action and press Enter, then the desired joystick button; Delete clears it. Recognised gamepads use a standard layout, including triggers as buttons 16/17. Other joysticks use their reported axis/button numbers. Defaults use the first two axes and buttons 1/2 for firing, 3 for boost, 4 for engine/shield, 5 for brake, 6 for look-around and 7 for radar. In menus, the pitch axis moves the selection, the bank axis adjusts options, and primary/secondary fire accept/go back. Use F10 to open settings, and **Apply and save** to retain them.
+**Controls → Joystick / gamepad** selects a device (Auto uses the first connected device), bank/pitch axes, inversion, sensitivity and dead zone. Axis numbers start at 1; select an axis row to see its live reading. Select a flight action and press Enter, then the desired joystick button; Delete clears it. Recognised gamepads use a standard layout, including triggers as buttons 16/17. Other joysticks use their reported axis/button numbers. Defaults use the first two axes and buttons 1/2 for firing, 3 for boost, 4 for engine/shield, 5 for brake, 6 for look-around and 7 for radar. In menus, the pitch axis moves the selection, the bank axis adjusts options, and primary/secondary fire accept/go back. Use F10 to open settings, and **Apply and save** to retain them.
 
 Joystick setup is also available entirely from the command line. Explicit arguments override saved settings; omitted options retain them. For example:
 
 ```sh
-./darker --joystick=1 --joystick-pitch-axis=2 --joystick-invert-pitch --joystick-deadzone=0
+./darker --joystick=1 --joystick-pitch-axis=2 --joystick-invert-pitch --joystick-deadzone=6.25
 ./darker --joystick=off
 ./darker --joystick-button=primary=2 --joystick-button=secondary=1
 ```
 
-Use `--help` for axis, sensitivity and button options. With no saved settings, the first available joystick is selected automatically and the original centre dead zone applies, with no extra dead zone or calibration required.
+Use `--help` for axis, sensitivity and button options. With no saved settings, the first available joystick is selected automatically and the original 6.25% centre dead zone applies. `--joystick-deadzone` changes that threshold directly (0 disables it); no calibration is required.
 
 **Sound** provides separate music and effects volumes, applied immediately across all music engines. Zero mutes that channel; **Apply and save** retains the settings. Command-line `--mute` and `--music=none` still disable their respective audio paths.
 

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "input/control_preferences.h"
+#include "game/flight_controls.h"
 
 namespace darker::input {
 
@@ -17,7 +18,7 @@ struct joystick_preferences {
   int pitch_axis{1};
   bool invert_bank{false};
   bool invert_pitch{false};
-  unsigned int deadzone_percent{0};
+  double deadzone_percent{100.0 * game::original_joystick_deadzone / game::joystick_response_scale};
   unsigned int sensitivity_percent{100};
   std::array<int, static_cast<unsigned int>(control_action::count)> buttons;
 

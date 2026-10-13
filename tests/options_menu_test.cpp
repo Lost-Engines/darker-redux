@@ -61,11 +61,13 @@ TEST_CASE("Display preferences round-trip and reject malformed values", "[option
   saved.joystick.device = 2;
   saved.joystick.bank_axis = 3;
   saved.joystick.invert_pitch = true;
-  saved.joystick.deadzone_percent = 12;
+  saved.joystick.deadzone_percent = 12.5;
   saved.joystick.buttons[0] = 12;
   darker::presentation::write_preferences(path, saved);
   CHECK(darker::presentation::read_preferences(path) == saved);
-  for(auto const bad : {"fov=nan", "width=12", "draw-distance=999", "fog-start=100", "gouraud=2", "fog-curve=12garbage", "mouse-sensitivity=0", "mouse-sensitivity=nan", "invert-mouse=2", "bind.left=69", "bind.left=256", "music-volume=101", "effects-volume=-1", "mouse-primary=1", "mouse-secondary=8", "joystick-device=16", "joystick-bank-axis=1", "joystick-deadzone=51", "joystick-sensitivity=0", "joystick-button.left=0"}) {
+  { std::ofstream output{path}; output << "joystick-deadzone=0\n"; }
+  CHECK(darker::presentation::read_preferences(path).joystick.deadzone_percent == 6.25);
+  for(auto const bad : {"fov=nan", "width=12", "draw-distance=999", "fog-start=100", "gouraud=2", "fog-curve=12garbage", "mouse-sensitivity=0", "mouse-sensitivity=nan", "invert-mouse=2", "bind.left=69", "bind.left=256", "music-volume=101", "effects-volume=-1", "mouse-primary=1", "mouse-secondary=8", "joystick-device=16", "joystick-bank-axis=1", "joystick-deadzone-percent=51", "joystick-deadzone-percent=-1", "joystick-sensitivity=0", "joystick-button.left=0"}) {
     { std::ofstream output{path}; output << bad << '\n'; }
     CHECK_THROWS(darker::presentation::read_preferences(path));
   }
@@ -273,7 +275,9 @@ TEST_CASE("Joystick command line overrides only explicitly supplied settings", "
   CHECK(saved.device == 3);
   CHECK(joystick_arguments({"--joystick=auto"}, saved).device == darker::input::joystick_automatic);
   CHECK(joystick_arguments({"--joystick=16"}).device == 15);
-  CHECK(joystick_arguments({}).deadzone_percent == 0);
+  CHECK(joystick_arguments({}).deadzone_percent == 6.25);
+  CHECK(joystick_arguments({"--joystick-deadzone=6.25"}).deadzone_percent == 6.25);
+  CHECK(joystick_arguments({"--joystick-deadzone=0"}).deadzone_percent == 0);
 }
 
 TEST_CASE("Joystick CLI applies axis and button swaps together and validates conflicts", "[options][joystick]") {

@@ -60,14 +60,13 @@ TEST_CASE("Joystick fallback matches retail calibrated response and smoothing", 
   }
 }
 
-TEST_CASE("Host joystick axes handle missing axes, inversion, deadzone and saturation", "[controls][joystick]") {
+TEST_CASE("Host joystick axes handle missing axes, inversion and saturation", "[controls][joystick]") {
   darker::input::joystick_sample sample{
     .device{0},
     .axes{0.02f, -1.0f, 0.5f}
   };
   darker::input::joystick_preferences settings;
-  settings.deadzone_percent = 5;
-  CHECK(darker::input::joystick_axis(sample, 0, false, settings) == 0);
+  CHECK(darker::input::joystick_axis(sample, 0, false, settings) == 655);
   CHECK(darker::input::joystick_axis(sample, 1, false, settings) == -32767);
   CHECK(darker::input::joystick_axis(sample, 1, true, settings) == 32767);
   CHECK(darker::input::joystick_axis(sample, 10, false, settings) == 0);
@@ -104,4 +103,18 @@ TEST_CASE("Joystick buttons require release after focus, connection and menu cha
   CHECK(buttons.pushed(0));
   buttons.update({}, true);
   CHECK_FALSE(buttons.down(0));
+}
+
+TEST_CASE("Joystick has one configurable centre threshold with unchanged maximum force", "[controls][joystick]") {
+  auto const response{[](int16_t position, uint16_t deadzone){
+    darker::game::steering_axis_state axis;
+    axis.previous_joystick = position; // Settled input, so smoothing does not alter the test position.
+    axis.joystick(position, 16, deadzone);
+    return axis.reference;
+  }};
+  CHECK(response(1000, darker::game::original_joystick_deadzone) == 0);
+  CHECK(response(1000, 0) > 0);
+  CHECK(response(3000, darker::game::original_joystick_deadzone) > 0);
+  CHECK(response(3000, 512) == 0);
+  for(uint16_t const threshold : std::array<uint16_t, 4>{0, 256, 512, 2048}) CHECK(response(32767, threshold) == 3840);
 }

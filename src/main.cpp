@@ -188,6 +188,7 @@ struct flight_host {
       .joystick_enabled{joystick.device >= 0},
       .joystick_bank{darker::input::joystick_axis(joystick, options.values.joystick.bank_axis, options.values.joystick.invert_bank, options.values.joystick)},
       .joystick_pitch{darker::input::joystick_axis(joystick, options.values.joystick.pitch_axis, options.values.joystick.invert_pitch, options.values.joystick)},
+      .joystick_deadzone{static_cast<uint16_t>(std::lround(options.values.joystick.deadzone_percent * darker::game::joystick_response_scale / 100.0))},
     };
   }
 };

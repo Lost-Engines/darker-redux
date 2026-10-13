@@ -1,6 +1,7 @@
 #include "input/joystick_options.h"
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <stdexcept>
 #include <string_view>
 
@@ -29,7 +30,7 @@ void add_joystick_options(boost::program_options::options_description &options) 
     ("joystick-pitch-axis", po::value<std::string>(), "pitch axis 1..32 (default: saved choice or 2)")
     ("joystick-invert-bank", po::value<bool>()->implicit_value(true), "invert bank axis; use =false to override a saved inversion")
     ("joystick-invert-pitch", po::value<bool>()->implicit_value(true), "invert pitch axis; use =false to override a saved inversion")
-    ("joystick-deadzone", po::value<unsigned int>(), "extra dead zone in percent, 0..50 (default: 0); original 6.25% centre response remains")
+    ("joystick-deadzone", po::value<double>(), "joystick centre dead zone in percent, 0..50 (original/default: 6.25); 0 disables")
     ("joystick-sensitivity", po::value<unsigned int>(), "axis sensitivity in percent, 25..200 (default: 100)")
     ("joystick-button", po::value<std::vector<std::string>>()->composing(), button_help.c_str());
 }
@@ -45,10 +46,10 @@ joystick_preferences apply_joystick_options(joystick_preferences const &base,
   if(arguments.contains("joystick-pitch-axis")) result.pitch_axis = numbered(arguments["joystick-pitch-axis"].as<std::string>(), 32, "--joystick-pitch-axis");
   if(arguments.contains("joystick-invert-bank")) result.invert_bank = arguments["joystick-invert-bank"].as<bool>();
   if(arguments.contains("joystick-invert-pitch")) result.invert_pitch = arguments["joystick-invert-pitch"].as<bool>();
-  if(arguments.contains("joystick-deadzone")) result.deadzone_percent = arguments["joystick-deadzone"].as<unsigned int>();
+  if(arguments.contains("joystick-deadzone")) result.deadzone_percent = arguments["joystick-deadzone"].as<double>();
   if(arguments.contains("joystick-sensitivity")) result.sensitivity_percent = arguments["joystick-sensitivity"].as<unsigned int>();
   if(result.bank_axis == result.pitch_axis) throw std::invalid_argument{"Joystick bank and pitch axes must differ; specify both options when swapping axes"};
-  if(result.deadzone_percent > 50) throw std::invalid_argument{"--joystick-deadzone must be between 0 and 50 percent"};
+  if(!std::isfinite(result.deadzone_percent) || result.deadzone_percent < 0 || result.deadzone_percent > 50) throw std::invalid_argument{"--joystick-deadzone must be between 0 and 50 percent"};
   if(result.sensitivity_percent < 25 || result.sensitivity_percent > 200) throw std::invalid_argument{"--joystick-sensitivity must be between 25 and 200 percent"};
   auto const descriptions{control_descriptions()};
   if(arguments.contains("joystick-button")) {
