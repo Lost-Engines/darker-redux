@@ -87,7 +87,11 @@ flight_steering flight_controls_state::update(flight_controls_input const input,
   if(result.bank != 0 || result.pitch != 0) return result;
   result.bank = bank.mouse(input.mouse_x, input.mouse_sensitivity, frame_step);
   result.pitch = pitch.mouse(static_cast<uint16_t>(-input.mouse_y), input.mouse_sensitivity, frame_step);
-  if(result.bank == 0 && result.pitch == 0 && input.joystick_enabled) {
+  // Retail requires exact zero, but negative mouse-filter rounding can settle
+  // at a drive of -1 indefinitely. Ignore that residue only for source selection.
+  int constexpr mouse_idle_drive_tolerance{1};
+  if(std::abs(word(result.bank)) <= mouse_idle_drive_tolerance
+    && std::abs(word(result.pitch)) <= mouse_idle_drive_tolerance && input.joystick_enabled) {
     result.bank = bank.joystick(input.joystick_bank, frame_step, input.joystick_deadzone);
     result.pitch = pitch.joystick(input.joystick_pitch, frame_step, input.joystick_deadzone);
   } else if(!input.joystick_enabled) {

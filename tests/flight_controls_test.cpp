@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <bit>
 #include "game/flight_controls.h"
 #include "reference/flight_controls_samples.h"
 #include "reference/joystick_samples.h"
@@ -117,4 +118,31 @@ TEST_CASE("Joystick has one configurable centre threshold with unchanged maximum
   CHECK(response(3000, darker::game::original_joystick_deadzone) > 0);
   CHECK(response(3000, 512) == 0);
   for(uint16_t const threshold : std::array<uint16_t, 4>{0, 256, 512, 2048}) CHECK(response(32767, threshold) == 3840);
+}
+
+TEST_CASE("Mouse smoothing residue does not lock out joystick steering", "[game][controls][joystick]") {
+  for(uint16_t const step : std::array<uint16_t, 3>{8, 16, 32}) {
+    CAPTURE(step);
+    darker::game::flight_controls_state state;
+    darker::game::flight_controls_input input{
+      .mouse_x{static_cast<uint16_t>(-100)},
+      .mouse_y{100},
+      .joystick_enabled{true},
+      .joystick_bank{16000},
+      .joystick_pitch{16000}
+    };
+    // Real mouse movement still wins on both axes.
+    auto drive{state.update(input, step)};
+    CHECK(std::bit_cast<int16_t>(drive.bank) < -1);
+    CHECK(std::bit_cast<int16_t>(drive.pitch) < -1);
+    // Stop moving: both negative filter tails settle, then the stick takes over.
+    for(unsigned int frame{0}; frame < 300; ++frame) drive = state.update(input, step);
+    CHECK(std::bit_cast<int16_t>(state.bank.mouse_target) < 0);
+    CHECK(std::bit_cast<int16_t>(state.pitch.mouse_target) < 0);
+    CHECK(std::bit_cast<int16_t>(drive.bank) > 1);
+    CHECK(std::bit_cast<int16_t>(drive.pitch) > 1);
+    input.left = true;
+    drive = state.update(input, step);
+    CHECK(std::bit_cast<int16_t>(drive.bank) < -1);
+  }
 }

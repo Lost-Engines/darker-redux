@@ -85,7 +85,10 @@ axis readings, removes the inner 1/16 of calibrated travel and saturates at
 0x0f00; 7BA6/7BBD scale the signed result by the simulation timestep. Redux
 normalises host axes to ±32767 and uses that as the calibrated extent. The
 native-reference generator captures 256 complete fallback updates, including
-signed wrapping and asymmetric rounding. Keyboard/mouse fixtures remain intact.
+signed wrapping and asymmetric rounding. Redux permits mouse drive within ±1 on both axes
+when selecting the joystick fallback: negative mouse rounding can otherwise
+leave a permanent -1 drive that blocks the joystick. Mouse filtering itself and
+keyboard priority are unchanged. Keyboard/mouse fixtures remain intact.
 
 Physical button edges and held states are distinct. Button actions share the
 existing flight command paths; brake, firing, radar and look-around remain
