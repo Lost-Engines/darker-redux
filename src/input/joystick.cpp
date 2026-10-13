@@ -11,8 +11,7 @@ joystick_preferences::joystick_preferences() {
   buttons[std::to_underlying(control_action::primary)] = 0;
   buttons[std::to_underlying(control_action::secondary)] = 1;
   buttons[std::to_underlying(control_action::boost)] = 2;
-  buttons[std::to_underlying(control_action::engine)] = 3;
-  buttons[std::to_underlying(control_action::brake)] = 4;
+  buttons[std::to_underlying(control_action::brake)] = 3;
   buttons[std::to_underlying(control_action::look)] = 5;
   buttons[std::to_underlying(control_action::radar)] = 6;
 }
