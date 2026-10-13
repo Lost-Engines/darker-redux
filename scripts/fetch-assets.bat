@@ -100,7 +100,7 @@ if defined manifest (
   )
 )
 echo Fetching %file%
-curl.exe --fail --location --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 30 --output "%file%" "%url%"
+curl.exe --user-agent "Lost Engines Darker Redux" --fail --location --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 30 --output "%file%" "%url%"
 if errorlevel 1 echo Warning: %file% is unavailable. %warning%
 exit /b 0
 
