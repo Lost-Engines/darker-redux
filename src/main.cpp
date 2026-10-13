@@ -1157,7 +1157,7 @@ auto main(int const argc, char const *const argv[])->int {
   glfwSetScrollCallback(window.get(), [](GLFWwindow *const window, double, double const amount){
     auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};
     if(!host.focused || !host.mouse_enabled || !host.options.active) return;
-    host.options.key(amount > 0 ? darker::presentation::options_key::up : darker::presentation::options_key::down);
+    host.options.wheel(amount > 0 ? -1 : amount < 0 ? 1 : 0);
   });
   glfwSetCursorPosCallback(window.get(), [](GLFWwindow *const window, double const x, double const y){
     auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};

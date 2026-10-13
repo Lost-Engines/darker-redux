@@ -153,3 +153,25 @@ TEST_CASE("Scrolling controls reaches the last weapon and control defaults", "[o
   menu.key(options_key::accept);
   CHECK(menu.values.controls == darker::input::control_preferences{});
 }
+
+TEST_CASE("Mouse wheel stops at list boundaries and control footer remains fixed", "[options][controls]") {
+  options_menu menu;
+  menu.open();
+  menu.wheel(-1);
+  menu.key(options_key::right);
+  CHECK(menu.values.width == 640); // Top-level wheel did not wrap to Return.
+  menu.click(30, 35 + 9 * 11);
+  for(int i{0}; i < 100; ++i) menu.wheel(1);
+  menu.click(30, 35 + 11 * 11); // Last visible binding remains Weapon 0.
+  REQUIRE(menu.capturing_key());
+  menu.capture_key('J');
+  CHECK(menu.values.controls.keys.back() == 'J');
+  menu.click(30, 176); // Defaults stays outside the scrolling list.
+  CHECK(menu.values.controls == darker::input::control_preferences{});
+  for(int i{0}; i < 100; ++i) menu.wheel(-1);
+  menu.click(250, 35); // First setting remains mouse sensitivity.
+  CHECK(menu.values.controls.mouse_sensitivity == 1.1);
+  menu.click(30, 187); // Back stays in the same place at either end.
+  menu.key(options_key::cancel);
+  CHECK_FALSE(menu.active);
+}

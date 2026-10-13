@@ -41,8 +41,9 @@ class options_menu {
   unsigned int scroll{0};
   bool controls_page{false};
   bool binding_pending{false};
-  enum class navigation_hover { none, previous, next };
-  navigation_hover hovered_navigation{navigation_hover::none};
+  unsigned int list_rows() const noexcept;
+  unsigned int page_size() const noexcept;
+  int selection_y() const noexcept;
   unsigned int rows() const noexcept;
   void keep_visible() noexcept;
   void adjust(int direction);
@@ -57,6 +58,7 @@ public:
   void key(options_key key);
   bool capturing_key() const noexcept;
   void capture_key(int key);
+  void wheel(int direction);
   void point(int x, int y);
   void click(int x, int y);
   void draw(std::span<framework::render::rgba_pixel> pixels, int width, int height,
