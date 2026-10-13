@@ -30,6 +30,8 @@ struct fm_stream::implementation {
   std::array<std::vector<std::byte>, 6> songs;
   std::atomic<int> requested{-1};
   int playing{-1};
+  std::atomic<unsigned int> music_volume{100}, effects_volume{100};
+  float output_gain{1.0f};
   uint64_t phase{0}, period;
   fm_sink sink;
 
@@ -185,6 +187,11 @@ void fm_stream::select_music(int const group) noexcept {
   state->requested.store(group >= 0 && group < 6 ? group : -1, std::memory_order_relaxed);
 }
 
+void fm_stream::set_volumes(unsigned int const music_percent, unsigned int const effects_percent) noexcept {
+  state->music_volume.store(std::min(music_percent, 100u), std::memory_order_relaxed);
+  state->effects_volume.store(std::min(effects_percent, 100u), std::memory_order_relaxed);
+}
+
 bool fm_stream::publish(fm_frame const &frame) noexcept {
   /// The simulation is the sole producer; immutable snapshots cross into the audio callback
   for(auto const &note : frame) {
@@ -232,6 +239,15 @@ void fm_stream::render(std::span<float> const stereo) noexcept {
     }
   } else {
     state->render(stereo);
+  }
+  // Gain is applied after synthesis for every backend, with a short ramp to avoid clicks.
+  auto const percent{(state->playing >= 0 && state->has_music() ? state->music_volume : state->effects_volume).load(std::memory_order_relaxed)};
+  float const target{percent / 100.0f};
+  float const increment{1.0f / (state->sample_rate * 0.005f)};
+  for(size_t i{0}; i + 1 < stereo.size(); i += 2) {
+    state->output_gain += std::clamp(target - state->output_gain, -increment, increment);
+    stereo[i] *= state->output_gain;
+    stereo[i + 1] *= state->output_gain;
   }
 }
 

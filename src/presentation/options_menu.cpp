@@ -15,19 +15,19 @@ namespace darker::presentation {
 namespace {
 enum class option_row : unsigned int {
   resolution, field_of_view, draw_distance, fog_start, fade_distance, fog_curve,
-  minimum_light_size, background_fade, gouraud, controls, defaults, apply, cancel, back, count
+  minimum_light_size, background_fade, gouraud, controls, audio, defaults, apply, cancel, back, count
 };
 constexpr unsigned int setting_count{std::to_underlying(option_row::controls)};
 constexpr unsigned int row_count{std::to_underlying(option_row::count)};
 constexpr int first_row{35};
 constexpr int row_height{11};
-constexpr unsigned int visible_rows{14};
+constexpr unsigned int visible_rows{15};
 constexpr int scrollbar_left{305};
 constexpr int scrollbar_right{310};
 constexpr unsigned int control_visible_rows{12};
 constexpr int list_bottom{first_row + row_height * static_cast<int>(control_visible_rows)};
 constexpr int footer_top{176};
-constexpr unsigned int mouse_setting_count{2};
+constexpr unsigned int mouse_setting_count{4};
 constexpr unsigned int controls_defaults{mouse_setting_count + std::to_underlying(input::control_action::count)};
 constexpr unsigned int controls_back{controls_defaults + 1};
 constexpr std::array<std::array<int, 2>, 9> resolutions{{
@@ -51,7 +51,7 @@ bool preferences::valid() const noexcept {
     && std::isfinite(fog_start) && std::isfinite(fade_distance)
     && fog_start >= 0 && fade_distance >= fog_start && fade_distance <= draw_distance
     && std::isfinite(fog_curve) && fog_curve >= 0
-    && std::isfinite(minimum_light_size) && minimum_light_size >= 0 && controls.valid();
+    && std::isfinite(minimum_light_size) && minimum_light_size >= 0 && music_volume <= 100 && effects_volume <= 100 && controls.valid();
 }
 
 std::filesystem::path preferences_path() {
@@ -85,6 +85,10 @@ preferences read_preferences(std::filesystem::path const &path) {
     else if(name == "minimum-light-size") value >> result.minimum_light_size;
     else if(name == "background-fade") value >> result.background_fade;
     else if(name == "gouraud") value >> result.gouraud;
+    else if(name == "music-volume") value >> result.music_volume;
+    else if(name == "effects-volume") value >> result.effects_volume;
+    else if(name == "mouse-primary") value >> result.controls.primary_mouse_button;
+    else if(name == "mouse-secondary") value >> result.controls.secondary_mouse_button;
     else if(name == "mouse-sensitivity") value >> result.controls.mouse_sensitivity;
     else if(name == "invert-mouse") value >> result.controls.invert_mouse;
     else if(name.starts_with("bind.")) {
@@ -111,6 +115,8 @@ void write_preferences(std::filesystem::path const &path, preferences const &val
     << "\nfog-start=" << value.fog_start << "\nfade-distance=" << value.fade_distance
     << "\nfog-curve=" << value.fog_curve << "\nminimum-light-size=" << value.minimum_light_size
     << "\nbackground-fade=" << value.background_fade << "\ngouraud=" << value.gouraud << '\n';
+  output << "music-volume=" << value.music_volume << "\neffects-volume=" << value.effects_volume
+    << "\nmouse-primary=" << value.controls.primary_mouse_button << "\nmouse-secondary=" << value.controls.secondary_mouse_button << '\n';
   output << "mouse-sensitivity=" << value.controls.mouse_sensitivity
     << "\ninvert-mouse=" << value.controls.invert_mouse << '\n';
   auto const descriptions{input::control_descriptions()};
@@ -128,20 +134,21 @@ void options_menu::open() {
   selected = 0;
   scroll = 0;
   controls_page = false;
+  audio_page = false;
   binding_pending = false;
   notice.clear();
 }
 
 unsigned int options_menu::rows() const noexcept {
-  return controls_page ? controls_back + 1 : row_count;
+  return controls_page ? controls_back + 1 : audio_page ? 4 : row_count;
 }
 
 unsigned int options_menu::list_rows() const noexcept {
-  return controls_page ? controls_defaults : row_count;
+  return controls_page ? controls_defaults : rows();
 }
 
 unsigned int options_menu::page_size() const noexcept {
-  return controls_page ? control_visible_rows : visible_rows;
+  return controls_page ? control_visible_rows : std::min(visible_rows, rows());
 }
 
 int options_menu::selection_y() const noexcept {
@@ -193,9 +200,23 @@ void options_menu::capture_key(int const physical_key) {
 }
 
 void options_menu::adjust(int const direction) {
+  if(audio_page) {
+    if(selected < 2) {
+      auto &volume{selected == 0 ? values.music_volume : values.effects_volume};
+      volume = static_cast<unsigned int>(std::clamp(static_cast<int>(volume) + direction * 5, 0, 100));
+    }
+    return;
+  }
   if(controls_page) {
     if(selected == 0) values.controls.mouse_sensitivity = std::clamp(std::round(values.controls.mouse_sensitivity * 10 + direction) / 10, 0.1, 5.0);
     if(selected == 1) values.controls.invert_mouse = !values.controls.invert_mouse;
+    if(selected == 2 || selected == 3) {
+      auto &button{selected == 2 ? values.controls.primary_mouse_button : values.controls.secondary_mouse_button};
+      auto &other{selected == 2 ? values.controls.secondary_mouse_button : values.controls.primary_mouse_button};
+      int const previous{button};
+      button = std::clamp(button + direction, -1, 7);
+      if(button >= 0 && button == other) other = previous; // Swap occupied buttons, retaining both actions.
+    }
     return;
   }
   switch(static_cast<option_row>(selected)) {
@@ -237,11 +258,17 @@ void options_menu::key(options_key const key) {
   switch(key) {
   case options_key::up: selected = (selected + rows() - 1) % rows(); break;
   case options_key::down: selected = (selected + 1) % rows(); break;
-  case options_key::left: if(selected < (controls_page ? mouse_setting_count : setting_count)) adjust(-1); break;
-  case options_key::right: if(selected < (controls_page ? mouse_setting_count : setting_count)) adjust(1); break;
+  case options_key::left: if(selected < (controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(-1); break;
+  case options_key::right: if(selected < (controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(1); break;
   case options_key::page_up: selected = selected > page_size() ? selected - page_size() : 0; break;
   case options_key::page_down: selected = std::min(selected + page_size(), list_rows() - 1); break;
   case options_key::cancel:
+    if(audio_page) {
+      audio_page = false;
+      selected = std::to_underlying(option_row::audio);
+      scroll = 0;
+      break;
+    }
     if(controls_page) {
       controls_page = false;
       selected = std::to_underlying(option_row::controls);
@@ -253,6 +280,12 @@ void options_menu::key(options_key const key) {
     active = false;
     break;
   case options_key::accept:
+    if(audio_page) {
+      if(selected < 2) adjust(1);
+      else if(selected == 2) { values.music_volume = 100; values.effects_volume = 100; }
+      else { audio_page = false; selected = std::to_underlying(option_row::audio); scroll = 0; }
+      break;
+    }
     if(controls_page) {
       if(selected < mouse_setting_count) adjust(1);
       else if(selected < controls_defaults) binding_pending = true;
@@ -264,9 +297,13 @@ void options_menu::key(options_key const key) {
       }
       break;
     }
-    if(selected < (controls_page ? mouse_setting_count : setting_count)) adjust(1);
+    if(selected < (controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(1);
     else if(selected == std::to_underlying(option_row::controls)) {
       controls_page = true;
+      selected = 0;
+      scroll = 0;
+    } else if(selected == std::to_underlying(option_row::audio)) {
+      audio_page = true;
       selected = 0;
       scroll = 0;
     } else if(selected == std::to_underlying(option_row::defaults)) values = preferences{};
@@ -300,7 +337,7 @@ void options_menu::click(int const x, int const y) {
   bool const in_footer{controls_page && y >= footer_top && y < footer_top + 2 * row_height};
   if(!in_list && !in_footer) return;
   point(x, y);
-  key(selected < (controls_page ? mouse_setting_count : setting_count) && x < 235 && x >= 190 ? options_key::left : options_key::accept);
+  key(selected < (controls_page ? mouse_setting_count : audio_page ? 2 : setting_count) && x < 235 && x >= 190 ? options_key::left : options_key::accept);
 }
 
 void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int const width, int const height,
@@ -313,13 +350,13 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
         .edge{0}
       });
   }};
-  text(controls_page ? "CONTROLS" : "OPTIONS", 125, 15, 2);
+  text(controls_page ? "CONTROLS" : audio_page ? "SOUND" : "OPTIONS", 125, 15, 2);
   if(controls_page) {
     text(std::to_string(scroll + 1) + "-" + std::to_string(std::min(scroll + page_size(), list_rows())) + "/" + std::to_string(list_rows()), 252, 15);
   }
   std::array<std::string, row_count> const labels{
     "Resolution", "Vertical field of view", "Draw distance", "Fog starts", "Fog reaches full shade",
-    "Fog curve", "Minimum light size", "Distant fade", "Gouraud shading", "Controls...", "Restore defaults",
+    "Fog curve", "Minimum light size", "Distant fade", "Gouraud shading", "Controls...", "Sound...", "Restore defaults",
     "Apply and save", "Cancel changes", "Return without saving"
   };
   std::array<std::string, 9> const settings{
@@ -329,11 +366,26 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
   };
   for(unsigned int row{scroll}; row < std::min(scroll + page_size(), list_rows()); ++row) {
     int const y{first_row + static_cast<int>(row - scroll) * row_height};
+    if(audio_page) {
+      std::array<std::string_view, 4> constexpr audio_labels{"Music volume", "Effects volume", "Restore sound defaults", "Back to options"};
+      text(audio_labels[row], 20, y, row == selected ? 2 : 1);
+      if(row < 2) {
+        text("<", 193, y);
+        text(std::to_string(row == 0 ? values.music_volume : values.effects_volume) + "%", 220, y, row == selected ? 2 : 1);
+        text(">", 294, y);
+      }
+      continue;
+    }
     if(controls_page) {
       std::string label;
       std::string value;
       if(row == 0) { label = "Mouse sensitivity"; value = number(values.controls.mouse_sensitivity) + "x"; }
       else if(row == 1) { label = "Invert vertical mouse"; value = values.controls.invert_mouse ? "On" : "Off"; }
+      else if(row == 2 || row == 3) {
+        label = row == 2 ? "Mouse primary fire" : "Mouse secondary fire";
+        int const button{row == 2 ? values.controls.primary_mouse_button : values.controls.secondary_mouse_button};
+        value = button < 0 ? "Off" : button == 0 ? "Left" : button == 1 ? "Right" : button == 2 ? "Middle" : "Button " + std::to_string(button + 1);
+      }
       else if(row < controls_defaults) {
         auto const action{row - mouse_setting_count};
         label = input::control_descriptions()[action].label;
@@ -359,17 +411,17 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
     "Map cells. Original: 15. Whole city: 182.", "Map cells before distance shading begins.",
     "Map cells to full shade, then distant fade.", "Higher values darken nearby objects faster.",
     "Pixels at 320x200. Zero disables the minimum.", "Blend the farthest Delphi silhouettes into sky.",
-    "Gouraud shading can also be switched in flight.", "Key bindings and mouse steering settings.", "Preview the recommended Redux defaults.",
+    "Gouraud shading can also be switched in flight.", "Key bindings and mouse steering settings.", "Music and effects playback volumes.", "Preview the recommended Redux defaults.",
     "Save these settings for future sessions.", "Restore the settings from when this menu opened.",
     "Keep changes until you quit, without saving."
   };
   std::string_view const hint{controls_page
     ? (binding_pending ? "Press a key; Delete clears; Esc cancels."
-      : "Mouse buttons: left primary, right secondary.")
-    : hints[selected]};
+      : "Mouse buttons affect flight; menus use left.")
+    : audio_page ? "Changes apply immediately. Zero mutes." : hints[selected]};
   text(notice.empty() ? hint : std::string_view{notice}, 13, 201);
-  text(controls_page ? "Arrows: navigate   Enter: change   Esc: back" : "Arrows: adjust   Enter: select   Esc: cancel", 22, 217);
-  text(controls_page ? "PgUp/PgDn: scroll   Changes save via Options" : "Hold Tab to preview the unobscured scene", 20, 225);
+  text(controls_page || audio_page ? "Arrows: navigate   Enter: change   Esc: back" : "Arrows: adjust   Enter: select   Esc: cancel", 22, 217);
+  text(controls_page ? "PgUp/PgDn: scroll   Changes save via Options" : audio_page ? "Changes save via Options" : "Hold Tab to preview the unobscured scene", 20, 225);
   // Retain a faint scene silhouette without competing with the menu text.
   unsigned int constexpr background_divisor{16};
   int const track_height{list_bottom - first_row};

@@ -23,6 +23,8 @@ struct preferences {
   double minimum_light_size{0.5};
   bool background_fade{true};
   bool gouraud{true};
+  unsigned int music_volume{100};
+  unsigned int effects_volume{100};
   input::control_preferences controls;
 
   bool valid() const noexcept;
@@ -40,6 +42,7 @@ class options_menu {
   unsigned int selected{0};
   unsigned int scroll{0};
   bool controls_page{false};
+  bool audio_page{false};
   bool binding_pending{false};
   unsigned int list_rows() const noexcept;
   unsigned int page_size() const noexcept;

@@ -46,7 +46,9 @@ to the build command and run the executable from that configuration's directory.
 
 Press **F10** from the menus, briefings or flight to open the options. The pilot-selection and run menus also have an **Options** link. The scene pauses while you adjust resolution, vertical FOV, draw distance, fog, distant fading, minimum light size and Gouraud shading. Changes appear immediately; hold **Tab** to hide the panel and inspect the scene.
 
-Open **Controls** to rebind flight, weapon and camera keys, adjust mouse sensitivity, or invert vertical mouse movement. Select a binding and press **Enter**, then the new key; **Delete** clears it and **Escape** cancels. Conflicting keys are flagged. Use the mouse wheel or **Page Up/Page Down** to scroll. Choose **Back to options**, then **Apply and save** to keep your changes. Mouse buttons remain left for primary fire and right for secondary fire.
+Open **Controls** to rebind flight, weapon and camera keys, adjust mouse sensitivity, or invert vertical mouse movement. Select a binding and press **Enter**, then the new key; **Delete** clears it and **Escape** cancels. Conflicting keys are flagged. Use the mouse wheel or **Page Up/Page Down** to scroll. Choose **Back to options**, then **Apply and save** to keep your changes. The mouse fire-button settings select left, right, middle or extra buttons, or disable mouse firing; swapping an occupied button swaps the two actions. Menus always use the left button.
+
+**Sound** provides separate music and effects volumes, applied immediately across all music engines. Zero mutes that channel; **Apply and save** retains the settings. Command-line `--mute` and `--music=none` still disable their respective audio paths.
 
 Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/darker-redux/options.cfg` when unset; Windows uses `%APPDATA%/darker-redux/options.cfg`. These are separate from the original game's saves. Explicit command-line options override saved preferences. Delete the file or apply **Restore defaults** to return to defaults. Menu text for these new Redux options is currently English.
 

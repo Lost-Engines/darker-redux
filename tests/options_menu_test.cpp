@@ -25,13 +25,13 @@ TEST_CASE("Options apply is a save request and defaults remain a cancellable pre
   options_menu menu;
   menu.values.width = 960;
   menu.open();
-  for(int i{0}; i < 10; ++i) menu.key(options_key::down);
+  for(int i{0}; i < 11; ++i) menu.key(options_key::down);
   menu.key(options_key::accept);
   CHECK(menu.values == preferences{});
   menu.key(options_key::cancel);
   CHECK(menu.values.width == 960);
   menu.open();
-  for(int i{0}; i < 11; ++i) menu.key(options_key::down);
+  for(int i{0}; i < 12; ++i) menu.key(options_key::down);
   menu.key(options_key::accept);
   CHECK(menu.save_requested);
   CHECK(menu.active); // The host only closes after a successful write.
@@ -49,12 +49,16 @@ TEST_CASE("Display preferences round-trip and reject malformed values", "[option
   saved.minimum_light_size = 0.25;
   saved.field_of_view = 73.125;
   saved.background_fade = false;
+  saved.music_volume = 35;
+  saved.effects_volume = 80;
+  saved.controls.primary_mouse_button = 2;
+  saved.controls.secondary_mouse_button = -1;
   saved.controls.mouse_sensitivity = 1.7;
   saved.controls.invert_mouse = true;
   saved.controls.keys[0] = 'J';
   darker::presentation::write_preferences(path, saved);
   CHECK(darker::presentation::read_preferences(path) == saved);
-  for(auto const bad : {"fov=nan", "width=12", "draw-distance=999", "fog-start=100", "gouraud=2", "fog-curve=12garbage", "mouse-sensitivity=0", "mouse-sensitivity=nan", "invert-mouse=2", "bind.left=69", "bind.left=256"}) {
+  for(auto const bad : {"fov=nan", "width=12", "draw-distance=999", "fog-start=100", "gouraud=2", "fog-curve=12garbage", "mouse-sensitivity=0", "mouse-sensitivity=nan", "invert-mouse=2", "bind.left=69", "bind.left=256", "music-volume=101", "effects-volume=-1", "mouse-primary=1", "mouse-secondary=8"}) {
     { std::ofstream output{path}; output << bad << '\n'; }
     CHECK_THROWS(darker::presentation::read_preferences(path));
   }
@@ -71,6 +75,8 @@ TEST_CASE("Control bindings preserve defaults and report conflicting assignments
   menu.key(options_key::down);
   menu.key(options_key::accept);
   CHECK(menu.values.controls.invert_mouse);
+  menu.key(options_key::down);
+  menu.key(options_key::down);
   menu.key(options_key::down); // Bank left.
   menu.key(options_key::accept);
   REQUIRE(menu.capturing_key());
@@ -95,8 +101,7 @@ TEST_CASE("Control capture can cancel, clear and reassign a previously occupied 
   options_menu menu;
   menu.open();
   menu.click(30, 35 + 9 * 11);
-  menu.key(options_key::down);
-  menu.key(options_key::down);
+  for(int i{0}; i < 4; ++i) menu.key(options_key::down);
   menu.key(options_key::accept);
   menu.capture_key(256); // Escape cancels only capture.
   CHECK_FALSE(menu.capturing_key());
@@ -174,4 +179,36 @@ TEST_CASE("Mouse wheel stops at list boundaries and control footer remains fixed
   menu.click(30, 187); // Back stays in the same place at either end.
   menu.key(options_key::cancel);
   CHECK_FALSE(menu.active);
+}
+
+TEST_CASE("Sound settings preview, clamp, restore and cancel", "[options]") {
+  options_menu menu;
+  menu.open();
+  menu.click(30, 35 + 10 * 11);
+  menu.key(options_key::left);
+  CHECK(menu.values.music_volume == 95);
+  menu.key(options_key::down);
+  for(int i{0}; i < 30; ++i) menu.key(options_key::left);
+  CHECK(menu.values.effects_volume == 0);
+  menu.key(options_key::cancel);
+  CHECK(menu.values.music_volume == 95);
+  menu.key(options_key::cancel);
+  CHECK(menu.values.music_volume == 100);
+  CHECK(menu.values.effects_volume == 100);
+}
+
+TEST_CASE("Mouse firing buttons swap occupied assignments and allow disabling", "[options][controls]") {
+  options_menu menu;
+  menu.open();
+  menu.click(30, 35 + 9 * 11);
+  menu.key(options_key::down);
+  menu.key(options_key::down);
+  menu.key(options_key::right);
+  CHECK(menu.values.controls.primary_mouse_button == 1);
+  CHECK(menu.values.controls.secondary_mouse_button == 0);
+  CHECK(menu.values.controls.valid());
+  menu.key(options_key::down);
+  menu.key(options_key::left);
+  CHECK(menu.values.controls.secondary_mouse_button == -1);
+  CHECK(menu.values.controls.valid());
 }

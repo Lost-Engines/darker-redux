@@ -65,6 +65,8 @@ std::string key_label(int key);
 struct control_preferences {
   double mouse_sensitivity{1.0};
   bool invert_mouse{false};
+  int primary_mouse_button{0};
+  int secondary_mouse_button{1};
   std::array<int, static_cast<unsigned int>(control_action::count)> keys;
 
   control_preferences();

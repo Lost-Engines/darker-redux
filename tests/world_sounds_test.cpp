@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include "audio/flight_sounds.h"
+#include "resources/archive_set.h"
 #include "audio/world_sounds.h"
 #include "game/object_definitions.h"
 #include "maths/world_coordinates.h"
@@ -404,4 +405,64 @@ TEST_CASE("Recycled transient records retrigger a retained physical voice", "[au
   auto const second{mixer.mix({}, combat, {})};
   CHECK(second[channel].active);
   CHECK(second[channel].generation != first[channel].generation);
+}
+
+TEST_CASE("Playback volume scales effects without restarting synthesis", "[audio][volume]") {
+  darker::audio::fm_stream reference{48000}, adjusted{48000};
+  darker::audio::fm_frame frame{};
+  frame[0] = {
+    .pitch{686},
+    .level{0xb000},
+    .generation{1},
+    .patch{2},
+    .active{true}
+  };
+  REQUIRE(reference.publish(frame));
+  REQUIRE(adjusted.publish(frame));
+  std::array<float, 2048> original{}, quieter{};
+  adjusted.set_volumes(0, 50); // Music mute must not mute flight effects.
+  reference.render(original);
+  adjusted.render(quieter); // Allow the short gain ramp to finish.
+  reference.render(original);
+  adjusted.render(quieter);
+  CHECK(std::ranges::any_of(original, [](float sample){ return sample != 0; }));
+  for(size_t i{0}; i < original.size(); ++i) CHECK(quieter[i] == original[i] * 0.5f);
+  adjusted.set_volumes(100, 0);
+  reference.render(original);
+  adjusted.render(quieter);
+  adjusted.render(quieter);
+  reference.render(original);
+  CHECK(std::ranges::all_of(quieter, [](float sample){ return sample == 0; }));
+  adjusted.set_volumes(100, 100);
+  reference.render(original);
+  adjusted.render(quieter);
+  reference.render(original);
+  adjusted.render(quieter);
+  CHECK(original == quieter); // Muting did not pause or reset the chip.
+}
+
+TEST_CASE("Music volume is independent of effects and keeps the song advancing", "[audio][volume]") {
+  if(std::string_view{DARKER_TEST_RESOURCE_DIR}.empty()) SKIP("Supply extracted resources for music playback verification");
+  auto const load{[](unsigned int const slot){
+    auto const digits{std::to_string(slot)};
+    return darker::resources::read_binary_file(std::filesystem::path{DARKER_TEST_RESOURCE_DIR}
+      / ("00_" + std::string(3 - digits.size(), '0') + digits + ".bin"), 65536);
+  }};
+  darker::audio::fm_stream reference{48000}, adjusted{48000};
+  std::array<std::vector<std::byte>, 6> songs;
+  for(unsigned int group{0}; group < songs.size(); ++group) songs[group] = load(38 + group * 5);
+  reference.configure_music(load(33), songs);
+  adjusted.configure_music(load(33), std::move(songs));
+  reference.select_music(0);
+  adjusted.select_music(0);
+  adjusted.set_volumes(25, 0);
+  std::vector<float> original(96000), quieter(96000);
+  reference.render(original);
+  adjusted.render(quieter);
+  reference.render(original);
+  adjusted.render(quieter);
+  CHECK(std::ranges::any_of(original, [](float sample){ return sample != 0; }));
+  bool matches{true};
+  for(size_t i{0}; i < original.size(); ++i) matches &= quieter[i] == original[i] * 0.25f;
+  CHECK(matches);
 }

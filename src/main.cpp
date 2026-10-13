@@ -516,6 +516,8 @@ auto main(int const argc, char const *const argv[])->int {
     .minimum_light_size{minimum_light_size},
     .background_fade{fog_target == "background"},
     .gouraud{host.gouraud},
+    .music_volume{saved_preferences.music_volume},
+    .effects_volume{saved_preferences.effects_volume},
     .controls{saved_preferences.controls}
   };
   framework::render::indexed_cockpit_framebuffer display{};
@@ -1211,6 +1213,7 @@ auto main(int const argc, char const *const argv[])->int {
     }
   });
   std::unique_ptr<framework::platform::audio_output> audio_device;
+  audio.set_volumes(host.options.values.music_volume, host.options.values.effects_volume);
   if(!arguments.contains("mute")) {
     if(front && music_name != "none") {
       std::array<std::vector<std::byte>, 6> songs;
@@ -1290,6 +1293,7 @@ auto main(int const argc, char const *const argv[])->int {
   while(!glfwWindowShouldClose(window.get())) {
     host.weapon_selection_blocked = exchange.supplementary_active;
     glfwPollEvents();
+    audio.set_volumes(host.options.values.music_volume, host.options.values.effects_volume);
     auto const frame_time{std::chrono::steady_clock::now()};
     if(frame_time < next_frame) {
       glfwWaitEventsTimeout(std::chrono::duration<double>(next_frame - frame_time).count());
@@ -1667,9 +1671,13 @@ auto main(int const argc, char const *const argv[])->int {
     darker::game::city_collision_result contact;
     std::optional<darker::maths::world_position> player_start;
     if(host.menu_mouse_consumed && glfwGetMouseButton(window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) host.menu_mouse_consumed = false;
-    bool const primary_held{host.key_down(*window, GLFW_KEY_SPACE) || (host.focused && host.mouse_enabled && !host.paused && !host.menu_mouse_consumed && glfwGetMouseButton(window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)};
-    bool const secondary_held{host.key_down(*window, GLFW_KEY_LEFT_ALT) || host.key_down(*window, GLFW_KEY_RIGHT_ALT)
-      || (host.focused && host.mouse_enabled && !host.paused && glfwGetMouseButton(window.get(), GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)};
+    auto const mouse_down{[&](int const button){
+      return button >= 0 && host.focused && host.mouse_enabled && !host.paused
+        && !(button == GLFW_MOUSE_BUTTON_LEFT && host.menu_mouse_consumed)
+        && glfwGetMouseButton(window.get(), button) == GLFW_PRESS;
+    }};
+    bool const primary_held{host.key_down(*window, GLFW_KEY_SPACE) || mouse_down(host.options.values.controls.primary_mouse_button)};
+    bool const secondary_held{host.key_down(*window, GLFW_KEY_LEFT_ALT) || mouse_down(host.options.values.controls.secondary_mouse_button)};
     bool const was_crashing{host.player.lifecycle.crashing};
     if(step != 0) {
       if(front) combat->spawn_aircraft(host.player, cells, bank, game_clock.frame_ticks, step);

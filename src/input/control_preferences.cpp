@@ -272,6 +272,8 @@ control_preferences::control_preferences() {
 
 bool control_preferences::valid() const noexcept {
   if(!std::isfinite(mouse_sensitivity) || mouse_sensitivity < 0.1 || mouse_sensitivity > 5.0) return false;
+  if(primary_mouse_button < -1 || primary_mouse_button > 7 || secondary_mouse_button < -1 || secondary_mouse_button > 7) return false;
+  if(primary_mouse_button >= 0 && primary_mouse_button == secondary_mouse_button) return false;
   for(unsigned int i{0}; i < keys.size(); ++i) {
     if(!bindable_key(keys[i]) || normalise_key(keys[i]) != keys[i]) return false;
     if(keys[i] == GLFW_KEY_UNKNOWN) continue;

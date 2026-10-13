@@ -59,3 +59,19 @@ window-edge clamp in Darker's tunnel controller. Which input path and delivered
 counts explain the observed playtest still needs a matched live trace. A slow
 and fast sweep over the same physical distance would help distinguish speed-
 dependent packet delivery from a position limit.
+
+## Native joystick support status
+
+Neither native reconstruction currently polls a joystick or gamepad. The retail
+manual lists joystick steering on page 17 and configurable joystick A/B fire
+buttons on page 22, alongside mouse and keyboard button masks. The 1995 demo's
+instructions additionally describe automatic calibration, J to recalibrate, and
+fire buttons as menu acceptance.
+
+The retail steering code at 7B7D–7BC4 enters its joystick fallback only when the
+preceding keyboard/mouse path supplies no drive and the device flags permit it.
+It reads two retained axes, smooths each against its previous sample, applies
+the calibrated response through 7BCA, and scales the result by the simulation
+step. This is a distinct analogue path, not mouse movement or digital arrows.
+Implementing host joystick input remains separate from the Redux keyboard and
+mouse preferences.
