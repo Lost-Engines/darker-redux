@@ -166,7 +166,7 @@ private:
     projection.set_component(axis, std::bit_cast<int16_t>(word(position)));
   }
 
-  uint8_t colour(uint8_t const source, bool const powered_disc = false, bool const luminous_disc = false) const noexcept {
+  uint8_t colour(uint8_t const source, bool const luminous_disc = false) const noexcept {
     /// 3383 resolves the supplied distance shade table and dynamic colour codes
     unsigned int shade{static_cast<unsigned int>(source & model_colours::shade_mask)};
     if(shade < model_colours::shade_count && !luminous_disc) shade = colours.shades[shade];
@@ -174,12 +174,6 @@ private:
       // special shade codes combine beacon light with the brightest distance shade, then compress into the normal ramp
       unsigned int const value{static_cast<uint8_t>((luminous_disc ? model_colours::shade_mask : colours.dynamic & model_colours::shade_mask) + colours.shades.back())};
       shade = std::min(model_colours::shade_count - 1, static_cast<unsigned int>(static_cast<uint8_t>(value + 11 - (value >> 2))) >> 1);
-    }
-    if(powered_disc) {
-      // Redux: luminous discs must extinguish with their beacon. The native
-      // special-colour ramp retains a visible residual even at zero power.
-      auto const strength{colours.dynamic & model_colours::beacon_strength_mask};
-      shade = shade * strength / model_colours::beacon_strength_mask;
     }
     return colours.apply_fog(static_cast<uint8_t>((source & model_colours::ramp_mask) + shade));
   }
@@ -219,16 +213,13 @@ public:
       case model_opcode::disc:
         {
           auto const source{byte(position)};
-          bool const powered{(source & model_colours::shade_mask) >= model_colours::shade_count};
           // Fountain lamps use fixed white (27), unlike their tinted reflections.
           // Give these lamps full-strength luminous shading without tying them to beacon power.
           uint8_t constexpr fountain_lamp_colour{27};
-          auto const index{colour(source, powered, source == fountain_lamp_colour)};
+          auto const index{colour(source, source == fountain_lamp_colour)};
           auto const radius{word(position)};
           if(cursor == 0) throw std::invalid_argument{"Model disc has no preceding vertex"};
           --cursor;
-          // Still consume the vertex and operands when the light is off.
-          if(powered && !(colours.dynamic & model_colours::beacon_strength_mask)) break;
           auto const centre{workspace.camera_vertices[cursor]};
           auto const depth{path == model_path::near_clipped ? signed_word(centre.depth >> render_geometry::fraction_bits) : last_depth};
           if(path == model_path::near_clipped && depth < render_geometry::near_depth) break;
