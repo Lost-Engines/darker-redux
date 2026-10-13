@@ -1,6 +1,20 @@
 name: Build and release
 
 on:
+  push:
+    branches: [master]
+    paths: &build_paths
+      - 'src/**'
+      - 'tests/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'vectorstorm/**'
+      - 'scripts/**'
+      - 'tools/**'
+      - '.github/workflows/**'
+  pull_request:
+    paths: *build_paths
   workflow_dispatch:
     inputs:
       release:
@@ -11,13 +25,42 @@ on:
 permissions:
   contents: read
 
-# Builds are manual while Redux is evolving rapidly. Releases remain an explicit choice.
+# Preserve each master push; replace obsolete runs on a pull request.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref == 'refs/heads/master' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      release: ${{ steps.classify.outputs.release }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Identify code changes eligible for release
+        id: classify
+        env:
+          BEFORE: ${{ github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          release=false
+          if [[ "$EVENT" == push && "$GITHUB_REF" == refs/heads/master ]]; then
+            base="$BEFORE"
+            if [[ "$base" == 0000000000000000000000000000000000000000 ]]; then
+              base=$(git hash-object -t tree /dev/null)
+            fi
+            git cat-file -e "${base}^{tree}"
+            if ! git diff --quiet "$base" "$GITHUB_SHA" -- src vectorstorm CMakeLists.txt cmake ':!cmake/package.cmake'; then
+              release=true
+            fi
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: changes
     name: ${{ matrix.platform }} / ${{ matrix.configuration }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
@@ -165,8 +208,8 @@ jobs:
           retention-days: 7
 
   release:
-    needs: build
-    if: inputs.release
+    needs: [changes, build]
+    if: needs.changes.outputs.release == 'true' || (github.event_name == 'workflow_dispatch' && inputs.release)
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -204,15 +247,33 @@ jobs:
           (cd dist && sha256sum -- *.tar.gz *.zip > SHA256SUMS)
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" --draft --target "$GITHUB_SHA" \
-              --title "Darker ${GITHUB_SHA:0:7}" \
+              --title "Darker Redux ${GITHUB_SHA:0:7}" \
               --notes 'Automated Release builds for Linux x86-64, Windows x86-64 and macOS Apple Silicon. All six builds passed their asset-independent tests. Original game data and optional synthesiser ROMs are supplied separately. See the repository README for setup.'
           fi
           gh release upload "$tag" "${packages[@]}" dist/SHA256SUMS --clobber
           gh release edit "$tag" --draft=false --latest
-          # Only prune after publishing the complete replacement. Leave drafts and Git tags alone.
+          # Only prune after publishing the complete replacement. Leave draft releases alone.
           keep=$(gh api "repos/$GH_REPO/releases/tags/$tag" --jq .id)
           gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
             --jq ".[] | select(.draft == false and .id != $keep) | .id" > old-releases.txt
           while read -r release_id; do
             gh api --method DELETE "repos/$GH_REPO/releases/$release_id"
           done < old-releases.txt
+          # Remove obsolete generated tags, including those left by earlier releases.
+          # Preserve tags attached to retained releases/drafts and unrelated tag names.
+          gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+            --jq '.[].tag_name' > retained-release-tags.txt
+          gh api --paginate "repos/$GH_REPO/git/matching-refs/tags/release-?per_page=100" \
+            --jq '.[].ref' > release-tag-refs.txt
+          while read -r tag_ref; do
+            old_tag="${tag_ref#refs/tags/}"
+            [[ "$old_tag" =~ ^release-[0-9a-f]{40}$ ]] || continue
+            [[ "$old_tag" != "$tag" ]] || continue
+            if grep -Fxq -- "$old_tag" retained-release-tags.txt; then
+              continue
+            fi
+            # An unrelated branch or a newer commit is not an older release.
+            if git merge-base --is-ancestor "${old_tag#release-}" "$GITHUB_SHA"; then
+              gh api --method DELETE "repos/$GH_REPO/git/refs/tags/$old_tag"
+            fi
+          done < release-tag-refs.txt
