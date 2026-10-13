@@ -83,7 +83,6 @@ Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/d
 - 
 ### Bug fixes
 
-- **Startup menu navigation:** keyboard arrows and the joystick visibly select pilots and Start/Select/Erase/Quit; Enter or the trigger activates that selection independently of a stationary mouse.
 - **Joystick after mouse movement:** a one-unit tolerance in the mouse steering priority check prevents residual mouse smoothing from indefinitely blocking joystick control.
 
 - **Skimma direction indicator:** the rightmost symbol no longer copies a stray blue pixel outside its artwork. This pixel is also present in retail.

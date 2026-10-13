@@ -159,7 +159,6 @@ int front_end::music_group() const noexcept {
 
 void front_end::choose_game() {
   /// An empty slot asks for a name before exposing its run menu
-  selected_action = 0;
   draft_name.clear();
   unsupported_stage = false;
   current = !nightmare_selected() && save.pilots[selected].stage == 0 ? screen::name : screen::run;
@@ -197,11 +196,6 @@ void front_end::finish_briefing() {
 
 void front_end::key(front_key const input) {
   /// Route menu commands separately from in-flight bindings
-  pointer_navigation = false;
-  if(current == screen::run && input == front_key::accept && selected_action != 0) {
-    key(std::array{front_key::accept, front_key::select, front_key::erase, front_key::quit}[selected_action]);
-    return;
-  }
   if(current == screen::introduction) {
     current = screen::title;
     return;
@@ -304,8 +298,6 @@ void front_end::key(front_key const input) {
       ignored_character = 49 + selected;
     } else if(input == front_key::accept) choose_game();
   } else if(current == screen::run) {
-    if(input == front_key::up) selected_action = (selected_action + 3) % 4;
-    if(input == front_key::down) selected_action = (selected_action + 1) % 4;
     if(input == front_key::accept) begin_briefing();
     if(input == front_key::select) current = screen::games;
     if(input == front_key::erase) {
@@ -329,13 +321,7 @@ void front_end::character(unsigned int const code) {
 
 void front_end::point(int const x, int const y) noexcept {
   /// Retain framebuffer mouse coordinates for native presentation navigation highlighting
-  if(pointer == std::array{x, y}) return;
   pointer = {x, y};
-  pointer_navigation = true;
-  if(current == screen::games && x >= 48 && x < 272 && y >= 15 && y < 189 && (y - 15) % 36 < 30)
-    selected = static_cast<unsigned int>((y - 15) / 36);
-  if(current == screen::run && x >= 70 && x < 250 && y >= 160 && y < 224)
-    selected_action = static_cast<unsigned int>((y - 160) / 16);
 }
 
 void front_end::click(int const x, int const y) {
@@ -348,8 +334,7 @@ void front_end::click(int const x, int const y) {
     selected = static_cast<unsigned int>((y - 15) / 36);
     choose_game();
   } else if(current == screen::run && x >= 70 && x < 250 && y >= 160 && y < 224) {
-    selected_action = static_cast<unsigned int>((y - 160) / 16);
-    key(front_key::accept);
+    key(std::array{front_key::accept, front_key::select, front_key::erase, front_key::quit}[static_cast<size_t>((y - 160) / 16)]);
   } else if(current == screen::quit || current == screen::erase) {
     int const answer_y{current == screen::erase ? 216 : 168};
     if(y >= answer_y && y < answer_y + 15) {
@@ -465,7 +450,6 @@ void front_end::show_outcome(uint8_t const outcome, uint8_t const completed_obje
 
 void front_end::return_to_menu() {
   /// Retain saved pilot slots while leaving the finished or abandoned session
-  selected_action = 0;
   current = screen::run;
 }
 
@@ -538,7 +522,7 @@ void front_end::draw(framework::render::cockpit_framebuffer &output) const {
     for(unsigned int i{0}; i < 5; ++i) {
       auto const top{15 + static_cast<int>(i) * 36};
       bool const hover{pointer[0] >= 48 && pointer[0] < 272 && pointer[1] >= top && pointer[1] < top + 30};
-      game_row(i, top + 5, (pointer_navigation ? hover : i == selected) ? 126 : 125);
+      game_row(i, top + 5, hover ? 126 : 125);
     }
     panel(54, 217, 212, 18);
     centred(selection_prompt, 222, 125);
@@ -554,7 +538,7 @@ void front_end::draw(framework::render::cockpit_framebuffer &output) const {
     if(unsupported_stage) text("This stage is not implemented yet", 32, 120);
     auto const action{[&](std::string_view const label, int const x, int const y){
       bool const hover{pointer[0] >= 70 && pointer[0] < 250 && pointer[1] >= y && pointer[1] < y + 16};
-      text(label, x, y, (pointer_navigation ? hover : static_cast<unsigned int>((y - 160) / 16) == selected_action) ? 126 : 125);
+      text(label, x, y, hover ? 126 : 125);
     }};
     for(size_t i{0}; i < labels.actions.size(); ++i) action(labels.actions[i].text, labels.actions[i].x, 160 + static_cast<int>(i) * 16);
   } else {
