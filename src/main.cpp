@@ -128,7 +128,6 @@ struct flight_host {
   darker::input::joystick_sample joystick;
   darker::input::joystick_buttons joystick_buttons;
   bool joystick_dispatch{false};
-  int joystick_menu_direction{0};
   int joystick_context{-1};
   std::optional<darker::input::joystick_preferences> previous_joystick_settings;
 
@@ -1337,7 +1336,6 @@ auto main(int const argc, char const *const argv[])->int {
     int const joystick_context{host.options.active ? 1 : host.front && host.front->active() ? 2 : host.paused ? 3 : 0};
     if(joystick_context != host.joystick_context || settings_changed) {
       host.joystick_buttons.suppress();
-      host.joystick_menu_direction = 0;
       host.joystick_context = joystick_context;
     }
     auto const joystick_key{[&](int const key){
@@ -1354,24 +1352,13 @@ auto main(int const argc, char const *const argv[])->int {
           break;
         }
       }
-    } else if(host.focused && !host.options.capturing_key()) {
+    } else if(host.focused && !host.options.active) {
       auto const &bindings{host.options.values.joystick.buttons};
-      if(joystick_context == 1 || joystick_context == 2) {
-        int const axis{host.options.values.joystick.pitch_axis};
-        float const value{axis >= 0 && static_cast<unsigned int>(axis) < host.joystick.axes.size() ? host.joystick.axes[axis] : 0.0f};
-        int const bank_axis{host.options.values.joystick.bank_axis};
-        float const horizontal{bank_axis >= 0 && static_cast<unsigned int>(bank_axis) < host.joystick.axes.size() ? host.joystick.axes[bank_axis] : 0.0f};
-        int const direction{value > 0.5f ? 1 : value < -0.5f ? -1
-          : joystick_context == 1 && horizontal > 0.5f ? 2 : joystick_context == 1 && horizontal < -0.5f ? -2 : 0};
-        if(direction && direction != host.joystick_menu_direction) {
-          joystick_key(direction == 1 ? GLFW_KEY_DOWN : direction == -1 ? GLFW_KEY_UP : direction == 2 ? GLFW_KEY_RIGHT : GLFW_KEY_LEFT);
-        }
-        host.joystick_menu_direction = direction;
+      if(joystick_context == 2) {
+        // Retain fire-button acceptance in the original front end, without
+        // adding stick navigation or button shortcuts to the options menu.
         if(host.joystick_buttons.pushed(bindings[std::to_underlying(darker::input::control_action::primary)])) {
           joystick_key(GLFW_KEY_ENTER);
-          host.joystick_buttons.suppress();
-        } else if(host.joystick_buttons.pushed(bindings[std::to_underlying(darker::input::control_action::secondary)])) {
-          joystick_key(GLFW_KEY_ESCAPE);
           host.joystick_buttons.suppress();
         }
       } else if(joystick_context == 3) {
