@@ -41,6 +41,8 @@ class options_menu {
   unsigned int scroll{0};
   bool controls_page{false};
   bool binding_pending{false};
+  enum class navigation_hover { none, previous, next };
+  navigation_hover hovered_navigation{navigation_hover::none};
   unsigned int rows() const noexcept;
   void keep_visible() noexcept;
   void adjust(int direction);

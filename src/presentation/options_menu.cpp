@@ -22,6 +22,9 @@ constexpr unsigned int row_count{std::to_underlying(option_row::count)};
 constexpr int first_row{35};
 constexpr int row_height{11};
 constexpr unsigned int visible_rows{14};
+constexpr int scrollbar_left{305};
+constexpr int scrollbar_right{310};
+constexpr int list_bottom{first_row + row_height * static_cast<int>(visible_rows)};
 constexpr unsigned int mouse_setting_count{2};
 constexpr unsigned int controls_defaults{mouse_setting_count + std::to_underlying(input::control_action::count)};
 constexpr unsigned int controls_back{controls_defaults + 1};
@@ -124,6 +127,7 @@ void options_menu::open() {
   scroll = 0;
   controls_page = false;
   binding_pending = false;
+  hovered_navigation = navigation_hover::none;
   notice.clear();
 }
 
@@ -205,6 +209,7 @@ void options_menu::adjust(int const direction) {
 void options_menu::key(options_key const key) {
   if(!active || binding_pending) return;
   notice.clear();
+  hovered_navigation = navigation_hover::none;
   switch(key) {
   case options_key::up: selected = (selected + rows() - 1) % rows(); break;
   case options_key::down: selected = (selected + 1) % rows(); break;
@@ -250,13 +255,25 @@ void options_menu::key(options_key const key) {
 }
 
 void options_menu::point(int const x, int const y) {
+  hovered_navigation = navigation_hover::none;
   if(binding_pending) return;
-  if(x >= 12 && x < 308 && y >= first_row && y < first_row + static_cast<int>(std::min(visible_rows, rows() - scroll)) * row_height) {
+  if(controls_page && y >= 188 && y < 199) {
+    if(x >= 20 && x < 60) hovered_navigation = navigation_hover::previous;
+    if(x >= 260 && x < 300) hovered_navigation = navigation_hover::next;
+  }
+  if(x >= 12 && x < (controls_page ? scrollbar_left : 308) && y >= first_row && y < first_row + static_cast<int>(std::min(visible_rows, rows() - scroll)) * row_height) {
     selected = scroll + static_cast<unsigned int>((y - first_row) / row_height);
   }
 }
 
 void options_menu::click(int const x, int const y) {
+  if(controls_page && !binding_pending && x >= scrollbar_left && x <= scrollbar_right && y >= first_row && y < list_bottom) {
+    // Clicking the track positions the visible window directly, including both endpoints.
+    scroll = static_cast<unsigned int>(y - first_row) * (rows() - visible_rows) / (list_bottom - first_row - 1);
+    selected = std::clamp(selected, scroll, scroll + visible_rows - 1);
+    hovered_navigation = navigation_hover::none;
+    return;
+  }
   if(controls_page && !binding_pending && y >= 188 && y < 199) {
     if(x >= 20 && x < 60) key(options_key::page_up);
     if(x >= 260 && x < 300) key(options_key::page_down);
@@ -315,8 +332,8 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
     }
   }
   if(controls_page) {
-    text("< Prev", 20, 190);
-    text("Next >", 260, 190);
+    text("< Prev", 20, 190, hovered_navigation == navigation_hover::previous ? 2 : 1);
+    text("Next >", 260, 190, hovered_navigation == navigation_hover::next ? 2 : 1);
   }
   std::array<std::string_view, row_count> constexpr hints{
     "Render resolution; window size stays unchanged.", "Vertical angle in degrees. Original: 50.2.",
@@ -336,6 +353,9 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
   text(controls_page ? "PgUp/PgDn: scroll   Changes save via Options" : "Hold Tab to preview the unobscured scene", 20, 225);
   // Retain a faint scene silhouette without competing with the menu text.
   unsigned int constexpr background_divisor{16};
+  int const track_height{list_bottom - first_row};
+  int const thumb_height{track_height * static_cast<int>(visible_rows) / static_cast<int>(rows())};
+  int const thumb_top{first_row + (controls_page ? (track_height - thumb_height) * static_cast<int>(scroll) / static_cast<int>(rows() - visible_rows) : 0)};
   auto const viewport{framework::render::fit_viewport(width, height, 320, 240)};
   for(int y{0}; y < viewport.height; ++y) {
     int const source_y{y * 240 / viewport.height};
@@ -345,9 +365,18 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
       if(source_x < 7 || source_x >= 313) continue;
       auto &pixel{pixels[static_cast<size_t>(y + viewport.y) * width + x + viewport.x]};
       auto const code{ink.pixels[static_cast<unsigned int>(source_y * 320 + source_x)]};
-      bool const highlight{source_y >= first_row + static_cast<int>(selected - scroll) * row_height - 1
-        && source_y < first_row + static_cast<int>(selected - scroll + 1) * row_height - 1};
+      bool const navigation_highlight{controls_page && source_y >= 188 && source_y < 199
+        && ((hovered_navigation == navigation_hover::previous && source_x >= 20 && source_x < 60)
+          || (hovered_navigation == navigation_hover::next && source_x >= 260 && source_x < 300))};
+      bool const highlight{navigation_highlight || (hovered_navigation == navigation_hover::none
+        && (!controls_page || source_x < scrollbar_left)
+        && source_y >= first_row + static_cast<int>(selected - scroll) * row_height - 1
+        && source_y < first_row + static_cast<int>(selected - scroll + 1) * row_height - 1)};
       if(code) pixel = code == 2 ? framework::render::rgba_pixel{238, 220, 184} : framework::render::rgba_pixel{174, 170, 186};
+      else if(controls_page && source_x >= scrollbar_left && source_x <= scrollbar_right && source_y >= first_row && source_y < list_bottom) {
+        pixel = source_y >= thumb_top && source_y < thumb_top + thumb_height
+          ? framework::render::rgba_pixel{174, 170, 186} : framework::render::rgba_pixel{55, 48, 64};
+      }
       else if(source_x == 7 || source_x == 312 || source_y == 7 || source_y == 233) pixel = {108, 100, 120};
       else pixel = {static_cast<uint8_t>(pixel.r / background_divisor + (highlight ? 44 : 15)), static_cast<uint8_t>(pixel.g / background_divisor + (highlight ? 38 : 14)), static_cast<uint8_t>(pixel.b / background_divisor + (highlight ? 52 : 22))};
     }
