@@ -68,6 +68,10 @@
 #include "resources/save_file.h"
 #include "resources/world_profile.h"
 
+#ifndef NDEBUG
+#include "debug/capture_session.h"
+#endif // NDEBUG
+
 namespace {
 
 auto default_game_directory()->std::filesystem::path {
@@ -232,6 +236,7 @@ auto main(int const argc, char const *const argv[])->int {
     ("opl", boost::program_options::value<std::string>()->default_value("dosbox"), "FM synthesis: dosbox (default, 44100 Hz) or nuked");
 #ifndef NDEBUG
   options.add_options()
+    ("capture-plan", boost::program_options::value<std::string>(), "developer use: execute a fixed-step JSON mission screenshot plan; requires --level; no save writes")
     ("noclip", "developer use: disable player collisions and tunnel guidance; provide unlimited flight power")
     ("cheats-dev", "developer use: enable K to eliminate active enemies and credit their objectives")
     ("seconds", boost::program_options::value<double>()->default_value(0.0), "developer use: close after this many seconds; zero disables the time limit")
@@ -249,6 +254,17 @@ auto main(int const argc, char const *const argv[])->int {
   } catch(boost::program_options::error const &error) {
     return startup_failure(error.what());
   }
+#ifndef NDEBUG
+  std::unique_ptr<darker::debug::capture_session> capture;
+  try {
+    if(arguments.contains("capture-plan")) {
+      if(!arguments.contains("level")) return startup_failure("--capture-plan requires --level");
+      capture = std::make_unique<darker::debug::capture_session>(arguments["capture-plan"].as<std::string>());
+    }
+  } catch(std::exception const &error) {
+    return startup_failure(error.what());
+  }
+#endif // NDEBUG
   auto const preferences_file{darker::presentation::preferences_path()};
   darker::presentation::preferences saved_preferences;
   try {
@@ -591,8 +607,15 @@ auto main(int const argc, char const *const argv[])->int {
     auto const *watched{combat->missile_camera_enabled && host.camera.mode != darker::game::camera_mode::object
       ? combat->camera_projectile : nullptr};
     bool const watching_actor{host.camera.mode == darker::game::camera_mode::object && host.combat->camera_actor.has_value()};
-    bool const cockpit_visible{!watched && host.camera.visible_mode() == darker::game::camera_mode::cockpit};
-    bool const external{watched || (host.camera.visible_mode() != darker::game::camera_mode::cockpit && host.camera.visible_mode() != darker::game::camera_mode::fullscreen)};
+    bool cockpit_visible{!watched && host.camera.visible_mode() == darker::game::camera_mode::cockpit};
+    bool external{watched || (host.camera.visible_mode() != darker::game::camera_mode::cockpit && host.camera.visible_mode() != darker::game::camera_mode::fullscreen)};
+#ifndef NDEBUG
+    if(capture) {
+      cockpit_visible = capture->cockpit;
+      external = !cockpit_visible;
+      host.field_of_view = capture->field_of_view;
+    }
+#endif // NDEBUG
     int const height{cockpit_visible ? (caero ? darker::graphics::cockpit_view_layout::caero_height : darker::graphics::cockpit_view_layout::skimma_height) : framework::render::display_layout::height};
     int const world_height{height * display_height / framework::render::display_layout::height};
     double const native_fov{2 * std::atan(120.0 / 256.0) * 180 / std::numbers::pi};
@@ -604,7 +627,10 @@ auto main(int const argc, char const *const argv[])->int {
     auto const camera_subject{watching_actor
       ? (actor != combat->actors.end() && (actor->flags & 8) ? darker::game::camera_subject::object_effect : darker::game::camera_subject::object)
       : host.camera.mode == darker::game::camera_mode::object ? darker::game::camera_subject::absent_object : subject};
-    auto const camera{host.camera.view(camera_pose, frame_step, !watching_actor && darker::game::has_player_flag(host.player.lifecycle.flags, darker::game::player_flag::ground_protection), camera_subject, host.player.tunnel.has_value())};
+    auto camera{host.camera.view(camera_pose, frame_step, !watching_actor && darker::game::has_player_flag(host.player.lifecycle.flags, darker::game::player_flag::ground_protection), camera_subject, host.player.tunnel.has_value())};
+#ifndef NDEBUG
+    if(capture) camera = capture->camera.value_or(host.player.pose());
+#endif // NDEBUG
     host.audio_listener = camera;
     host.audio_motion = camera_pose;
     darker::graphics::city_view view{
@@ -810,6 +836,9 @@ auto main(int const argc, char const *const argv[])->int {
           .edge{95}
         });
     }
+#ifndef NDEBUG
+    if(capture && !capture->cockpit) display.pixels.fill(255);
+#endif // NDEBUG
     framework::render::indexed_cockpit_framebuffer artwork_mask;
     artwork_mask.pixels.fill(0);
     if(cockpit_visible) {
@@ -852,7 +881,11 @@ auto main(int const argc, char const *const argv[])->int {
     }
     return count;
   }};
+#ifndef NDEBUG
+  if(!capture) render(0, false);
+#else
   render(0, false);
+#endif // NDEBUG
 
 #ifndef NDEBUG
   if(arguments.contains("screenshot")) {
@@ -901,7 +934,11 @@ auto main(int const argc, char const *const argv[])->int {
       }
     }
   }
+#ifndef NDEBUG
+  if(!capture) glfwShowWindow(window.get());
+#else
   glfwShowWindow(window.get());
+#endif // NDEBUG
   if(compositor_sizing) {
     // ask for the usable content area, then leave maximised mode before presenting
     int width{}, height{};
@@ -915,7 +952,11 @@ auto main(int const argc, char const *const argv[])->int {
     glfwSetWindowSize(window.get(), fitted.width, fitted.height);
   }
   glfwMakeContextCurrent(window.get());
+#ifndef NDEBUG
+  glfwSwapInterval(capture ? 0 : 1);
+#else
   glfwSwapInterval(1);
+#endif // NDEBUG
   host.focused = glfwGetWindowAttrib(window.get(), GLFW_FOCUSED) == GLFW_TRUE;
   glfwSetInputMode(window.get(), GLFW_CURSOR, host.cursor_mode(!caero));
   if(host.mouse_enabled && glfwRawMouseMotionSupported()) glfwSetInputMode(window.get(), GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
@@ -1316,12 +1357,23 @@ auto main(int const argc, char const *const argv[])->int {
   bool options_were_active{false};
   std::optional<darker::presentation::preferences> preview_settings;
   std::vector<framework::render::rgba_pixel> options_output;
+#ifndef NDEBUG
+  unsigned int constexpr maximum_capture_startup_frames{60000}; // approximately sixteen minutes of simulated presentation time
+  unsigned int capture_startup_frames{0};
+#endif // NDEBUG
   while(!glfwWindowShouldClose(window.get())) {
+#ifndef NDEBUG
+    if(capture && host.exit_requested != session_exit::none) throw std::runtime_error{"Capture mission ended before its last shot"};
+#endif // NDEBUG
     host.weapon_selection_blocked = exchange.supplementary_active;
     glfwPollEvents();
     audio.set_volumes(host.options.values.music_volume, host.options.values.effects_volume);
     auto const frame_time{std::chrono::steady_clock::now()};
-    if(frame_time < next_frame) {
+    if(frame_time < next_frame
+#ifndef NDEBUG
+      && !capture
+#endif // NDEBUG
+    ) {
       glfwWaitEventsTimeout(std::chrono::duration<double>(next_frame - frame_time).count());
       continue;
     }
@@ -1450,7 +1502,16 @@ auto main(int const argc, char const *const argv[])->int {
 #ifndef NDEBUG
     if(seconds > 0 && elapsed >= seconds) break;
 #endif // NDEBUG
-    auto const interrupts{static_cast<uint64_t>(elapsed * (1193180.0 / 2386))};
+    auto interrupts{static_cast<uint64_t>(elapsed * (1193180.0 / 2386))};
+#ifndef NDEBUG
+    if(capture) {
+      interrupts = previous_interrupts + darker::debug::capture_session::step_ticks;
+      if(host.briefing && front) {
+        if(++capture_startup_frames > maximum_capture_startup_frames) throw std::runtime_error{"Capture could not enter a playable mission"};
+        front->key(darker::presentation::front_key::accept);
+      }
+    }
+#endif // NDEBUG
     if(front && std::exchange(front->options_requested, false)) {
       host.options.open();
       glfwSetInputMode(window.get(), GLFW_CURSOR, host.cursor_mode(false));
@@ -1746,6 +1807,20 @@ auto main(int const argc, char const *const argv[])->int {
         }
       }
     }
+#ifndef NDEBUG
+    if(capture && !host.briefing) {
+      unsigned int const tick{(static_cast<unsigned int>(game_clock.wraps) << 16) | game_clock.frame_ticks};
+      capture->before_frame(tick, host.player, *combat, host.hangar, host.available_weapons);
+      capture->capture(tick, host.player, *combat, cells, bank, host.available_weapons, display_width, display_height, [&] {
+        render(game_clock.frame_ticks, false);
+        return std::span<framework::render::rgba_pixel const>{world_output};
+      });
+      if(capture->finished()) break;
+      // Cinematic camera placement must not redirect weapon aim; keep gameplay
+      // targeting tied to the player's attitude even on frames we do not render.
+      combat->targeting_basis = darker::maths::make_view_basis(host.player.pose().angles, darker::maths::angle_precision::full);
+    }
+#endif // NDEBUG
     game_clock.running = !host.briefing && host.hangar.returning != darker::game::hangar_return_phase::complete;
     darker::game::advance_game_clock(game_clock, single_step ? 8 : interrupts - previous_interrupts);
     previous_interrupts = interrupts;
@@ -1760,8 +1835,14 @@ auto main(int const argc, char const *const argv[])->int {
         && !(button == GLFW_MOUSE_BUTTON_LEFT && host.menu_mouse_consumed)
         && glfwGetMouseButton(window.get(), button) == GLFW_PRESS;
     }};
-    bool const primary_held{host.key_down(*window, GLFW_KEY_SPACE) || mouse_down(host.options.values.controls.primary_mouse_button)};
-    bool const secondary_held{host.key_down(*window, GLFW_KEY_LEFT_ALT) || mouse_down(host.options.values.controls.secondary_mouse_button)};
+    bool primary_held{host.key_down(*window, GLFW_KEY_SPACE) || mouse_down(host.options.values.controls.primary_mouse_button)};
+    bool secondary_held{host.key_down(*window, GLFW_KEY_LEFT_ALT) || mouse_down(host.options.values.controls.secondary_mouse_button)};
+#ifndef NDEBUG
+    if(capture) {
+      primary_held = capture->primary;
+      secondary_held = capture->secondary;
+    }
+#endif // NDEBUG
     bool const was_crashing{host.player.lifecycle.crashing};
     if(step != 0) {
       if(front) combat->spawn_aircraft(host.player, cells, bank, game_clock.frame_ticks, step);
@@ -1866,7 +1947,12 @@ auto main(int const argc, char const *const argv[])->int {
     host.camera.update_look(host.player.look_drive, host.key_down(*window, GLFW_KEY_TAB), step, darker::game::has_player_flag(host.player.lifecycle.flags, darker::game::player_flag::ground_protection));
     auto const clock{game_clock.frame_ticks};
     host.clock = clock;
-    auto const count{render(clock, enlarged, step)};
+    size_t count{0};
+#ifndef NDEBUG
+    if(!capture) count = render(clock, enlarged, step);
+#else
+    count = render(clock, enlarged, step);
+#endif // NDEBUG
     if(caero_state && (caero_state->energy.boost >> 13) > previous_cells) host.sounds.trigger(darker::audio::flight_sound::charged, clock);
     if(audio_device) {
       auto const player_sounds{host.sounds.advance(host.player, clock, host.shield_ready,
@@ -1887,6 +1973,9 @@ auto main(int const argc, char const *const argv[])->int {
       // 3E93's late-frame SI is not a recovered player continuation; blackout never returns through it
       exchange.exchange(script, context, std::nullopt);
     }
+#ifndef NDEBUG
+    if(capture) continue;
+#endif // NDEBUG
     auto const status{host.paused ? " - paused (Pause steps; an ordinary key resumes)" : host.briefing                                                      ? " - menu / presentation"
       : host.hangar.returning == darker::game::hangar_return_phase::complete ? " - mission complete"
       : host.player.lifecycle.crashing                                       ? (caero ? " - crashed" : " - crashed: restarting") : " - flight"};

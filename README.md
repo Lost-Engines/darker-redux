@@ -97,3 +97,5 @@ All of these repairs happen in memory. Original packs and saves are not rewritte
 ### Developer additions
 
 - **Developer cheats (Debug / RelWithDebInfo):** launch with `--cheats-dev`, then press **K** during flight to eliminate active aircraft and ground/static mission targets. Normal objective credit and cleanup run on the next simulation update; reserve waves and uncounted ground escorts are preserved. This switch and key handler are absent from Release builds.
+
+- **Reproducible screenshots (Debug / RelWithDebInfo):** `--capture-plan` advances real missions to specified times and captures independent cinematic cameras, with optional explicit player setup. See [capture plans](docs/debug_capture.md). Absent from Release builds.
