@@ -16,10 +16,18 @@ void diffuser_state::advance(clock_tick const clock) noexcept {
   if(active && std::bit_cast<int16_t>(static_cast<clock_tick>(clock - deadline)) >= 0) active = false;
 }
 
-diffuser_impact diffuser_state::hit(bool const gas, collision_category const category, uint8_t const state, uint16_t const target, clock_tick const clock) noexcept {
-  /// Retain CE84's target and timing window, but leave an already-smoking roof's timer alone
+diffuser_impact diffuser_state::hit(bool const gas, collision_category const category, uint8_t const state, bool const linked, uint16_t const target, clock_tick const clock) noexcept {
+  /// Extend CE84 to permitted destructible buildings while retaining its timing window and retry state
   advance(clock);
-  if(category != collision_category::diffuser || !(state & city_cell::permitted_target)) return diffuser_impact::rejected;
+  if(!linked || !(state & city_cell::permitted_target)) return diffuser_impact::rejected;
+  switch(category) {
+  case collision_category::ground_target:
+  case collision_category::fragile:
+  case collision_category::diffuser:
+    break;
+  default:
+    return diffuser_impact::rejected;
+  }
   if(gas) {
     if(active && target == cell) return diffuser_impact::already_gassed;
     cell = target;

@@ -102,23 +102,32 @@ Key 5 selects the gas capsule (selection 5, definition slot 4); selection 4,
 slot 3 is the detonator. There is no separate key 4 binding. Redux changes the
 original alternating-shot controls:
 
-- Firing gas, missing, or failing to fire leaves gas selected. A valid warehouse
+- Firing gas, missing, or failing to fire leaves gas selected. A valid building
   impact selects the detonator, provided the Diffuser is still selected.
 - Firing the detonator leaves it selected after a miss, an early impact or a
   blocked firing attempt. Successful detonation or gas expiry returns to gas.
-- Pressing 5 selects gas again, even while a roof is smoking. Another gas hit on
-  that same active roof keeps its deadline and existing smoke unchanged, then
+- Pressing 5 selects gas again, even while a building is smoking. Another gas hit on
+  that same active building keeps its deadline and existing smoke unchanged, then
   reselects the detonator. It does not emit another smoke sequence or impact effect.
 - Selecting another secondary weapon is respected: a delayed impact or gas
   timeout does not switch back to the Diffuser.
 
-CE84's collision and detonation requirements are retained: collision category 3
-and cell state bit 40h. Gas records one shared target cell and a deadline 2800h
-ticks ahead, emitting recipe 75D4h at the building origin. A trigger must hit
+Redux extends CE84's warehouse-only admission to every permitted destructible
+building. Both stages require cell state bit 40h and a nonzero damage link in
+the currently selected model. Collision categories 0 (ordinary ground target),
+2 (fragile) and 3 (Diffuser warehouse) accept the sequence; category 1 remains
+protected, so office walls and protected hangar surfaces still reject it.
+Unlike ordinary shots against fragile objects, the Diffuser still requires
+permission. Unmarked buildings, scenery without a damage model and terminal
+ruins cannot be primed or detonated. Warehouse roofs retain their special
+resistance to ordinary ground weapons.
+
+Gas records one shared target cell and a deadline 2800h ticks ahead, emitting
+recipe 75D4h at the building origin. A trigger must hit
 that cell in the final 1000h ticks: 6,144–10,239 ticks after gas impact, about
 12.29–20.48 seconds. An early trigger does not consume the gas. Success uses
 ordinary building destruction; a rejected building hit emits 75A3h at the
-projectile. Gas on a different valid roof replaces the shared target and timer;
+projectile. Gas on a different valid building replaces the shared target and timer;
 object and terrain impacts retain their ordinary paths.
 
 An explicit active flag is retired at expiry or detonation, so an old deadline
@@ -131,11 +140,12 @@ the current clock. The state retains that deadline; the general fixed ambient
 sound-record scheduler is not yet connected to playback.
 
 Native firing fixtures still check energy costs, readiness and launch guards;
-impact fixtures retain the collision and detonation-window comparisons outside
-the deliberate repeat-gas change. Redux checks cover misses, repeated gas,
-early triggers, expiry, clock wrapping, manual reselection and successful
-warehouse destruction. The controlled mission-80 test uses real projectile
-flight and collision geometry to destroy three skylights with timed pairs,
+impact fixtures retain the protected-surface and warehouse detonation-window
+comparisons outside the deliberate repeat-gas change. Redux checks cover the
+extended surface categories, missing destruction links, misses, repeated gas,
+early triggers, expiry, clock wrapping, manual reselection and real projectile
+collisions with storage tanks and warehouse blocks. The controlled mission-80
+test uses real projectile flight and collision geometry to destroy three skylights with timed pairs,
 then the storage tank with Brent Ground, and verifies the return message and
 docking.
 

@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <algorithm>
 #include <filesystem>
 #include <string_view>
@@ -174,18 +175,20 @@ TEST_CASE("Diffuser firing preserves its stage while retaining native launch gua
   }
 }
 
-TEST_CASE("Diffuser building impacts retain native target admission and detonation timing", "[game][weapons][diffuser]") {
-  /// Repeat gas on the same active roof deliberately diverges and is covered separately
+TEST_CASE("Diffuser warehouse impacts retain native detonation timing and protected surfaces", "[game][weapons][diffuser]") {
+  /// Ordinary and fragile surfaces now accept gas; compare native fixtures outside that extension and repeat-gas changes
   for(auto const &sample : darker::test_reference::diffuser_impact_samples) {
     CAPTURE(sample);
     if(sample[0] && sample[3] == sample[4]) continue;
+    if(sample[1] == std::to_underlying(darker::game::collision_category::ground_target)
+      || sample[1] == std::to_underlying(darker::game::collision_category::fragile)) continue;
     darker::game::diffuser_state state{
       .cell{static_cast<uint16_t>(sample[4])},
       .deadline{static_cast<uint16_t>(sample[6])},
       .sound_deadline{static_cast<uint16_t>(sample[7])},
       .active{true},
     };
-    auto const result{state.hit(sample[0] != 0, static_cast<darker::game::collision_category>(sample[1]), static_cast<uint8_t>(sample[2]), static_cast<uint16_t>(sample[3]), static_cast<uint16_t>(sample[5]))};
+    auto const result{state.hit(sample[0] != 0, static_cast<darker::game::collision_category>(sample[1]), static_cast<uint8_t>(sample[2]), true, static_cast<uint16_t>(sample[3]), static_cast<uint16_t>(sample[5]))};
     auto const expected{sample[8] == 0x67ea   ? darker::game::diffuser_impact::gas
       : sample[8] == 0x67bf ? darker::game::diffuser_impact::destroyed : darker::game::diffuser_impact::rejected};
     CHECK(result == expected);
@@ -205,6 +208,47 @@ TEST_CASE("Caero Weapon impact strength matches native beacon sampling", "[game]
   }
 }
 
+TEST_CASE("Diffuser accepts permitted destructible surfaces and keeps each building's protection", "[game][weapons][diffuser]") {
+  /// Gas and detonators share the same eligibility checks, even if a target is destroyed between shots
+  using darker::game::collision_category;
+  using darker::game::diffuser_impact;
+  using darker::game::diffuser_state;
+  auto const category{GENERATE(collision_category::ground_target, collision_category::protected_surface,
+    collision_category::fragile, collision_category::diffuser, static_cast<collision_category>(4))};
+  bool const permitted{GENERATE(false, true)};
+  bool const linked{GENERATE(false, true)};
+  CAPTURE(category, permitted, linked);
+  uint8_t const flags{permitted ? darker::game::city_cell::permitted_target : uint8_t{0}};
+  uint16_t constexpr target{0x1717};
+  darker::game::clock_tick constexpr gas_time{1000};
+  auto constexpr trigger_time{static_cast<darker::game::clock_tick>(gas_time + diffuser_state::gas_lifetime_ticks - diffuser_state::trigger_window_ticks)};
+  bool const accepted{permitted && linked && (category == collision_category::ground_target
+    || category == collision_category::fragile || category == collision_category::diffuser)};
+  diffuser_state state;
+  auto const result{state.hit(true, category, flags, linked, target, gas_time)};
+  if(!accepted) {
+    CHECK(result == diffuser_impact::rejected);
+    CHECK_FALSE(state.active);
+    CHECK(state.cell == 0);
+    CHECK(state.deadline == 0);
+    return;
+  }
+  REQUIRE(result == diffuser_impact::gas);
+  REQUIRE(state.active);
+  auto const deadline{state.deadline};
+  CHECK(state.hit(false, category, flags, linked, target, trigger_time - 1) == diffuser_impact::rejected);
+  CHECK(state.hit(true, category, flags, linked, target, trigger_time) == diffuser_impact::already_gassed);
+  CHECK(state.deadline == deadline);
+  CHECK(state.hit(false, collision_category::protected_surface, flags, linked, target, trigger_time) == diffuser_impact::rejected);
+  CHECK(state.hit(false, category, flags, false, target, trigger_time) == diffuser_impact::rejected);
+  CHECK(state.hit(false, category, 0, linked, target, trigger_time) == diffuser_impact::rejected);
+  CHECK(state.hit(false, category, flags, linked, target + 1, trigger_time) == diffuser_impact::rejected);
+  CHECK(state.active);
+  CHECK(state.deadline == deadline);
+  CHECK(state.hit(false, category, flags, linked, target, trigger_time) == diffuser_impact::destroyed);
+  CHECK_FALSE(state.active);
+}
+
 TEST_CASE("Diffuser gas survives retry hits and expires permanently across clock wrapping", "[game][weapons][diffuser]") {
   /// Check the original arming window, duplicate hits, manual retargeting and absence of phantom gas
   using darker::game::clock_tick;
@@ -216,25 +260,25 @@ TEST_CASE("Diffuser gas survives retry hits and expires permanently across clock
   for(unsigned int const start : {0, 1024, 60000, 65000}) {
     CAPTURE(start);
     diffuser_state state;
-    CHECK(state.hit(false, collision_category::diffuser, permitted, 0, static_cast<clock_tick>(start)) == diffuser_impact::rejected);
-    REQUIRE(state.hit(true, collision_category::diffuser, permitted, roof, static_cast<clock_tick>(start)) == diffuser_impact::gas);
+    CHECK(state.hit(false, collision_category::diffuser, permitted, true, 0, static_cast<clock_tick>(start)) == diffuser_impact::rejected);
+    REQUIRE(state.hit(true, collision_category::diffuser, permitted, true, roof, static_cast<clock_tick>(start)) == diffuser_impact::gas);
     auto const deadline{state.deadline};
     auto const arm_time{static_cast<clock_tick>(deadline - diffuser_state::trigger_window_ticks)};
     REQUIRE(state.active);
-    CHECK(state.hit(false, collision_category::diffuser, permitted, roof, static_cast<clock_tick>(arm_time - 1)) == diffuser_impact::rejected);
+    CHECK(state.hit(false, collision_category::diffuser, permitted, true, roof, static_cast<clock_tick>(arm_time - 1)) == diffuser_impact::rejected);
     CHECK(state.active);
-    CHECK(state.hit(true, collision_category::diffuser, permitted, roof, arm_time) == diffuser_impact::already_gassed);
+    CHECK(state.hit(true, collision_category::diffuser, permitted, true, roof, arm_time) == diffuser_impact::already_gassed);
     CHECK(state.deadline == deadline);
-    CHECK(state.hit(false, collision_category::diffuser, permitted, roof + 1, arm_time) == diffuser_impact::rejected);
+    CHECK(state.hit(false, collision_category::diffuser, permitted, true, roof + 1, arm_time) == diffuser_impact::rejected);
     CHECK(state.active);
 
     SECTION("Successful detonation closes the sequence at either end of the valid window") {
       for(auto const clock : {arm_time, static_cast<clock_tick>(deadline - 1)}) {
         auto attempt{state};
-        CHECK(attempt.hit(false, collision_category::diffuser, permitted, roof, clock) == diffuser_impact::destroyed);
+        CHECK(attempt.hit(false, collision_category::diffuser, permitted, true, roof, clock) == diffuser_impact::destroyed);
         CHECK_FALSE(attempt.active);
         CHECK(attempt.sound_deadline == clock);
-        CHECK(attempt.hit(false, collision_category::diffuser, permitted, roof, clock) == diffuser_impact::rejected);
+        CHECK(attempt.hit(false, collision_category::diffuser, permitted, true, roof, clock) == diffuser_impact::rejected);
       }
     }
     SECTION("Timeout permits new gas but cannot revive the old target on a later clock cycle") {
@@ -242,37 +286,41 @@ TEST_CASE("Diffuser gas survives retry hits and expires permanently across clock
       CHECK(state.active);
       state.advance(deadline);
       CHECK_FALSE(state.active);
-      CHECK(state.hit(false, collision_category::diffuser, permitted, roof, deadline) == diffuser_impact::rejected);
+      CHECK(state.hit(false, collision_category::diffuser, permitted, true, roof, deadline) == diffuser_impact::rejected);
       state.advance(arm_time);
       CHECK_FALSE(state.active);
-      CHECK(state.hit(false, collision_category::diffuser, permitted, roof, arm_time) == diffuser_impact::rejected);
-      CHECK(state.hit(true, collision_category::diffuser, permitted, roof, arm_time) == diffuser_impact::gas);
+      CHECK(state.hit(false, collision_category::diffuser, permitted, true, roof, arm_time) == diffuser_impact::rejected);
+      CHECK(state.hit(true, collision_category::diffuser, permitted, true, roof, arm_time) == diffuser_impact::gas);
       CHECK(state.deadline == static_cast<clock_tick>(arm_time + diffuser_state::gas_lifetime_ticks));
     }
     SECTION("Gas on another valid roof replaces the single shared target") {
-      REQUIRE(state.hit(true, collision_category::diffuser, permitted, roof + 1, arm_time) == diffuser_impact::gas);
+      REQUIRE(state.hit(true, collision_category::diffuser, permitted, true, roof + 1, arm_time) == diffuser_impact::gas);
       CHECK(state.cell == roof + 1);
       CHECK(state.deadline == static_cast<clock_tick>(arm_time + diffuser_state::gas_lifetime_ticks));
     }
   }
 }
 
-TEST_CASE("Diffuser controls follow actual warehouse impacts and preserve manual selection", "[game][weapons][diffuser][integration]") {
-  /// Use the retail warehouse geometry and real flight/collision paths without enemy interference
+TEST_CASE("Diffuser controls follow actual building impacts and preserve manual selection", "[game][weapons][diffuser][integration]") {
+  /// Use retail tanks and warehouse geometry with real flight/collision paths and no enemy interference
   if(std::string_view{DARKER_TEST_RESOURCE_DIR}.empty()) SKIP("Requires extracted retail geometry");
   using darker::game::caero_weapon;
   using darker::game::clock_tick;
   darker::resources::geometry_bank const bank{darker::resources::read_binary_file(
     std::filesystem::path{DARKER_TEST_RESOURCE_DIR} / "00_030.bin", 1'000'000)};
+  auto const type{GENERATE(uint8_t{46}, uint8_t{48}, uint8_t{75}, uint8_t{76})};
+  CAPTURE(static_cast<unsigned int>(type));
   darker::game::city_map cells{};
-  auto &roof{cells[darker::game::city_cell_index(23, 23)]};
-  roof = {
-    .type{76},
+  auto &building{cells[darker::game::city_cell_index(23, 23)]};
+  building = {
+    .type{type},
     .state{darker::game::city_cell::permitted_target},
   };
+  unsigned int constexpr rejected_impact_emitters{2};
+  unsigned int constexpr gas_emitters{24};
   uint16_t constexpr target{0x1717};
   uint16_t constexpr missed_target{0x0a0a};
-  cells[darker::game::packed_cell_reference{missed_target}.index()] = roof;
+  cells[darker::game::packed_cell_reference{missed_target}.index()] = building;
   auto constexpr damage_mask{darker::resources::profile(darker::resources::world_kind::delphi).damage_mask};
   auto const aim{darker::game::resolve_map_guidance(target, cells, bank, damage_mask)};
   darker::maths::world_position const centre{
@@ -304,13 +352,13 @@ TEST_CASE("Diffuser controls follow actual warehouse impacts and preserve manual
       .secondary_pressed{fire},
     });
   }};
-  auto const fire{[&](bool const hit_roof)->darker::game::projectile* {
+  auto const fire{[&](bool const hit_building)->darker::game::projectile* {
     craft.energy.reserve = 0xffff;
-    combat.target.token = hit_roof ? target : missed_target;
+    combat.target.token = hit_building ? target : missed_target;
     auto const direction{darker::maths::object_target_direction(player.pose().position, centre)};
     player.pose().angles = {
       .heading{direction.heading},
-      .pitch{hit_roof ? direction.pitch : uint16_t{0}},
+      .pitch{hit_building ? direction.pitch : uint16_t{0}},
       .roll{0},
     };
     step(true);
@@ -328,6 +376,25 @@ TEST_CASE("Diffuser controls follow actual warehouse impacts and preserve manual
     while(clock < end) step();
   }};
 
+  if(type == 75) {
+    // this warehouse block has collision geometry and a target flag, but no destroyed model
+    auto const initial_state{building.state};
+    impact(fire(true));
+    CHECK_FALSE(combat.diffuser.active);
+    CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
+    CHECK(building.state == initial_state);
+    CHECK(combat.effects.emitters.size() == rejected_impact_emitters);
+    return;
+  }
+
+  SECTION("An unmarked building never starts the gas sequence") {
+    building.state = 0;
+    impact(fire(true));
+    CHECK_FALSE(combat.diffuser.active);
+    CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
+    CHECK(building.state == 0);
+    CHECK(combat.effects.emitters.size() == rejected_impact_emitters);
+  }
   SECTION("A missed gas shot never arms the detonator") {
     auto const *shot{fire(false)};
     CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
@@ -355,20 +422,20 @@ TEST_CASE("Diffuser controls follow actual warehouse impacts and preserve manual
     auto const deadline{combat.diffuser.deadline};
 
     SECTION("Manual gas reselection never restarts the existing smoke") {
-      REQUIRE(combat.effects.emitters.size() == 24);
+      REQUIRE(combat.effects.emitters.size() == gas_emitters);
       auto const first_smoke_start{combat.effects.emitters.front().start};
       combat.secondary_weapon = 5;                                              // same assignment as pressing the weapon selection key
       step();
       REQUIRE(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
       impact(fire(true));
       CHECK(combat.diffuser.deadline == deadline);
-      CHECK(combat.effects.emitters.size() == 24);
+      CHECK(combat.effects.emitters.size() == gas_emitters);
       CHECK(combat.effects.emitters.front().start == first_smoke_start);
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
     }
     SECTION("Early and missed detonators allow another attempt in the same smoke window") {
       impact(fire(true));
-      CHECK_FALSE(roof.state & damage_mask);
+      CHECK_FALSE(building.state & damage_mask);
       CHECK(combat.diffuser.deadline == deadline);
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
       wait_until(static_cast<clock_tick>(deadline - darker::game::diffuser_state::trigger_window_ticks));
@@ -377,14 +444,14 @@ TEST_CASE("Diffuser controls follow actual warehouse impacts and preserve manual
       REQUIRE(combat.diffuser.active);
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
       impact(fire(true));
-      CHECK(roof.state & damage_mask);
+      CHECK(building.state & damage_mask);
       CHECK_FALSE(combat.diffuser.active);
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
     }
     SECTION("Expiry resets to gas without a firing attempt") {
       wait_until(deadline);
       CHECK_FALSE(combat.diffuser.active);
-      CHECK_FALSE(roof.state & damage_mask);
+      CHECK_FALSE(building.state & damage_mask);
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
       impact(fire(true));
       CHECK(combat.diffuser.active);

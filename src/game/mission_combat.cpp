@@ -31,6 +31,13 @@ namespace {
 std::array constexpr actor_collision_groups{actor_category::ground, actor_category::stationary, actor_category::air};
 std::array constexpr aircraft_collision_group{actor_category::air};
 
+bool building_has_damage_link(city_cell const &cell, resources::geometry_bank const &bank, uint8_t const damage_mask) {
+  /// Require a further damaged model, including when a permitted target is already a ruin
+  auto const model{bank.city_model_offset(cell.type, cell.state, damage_mask)};
+  auto const bytes{bank.model_pool()};
+  return bytes[model] != std::byte{0} || bytes[model + 1] != std::byte{0};
+}
+
 void damage_world_cell(uint8_t const column, uint8_t const row, uint16_t const height,
   city_map &cells, resources::geometry_bank const &bank, effect_system &effects, clock_tick const clock, uint8_t &counter) {
   /// 67BF adds a damage stage, carries the resulting high bit into C221 and emits the type's effect at its origin
@@ -51,9 +58,7 @@ void impact_projectile_world(city_collision_result const &contact, maths::world_
     return;
   }
   auto const &cell{cells[city_cell_index(contact.column, contact.row)]};
-  auto const model{bank.city_model_offset(cell.type, cell.state, damage_mask)};
-  auto const bytes{bank.model_pool()};
-  bool const linked{bytes[model] != std::byte{0} || bytes[model + 1] != std::byte{0}};
+  bool const linked{building_has_damage_link(cell, bank, damage_mask)};
   auto const found{std::ranges::find_if(original_object_definitions, [&](auto const &original){
     return &original == &definition;
   })};
@@ -574,9 +579,7 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
         };
         if(caero) target.project_caero(pose.position, position, aim.height_extent, targeting_basis, secondary_weapon, cell.type, cell.state);
         else {
-          auto const model{bank.city_model_offset(cell.type, cell.state, damage_mask)};
-          auto const bytes{bank.model_pool()};
-          bool const linked{bytes[model] != std::byte{0} || bytes[model + 1] != std::byte{0}};
+          bool const linked{building_has_damage_link(cell, bank, damage_mask)};
           target.project_skimma(pose.position, position, aim.height_extent, targeting_basis, skimma.selection, true, false, linked);
         }
       }
@@ -615,7 +618,7 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
       && (shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_trigger)]
         || shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_gas)])) {
       auto const &cell{cells[city_cell_index(contact.column, contact.row)]};
-      auto const result{diffuser.hit(shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_gas)], contact.category, cell.state,
+      auto const result{diffuser.hit(shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_gas)], contact.category, cell.state, building_has_damage_link(cell, bank, damage_mask),
         packed_cell_reference::from_coordinates(contact.column, contact.row).value, clock)};
       // do not replace a different weapon selected while the capsule was in flight
       if(caero && (secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas)

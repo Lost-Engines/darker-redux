@@ -83,7 +83,7 @@ Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/d
 
 ### Gameplay enhancements
 
-- **Forbes Diffuser:** gas switches to the detonator only after a warehouse hit. Misses and early detonator hits leave it ready to try again until the gas expires. Press **5** to return to gas manually; hitting a smoking roof with more gas no longer restarts the wait.
+- **Forbes Diffuser:** now works on all permitted destructible buildings, with the usual protected-wall and doorway rules. Gas switches to the detonator only after a successful hit. Misses and early detonator hits leave it ready to try again until the gas expires. Press **5** to return to gas manually; hitting a smoking building with more gas no longer restarts the wait.
 - **Nightmare reinforcements:** restored the original authored spawn positions and fade-in, avoiding overlapping arrivals that immediately collide. This correction is also backported to the faithful engine.
 - **Nightmare steering:** removed the scripted height-512 altitude hold during the late truck hunt. Pitch remains under player control; the A-key altitude hold is still available. The beacon patterns, enemies and objective progression are unchanged.
 
