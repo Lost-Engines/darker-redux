@@ -26,6 +26,7 @@ TEST_CASE("Options preview preserves valid fog ordering and cancellation restore
 TEST_CASE("Options apply is a save request and defaults remain a cancellable preview", "[options]") {
   options_menu menu;
   menu.values.width = 960;
+  menu.values.automatic_resolution = false;
   menu.open();
   for(int i{0}; i < 11; ++i) menu.key(options_key::down);
   menu.key(options_key::accept);
@@ -39,6 +40,37 @@ TEST_CASE("Options apply is a save request and defaults remain a cancellable pre
   CHECK(menu.active); // The host only closes after a successful write.
 }
 
+TEST_CASE("Resolution defaults to the window and fixed choices can return to automatic sizing", "[options]") {
+  options_menu menu;
+  REQUIRE(menu.values.automatic_resolution);
+  menu.open();
+  menu.key(options_key::left);
+  CHECK(menu.values.automatic_resolution);
+  menu.key(options_key::right);
+  CHECK_FALSE(menu.values.automatic_resolution);
+  CHECK(menu.values.width == 320);
+  CHECK(menu.values.height == 240);
+  menu.key(options_key::right);
+  CHECK(menu.values.width == 640);
+  CHECK(menu.values.height == 480);
+  menu.key(options_key::left);
+  menu.key(options_key::left);
+  CHECK(menu.values.automatic_resolution);
+  menu.key(options_key::cancel);
+  CHECK(menu.values == preferences{});
+
+  menu.values.width = 853;
+  menu.values.height = 479;
+  menu.values.automatic_resolution = false;
+  menu.open();
+  menu.key(options_key::left);
+  CHECK(menu.values.automatic_resolution);
+  menu.key(options_key::cancel);
+  CHECK_FALSE(menu.values.automatic_resolution);
+  CHECK(menu.values.width == 853);
+  CHECK(menu.values.height == 479);
+}
+
 TEST_CASE("Display preferences round-trip and reject malformed values", "[options]") {
   auto const path{std::filesystem::temp_directory_path() / "darker-redux-options-test.cfg"};
   struct cleanup {
@@ -48,6 +80,7 @@ TEST_CASE("Display preferences round-trip and reject malformed values", "[option
   preferences saved;
   saved.width = 853;
   saved.height = 479;
+  saved.automatic_resolution = false;
   saved.minimum_light_size = 0.25;
   saved.field_of_view = 73.125;
   saved.background_fade = false;
@@ -65,9 +98,24 @@ TEST_CASE("Display preferences round-trip and reject malformed values", "[option
   saved.joystick.buttons[0] = 12;
   darker::presentation::write_preferences(path, saved);
   CHECK(darker::presentation::read_preferences(path) == saved);
+  saved.automatic_resolution = true;
+  darker::presentation::write_preferences(path, saved);
+  CHECK(darker::presentation::read_preferences(path) == saved);
+  for(auto const legacy : {"width=853\nheight=479\n", "height=479\nwidth=853\n"}) {
+    { std::ofstream output{path}; output << legacy; }
+    auto const loaded{darker::presentation::read_preferences(path)};
+    CHECK_FALSE(loaded.automatic_resolution);
+    CHECK(loaded.width == 853);
+    CHECK(loaded.height == 479);
+  }
+  for(auto const automatic : {"automatic-resolution=1\nwidth=853\nheight=479\n", "width=853\nheight=479\nautomatic-resolution=1\n"}) {
+    { std::ofstream output{path}; output << automatic; }
+    CHECK(darker::presentation::read_preferences(path).automatic_resolution);
+  }
   { std::ofstream output{path}; output << "joystick-deadzone=0\n"; }
+  CHECK(darker::presentation::read_preferences(path).automatic_resolution);
   CHECK(darker::presentation::read_preferences(path).joystick.deadzone_percent == 6.25);
-  for(auto const bad : {"fov=nan", "width=12", "draw-distance=999", "fog-start=100", "gouraud=2", "fog-curve=12garbage", "mouse-sensitivity=0", "mouse-sensitivity=nan", "invert-mouse=2", "bind.left=69", "bind.left=256", "music-volume=101", "effects-volume=-1", "mouse-primary=1", "mouse-secondary=8", "joystick-device=16", "joystick-bank-axis=1", "joystick-deadzone-percent=51", "joystick-deadzone-percent=-1", "joystick-sensitivity=0", "joystick-button.left=0"}) {
+  for(auto const bad : {"fov=nan", "width=12", "automatic-resolution=2", "draw-distance=999", "fog-start=100", "gouraud=2", "fog-curve=12garbage", "mouse-sensitivity=0", "mouse-sensitivity=nan", "invert-mouse=2", "bind.left=69", "bind.left=256", "music-volume=101", "effects-volume=-1", "mouse-primary=1", "mouse-secondary=8", "joystick-device=16", "joystick-bank-axis=1", "joystick-deadzone-percent=51", "joystick-deadzone-percent=-1", "joystick-sensitivity=0", "joystick-button.left=0"}) {
     { std::ofstream output{path}; output << bad << '\n'; }
     CHECK_THROWS(darker::presentation::read_preferences(path));
   }
@@ -174,7 +222,8 @@ TEST_CASE("Mouse wheel stops at list boundaries and control footer remains fixed
   menu.open();
   menu.wheel(-1);
   menu.key(options_key::right);
-  CHECK(menu.values.width == 640); // Top-level wheel did not wrap to Return.
+  CHECK_FALSE(menu.values.automatic_resolution); // Top-level wheel did not wrap to Return.
+  CHECK(menu.values.width == 320);
   menu.click(30, 35 + 9 * 11);
   for(int i{0}; i < 100; ++i) menu.wheel(1);
   menu.click(30, 35 + 11 * 11); // Last visible binding remains Weapon 0.

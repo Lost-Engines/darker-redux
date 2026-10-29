@@ -128,6 +128,8 @@ struct flight_host {
   bool focused{true};
   bool mouse_captured{false};
   bool menu_mouse_consumed{false};
+  bool toggle_fullscreen{false};
+  bool fullscreen_chord{false};
   int resume_key{GLFW_KEY_UNKNOWN};
   darker::input::joystick_sample joystick;
   darker::input::joystick_buttons joystick_buttons;
@@ -138,6 +140,8 @@ struct flight_host {
   bool key_down(GLFWwindow &window, int const key) const {
     /// A resume key remains consumed through repeats and held-key polling until its release
     int const binding{options.values.controls.binding_for_command(key)};
+    // Alt+Enter belongs to the window, including while its keys remain held.
+    if(fullscreen_chord && (binding == GLFW_KEY_LEFT_ALT || binding == GLFW_KEY_ENTER)) return false;
     if(focused && !paused) {
       auto const descriptions{darker::input::control_descriptions()};
       auto const found{std::ranges::find(descriptions, darker::input::normalise_key(key), &darker::input::control_description::default_key)};
@@ -213,8 +217,9 @@ auto main(int const argc, char const *const argv[])->int {
     ("cheat-level-x", "enable X to advance; Shift+X starts the previous playable level without saving")
     ("level", boost::program_options::value<int>(), "start at campaign level 1..116 with accumulated setup changes, without assumed combat damage; do not write saves")
     ("skip-intro", "start at game selection, skipping the startup presentation and title")
-    ("scale", boost::program_options::value<int>(), "initial window scale: positive integer multiple of 320 x 240 (default: fit available screen)")
-    ("resolution", boost::program_options::value<std::string>()->default_value("320x240"), "internal world resolution WIDTHxHEIGHT (64..8192 per axis)")
+    ("fullscreen", "start fullscreen at the current desktop mode; Alt+Enter toggles fullscreen")
+    ("scale", boost::program_options::value<int>(), "initial window magnification; without --resolution, render at 320x240 (default: fit available screen)")
+    ("resolution", boost::program_options::value<std::string>()->default_value("auto"), "world resolution: auto follows framebuffer size (default), or WIDTHxHEIGHT (64..8192 per axis)")
     ("fov", boost::program_options::value<double>(), "full-screen vertical field of view in degrees, 15..140 (original/default: approximately 50.2 degrees)")
     ("draw-distance", boost::program_options::value<unsigned int>()->default_value(darker::graphics::scene_limits::surface_radius_cells), "surface draw radius in map cells, 2..182 (original: 15; 182 includes the whole city)")
     ("minimum-light-size", boost::program_options::value<double>()->default_value(0.5), "minimum city light disc diameter in 320x200 reference pixels (scaled by height); 0 disables")
@@ -284,7 +289,8 @@ auto main(int const argc, char const *const argv[])->int {
       arguments.emplace(name, boost::program_options::variable_value{boost::any{value}, true});
     }
   }};
-  saved_default("resolution", std::to_string(saved_preferences.width) + "x" + std::to_string(saved_preferences.height));
+  saved_default("resolution", arguments.contains("scale") ? std::string{"320x240"} : saved_preferences.automatic_resolution ? std::string{"auto"}
+    : std::to_string(saved_preferences.width) + "x" + std::to_string(saved_preferences.height));
   saved_default("fov", saved_preferences.field_of_view);
   saved_default("draw-distance", saved_preferences.draw_distance);
   saved_default("fog-start", saved_preferences.fog_start);
@@ -347,14 +353,16 @@ auto main(int const argc, char const *const argv[])->int {
   auto const opl_name{arguments["opl"].as<std::string>()};
   if(opl_name != "nuked" && opl_name != "dosbox") return startup_failure("--opl must be nuked or dosbox");
   auto const resolution{arguments["resolution"].as<std::string>()};
+  bool const automatic_resolution{resolution == "auto"};
   auto const separator{resolution.find('x')};
-  int display_width{}, display_height{};
+  int display_width{320}, display_height{240};
   auto const parse_dimension{[](std::string_view text, int &value) {
     auto const result{std::from_chars(text.data(), text.data() + text.size(), value)};
-    return result.ec == std::errc{} && result.ptr == text.data() + text.size() && value >= 64 && value <= 8192;
+    return result.ec == std::errc{} && result.ptr == text.data() + text.size()
+      && value >= darker::presentation::preferences::minimum_dimension && value <= darker::presentation::preferences::maximum_dimension;
   }};
-  if(separator == std::string::npos || !parse_dimension(std::string_view{resolution}.substr(0, separator), display_width)
-    || !parse_dimension(std::string_view{resolution}.substr(separator + 1), display_height)) return startup_failure("--resolution must be WIDTHxHEIGHT with each dimension between 64 and 8192");
+  if(!automatic_resolution && (separator == std::string::npos || !parse_dimension(std::string_view{resolution}.substr(0, separator), display_width)
+    || !parse_dimension(std::string_view{resolution}.substr(separator + 1), display_height))) return startup_failure("--resolution must be auto or WIDTHxHEIGHT with each dimension between 64 and 8192");
   double const initial_fov{arguments.contains("fov") ? arguments["fov"].as<double>() : 2 * std::atan(120.0 / 256.0) * 180 / std::numbers::pi};
   if(!std::isfinite(initial_fov) || initial_fov < 15 || initial_fov > 140) return startup_failure("--fov must be a finite angle between 15 and 140 degrees");
   if(scale < 1 || scale > std::numeric_limits<int>::max() / std::max(display_width, display_height)) {
@@ -547,6 +555,7 @@ auto main(int const argc, char const *const argv[])->int {
   host.options.values = {
     .width{display_width},
     .height{display_height},
+    .automatic_resolution{automatic_resolution},
     .field_of_view{initial_fov},
     .draw_distance{draw_distance},
     .fog_start{fog_start},
@@ -951,6 +960,48 @@ auto main(int const argc, char const *const argv[])->int {
     auto const fitted{framework::render::fit_viewport(width, height, display_width, display_height)};
     glfwSetWindowSize(window.get(), fitted.width, fitted.height);
   }
+  framework::render::viewport windowed_bounds{};
+  bool windowed_maximised{false};
+  auto const toggle_fullscreen{[&] {
+    if(glfwGetWindowMonitor(window.get())) {
+      glfwSetWindowMonitor(window.get(), nullptr, windowed_bounds.x, windowed_bounds.y,
+        windowed_bounds.width, windowed_bounds.height, GLFW_DONT_CARE);
+      if(windowed_maximised) glfwMaximizeWindow(window.get());
+    } else {
+      auto *monitor{glfwGetPrimaryMonitor()};
+      glfwGetWindowSize(window.get(), &windowed_bounds.width, &windowed_bounds.height);
+      windowed_maximised = glfwGetWindowAttrib(window.get(), GLFW_MAXIMIZED) == GLFW_TRUE;
+      if(glfwGetPlatform() != GLFW_PLATFORM_WAYLAND) {
+        // Enter on the display containing most of this window. Wayland owns window placement.
+        glfwGetWindowPos(window.get(), &windowed_bounds.x, &windowed_bounds.y);
+        int count{};
+        auto *monitors{glfwGetMonitors(&count)};
+        int64_t largest_overlap{0};
+        for(int i{0}; i < count; ++i) {
+          auto const *mode{glfwGetVideoMode(monitors[i])};
+          if(!mode) continue;
+          int x{}, y{};
+          glfwGetMonitorPos(monitors[i], &x, &y);
+          int const width{std::max(0, std::min(windowed_bounds.x + windowed_bounds.width, x + mode->width) - std::max(windowed_bounds.x, x))};
+          int const height{std::max(0, std::min(windowed_bounds.y + windowed_bounds.height, y + mode->height) - std::max(windowed_bounds.y, y))};
+          int64_t const overlap{static_cast<int64_t>(width) * height};
+          if(overlap > largest_overlap) {
+            monitor = monitors[i];
+            largest_overlap = overlap;
+          }
+        }
+      }
+      auto const *mode{monitor ? glfwGetVideoMode(monitor) : nullptr};
+      if(!mode) {
+        std::cerr << "WARNING: no display mode is available for fullscreen.\n";
+        return;
+      }
+      // Request the desktop's existing mode rather than changing its resolution or refresh rate.
+      glfwSetWindowMonitor(window.get(), monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+    }
+    host.mouse_started = false;
+  }};
+  if(arguments.contains("fullscreen")) toggle_fullscreen();
   glfwMakeContextCurrent(window.get());
 #ifndef NDEBUG
   glfwSwapInterval(capture ? 0 : 1);
@@ -975,9 +1026,19 @@ auto main(int const argc, char const *const argv[])->int {
     auto &host{*static_cast<flight_host*>(glfwGetWindowUserPointer(window))};
     if(action == GLFW_RELEASE) {
       if(key == host.resume_key) host.resume_key = GLFW_KEY_UNKNOWN;
+      if((key == GLFW_KEY_LEFT_ALT || key == GLFW_KEY_RIGHT_ALT)
+        && glfwGetKey(window, GLFW_KEY_LEFT_ALT) != GLFW_PRESS && glfwGetKey(window, GLFW_KEY_RIGHT_ALT) != GLFW_PRESS) host.fullscreen_chord = false;
       return;
     }
     if(!host.focused || key == host.resume_key) return;
+    if((key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) && (modifiers & GLFW_MOD_ALT)) {
+      if(action == GLFW_PRESS) {
+        host.toggle_fullscreen = true;
+        host.fullscreen_chord = true;
+        host.resume_key = key;
+      }
+      return;
+    }
     if(host.options.active) {
       if(host.options.capturing_key()) {
         if(action == GLFW_PRESS) {
@@ -1233,21 +1294,12 @@ auto main(int const argc, char const *const argv[])->int {
     if(!host.focused || !host.mouse_enabled || (!host.options.active && (!host.front || !host.front->active()))) return;
     int width{0}, height{0};
     glfwGetWindowSize(window, &width, &height);
-    if(host.options.active) {
-      int pixels_width{}, pixels_height{};
-      glfwGetFramebufferSize(window, &pixels_width, &pixels_height);
-      auto const panel{framework::render::fit_viewport(pixels_width, pixels_height, 320, 240)};
-      if(width > 0 && height > 0 && panel.width > 0 && panel.height > 0) {
-        int const column{static_cast<int>((x * pixels_width / width - panel.x) * 320 / panel.width)};
-        int const row{static_cast<int>((y * pixels_height / height - panel.y) * 240 / panel.height)};
-        host.options.point(column, row);
-      }
-      return;
-    }
-    auto const viewport{framework::render::fit_viewport(width, height, framework::render::display_layout::width, framework::render::display_layout::height)};
-    if(viewport.width > 0 && viewport.height > 0) {
-      int const column{static_cast<int>((x - viewport.x) * 320 / viewport.width)};
-      int const row{static_cast<int>((y - viewport.y) * 240 / viewport.height)};
+    int pixels_width{}, pixels_height{};
+    glfwGetFramebufferSize(window, &pixels_width, &pixels_height);
+    auto const viewport{framework::render::fit_viewport(pixels_width, pixels_height, framework::render::display_layout::width, framework::render::display_layout::height)};
+    if(width > 0 && height > 0 && viewport.width > 0 && viewport.height > 0) {
+      int const column{static_cast<int>((x * pixels_width / width - viewport.x) * 320 / viewport.width)};
+      int const row{static_cast<int>((y * pixels_height / height - viewport.y) * 240 / viewport.height)};
       if(host.options.active) host.options.point(column, row);
       else host.front->point(column, row);
     }
@@ -1259,24 +1311,16 @@ auto main(int const argc, char const *const argv[])->int {
     double x{0}, y{0};
     glfwGetWindowSize(window, &width, &height);
     glfwGetCursorPos(window, &x, &y);
-    if(host.options.active) {
-      int pixels_width{}, pixels_height{};
-      glfwGetFramebufferSize(window, &pixels_width, &pixels_height);
-      auto const panel{framework::render::fit_viewport(pixels_width, pixels_height, 320, 240)};
-      if(width > 0 && height > 0 && panel.width > 0 && panel.height > 0) {
-        int const column{static_cast<int>((x * pixels_width / width - panel.x) * 320 / panel.width)};
-        int const row{static_cast<int>((y * pixels_height / height - panel.y) * 240 / panel.height)};
+    int pixels_width{}, pixels_height{};
+    glfwGetFramebufferSize(window, &pixels_width, &pixels_height);
+    auto const viewport{framework::render::fit_viewport(pixels_width, pixels_height, framework::render::display_layout::width, framework::render::display_layout::height)};
+    if(width > 0 && height > 0 && viewport.width > 0 && viewport.height > 0) {
+      int const column{static_cast<int>((x * pixels_width / width - viewport.x) * 320 / viewport.width)};
+      int const row{static_cast<int>((y * pixels_height / height - viewport.y) * 240 / viewport.height)};
+      if(host.options.active) {
         host.options.click(column, row);
         host.menu_mouse_consumed = true;
-      }
-      return;
-    }
-    auto const viewport{framework::render::fit_viewport(width, height, framework::render::display_layout::width, framework::render::display_layout::height)};
-    if(viewport.width > 0 && viewport.height > 0) {
-      int const column{static_cast<int>((x - viewport.x) * 320 / viewport.width)};
-      int const row{static_cast<int>((y - viewport.y) * 240 / viewport.height)};
-      if(host.options.active) host.options.click(column, row);
-      else host.front->click(column, row);
+      } else host.front->click(column, row);
     }
   });
   std::unique_ptr<framework::platform::audio_output> audio_device;
@@ -1367,6 +1411,9 @@ auto main(int const argc, char const *const argv[])->int {
 #endif // NDEBUG
     host.weapon_selection_blocked = exchange.supplementary_active;
     glfwPollEvents();
+    if(std::exchange(host.toggle_fullscreen, false)) toggle_fullscreen();
+    if(host.fullscreen_chord && glfwGetKey(window.get(), GLFW_KEY_LEFT_ALT) != GLFW_PRESS
+      && glfwGetKey(window.get(), GLFW_KEY_RIGHT_ALT) != GLFW_PRESS) host.fullscreen_chord = false;
     audio.set_volumes(host.options.values.music_volume, host.options.values.effects_volume);
     auto const frame_time{std::chrono::steady_clock::now()};
     if(frame_time < next_frame
@@ -1516,6 +1563,27 @@ auto main(int const argc, char const *const argv[])->int {
       host.options.open();
       glfwSetInputMode(window.get(), GLFW_CURSOR, host.cursor_mode(false));
     }
+    int render_width{host.options.values.width}, render_height{host.options.values.height};
+    if(host.options.values.automatic_resolution) {
+      // Use physical pixels, including high-DPI displays; a minimised window keeps its last surface.
+      glfwGetFramebufferSize(window.get(), &render_width, &render_height);
+      if(render_width <= 0 || render_height <= 0) {
+        render_width = display_width;
+        render_height = display_height;
+      }
+      render_width = std::clamp(render_width, darker::presentation::preferences::minimum_dimension, darker::presentation::preferences::maximum_dimension);
+      render_height = std::clamp(render_height, darker::presentation::preferences::minimum_dimension, darker::presentation::preferences::maximum_dimension);
+    }
+    bool const surface_resized{display_width != render_width || display_height != render_height};
+    if(surface_resized) {
+      // The borrowed indexed_surface is constructed anew in render(), after any storage changes.
+      std::vector<uint8_t> resized_pixels(static_cast<size_t>(render_width) * render_height);
+      std::vector<framework::render::rgba_pixel> resized_output(resized_pixels.size());
+      world_pixels.swap(resized_pixels);
+      world_output.swap(resized_output);
+      display_width = render_width;
+      display_height = render_height;
+    }
     if(host.options.active || options_were_active) {
       auto const &settings{host.options.values};
       if(host.options.active && !options_were_active) {
@@ -1523,15 +1591,6 @@ auto main(int const argc, char const *const argv[])->int {
         host.primary_held = false;
         host.secondary_held = false;
         if(audio_device) audio.publish({});
-      }
-      if(display_width != settings.width || display_height != settings.height) {
-        // The borrowed indexed_surface is constructed anew in render(), after any storage changes.
-        std::vector<uint8_t> resized_pixels(static_cast<size_t>(settings.width) * settings.height);
-        std::vector<framework::render::rgba_pixel> resized_output(resized_pixels.size());
-        world_pixels.swap(resized_pixels);
-        world_output.swap(resized_output);
-        display_width = settings.width;
-        display_height = settings.height;
       }
       if(draw_distance != settings.draw_distance || fog_start != settings.fog_start
         || fade_distance != settings.fade_distance || fog_curve != settings.fog_curve
@@ -1557,7 +1616,7 @@ auto main(int const argc, char const *const argv[])->int {
         }
       }
       previous_interrupts = interrupts;
-      if(!preview_settings || *preview_settings != settings) {
+      if(surface_resized || !preview_settings || *preview_settings != settings) {
         render(host.clock, false);
         preview_settings = settings;
       }
@@ -1601,6 +1660,7 @@ auto main(int const argc, char const *const argv[])->int {
     if(host.paused && !single_step) {
       // keep the last software frame intact and exclude paused wall time from the PIT clock
       previous_interrupts = interrupts;
+      if(surface_resized) render(host.clock, false);
       if(!pause_reported) {
         auto const &pose{host.player.pose()};
         std::cout << "Paused: position " << pose.position.column << ',' << pose.position.row << ',' << pose.position.height

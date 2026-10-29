@@ -46,7 +46,7 @@ std::string number(double value) {
 } // namespace
 
 bool preferences::valid() const noexcept {
-  return width >= 64 && width <= 8192 && height >= 64 && height <= 8192
+  return width >= minimum_dimension && width <= maximum_dimension && height >= minimum_dimension && height <= maximum_dimension
     && std::isfinite(field_of_view) && field_of_view >= 15 && field_of_view <= 140
     && draw_distance >= 2 && draw_distance <= 182
     && std::isfinite(fog_start) && std::isfinite(fade_distance)
@@ -69,6 +69,8 @@ preferences read_preferences(std::filesystem::path const &path) {
   if(!std::filesystem::exists(path)) return result;
   std::ifstream input{path};
   if(!input) throw std::runtime_error{"Cannot read preferences"};
+  bool saved_dimensions{false};
+  bool saved_resolution_mode{false};
   std::string line;
   while(std::getline(input, line)) {
     if(line.empty() || line.front() == '#') continue;
@@ -76,9 +78,13 @@ preferences read_preferences(std::filesystem::path const &path) {
     if(equals == std::string::npos) throw std::runtime_error{"Invalid preferences"};
     auto const name{line.substr(0, equals)};
     std::istringstream value{line.substr(equals + 1)};
-    if(name == "width") value >> result.width;
-    else if(name == "height") value >> result.height;
-    else if(name == "fov") value >> result.field_of_view;
+    if(name == "width" || name == "height") {
+      value >> (name == "width" ? result.width : result.height);
+      saved_dimensions = true;
+    } else if(name == "automatic-resolution") {
+      value >> result.automatic_resolution;
+      saved_resolution_mode = true;
+    } else if(name == "fov") value >> result.field_of_view;
     else if(name == "draw-distance") value >> result.draw_distance;
     else if(name == "fog-start") value >> result.fog_start;
     else if(name == "fade-distance") value >> result.fade_distance;
@@ -115,6 +121,8 @@ preferences read_preferences(std::filesystem::path const &path) {
     else continue; // Allow newer versions to add preferences.
     if(value.fail() || (value >> std::ws, !value.eof())) throw std::runtime_error{"Invalid preference: " + name};
   }
+  // Older preference files only stored fixed dimensions; preserve that choice.
+  if(saved_dimensions && !saved_resolution_mode) result.automatic_resolution = false;
   if(!result.valid()) throw std::runtime_error{"Preferences are outside supported ranges"};
   return result;
 }
@@ -126,6 +134,7 @@ void write_preferences(std::filesystem::path const &path, preferences const &val
   output << std::setprecision(17)
     << "# Darker Redux preferences; command-line options override these.\n"
     << "width=" << value.width << "\nheight=" << value.height
+    << "\nautomatic-resolution=" << value.automatic_resolution
     << "\nfov=" << value.field_of_view << "\ndraw-distance=" << value.draw_distance
     << "\nfog-start=" << value.fog_start << "\nfade-distance=" << value.fade_distance
     << "\nfog-curve=" << value.fog_curve << "\nminimum-light-size=" << value.minimum_light_size
@@ -281,11 +290,16 @@ void options_menu::adjust(int const direction) {
   }
   switch(static_cast<option_row>(selected)) {
   case option_row::resolution: {
-    auto position{std::ranges::find_if(resolutions, [&](auto const &size){ return size[0] == values.width && size[1] == values.height; })};
-    auto const index{position == resolutions.end() ? 0 : static_cast<int>(position - resolutions.begin())};
-    auto const &size{resolutions[static_cast<unsigned int>(std::clamp(index + direction, 0, static_cast<int>(resolutions.size()) - 1))]};
-    values.width = size[0];
-    values.height = size[1];
+    auto const position{std::ranges::find_if(resolutions, [&](auto const &size){ return size[0] == values.width && size[1] == values.height; })};
+    // The first entry follows the window; subsequent entries select a fixed resolution.
+    int const index{values.automatic_resolution ? 0 : position == resolutions.end() ? 1 : static_cast<int>(position - resolutions.begin()) + 1};
+    int const next{std::clamp(index + direction, 0, static_cast<int>(resolutions.size()))};
+    values.automatic_resolution = next == 0;
+    if(!values.automatic_resolution) {
+      auto const &size{resolutions[static_cast<unsigned int>(next - 1)]};
+      values.width = size[0];
+      values.height = size[1];
+    }
     break;
   }
   case option_row::field_of_view:
@@ -435,7 +449,7 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
     "Apply and save", "Cancel changes", "Return without saving"
   };
   std::array<std::string, 9> const settings{
-    std::to_string(values.width) + "x" + std::to_string(values.height), number(std::round(values.field_of_view * 10) / 10),
+    values.automatic_resolution ? "Window" : std::to_string(values.width) + "x" + std::to_string(values.height), number(std::round(values.field_of_view * 10) / 10),
     number(values.draw_distance), number(values.fog_start), number(values.fade_distance), number(values.fog_curve),
     number(values.minimum_light_size), values.background_fade ? "Sky colour" : "Original", values.gouraud ? "On" : "Off"
   };
@@ -508,7 +522,7 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
     text(joystick_page ? "Back to controls" : "Back to options", 20, footer_top + row_height, selected == binding_defaults() + 1 ? 2 : 1);
   }
   std::array<std::string_view, row_count> constexpr hints{
-    "Render resolution; window size stays unchanged.", "Vertical angle in degrees. Original: 50.2.",
+    "Window follows the window's pixel dimensions.", "Vertical angle in degrees. Original: 50.2.",
     "Map cells. Original: 15. Whole city: 182.", "Map cells before distance shading begins.",
     "Map cells to full shade, then distant fade.", "Higher values darken nearby objects faster.",
     "Pixels at 320x200. Zero disables the minimum.", "Blend the farthest Delphi silhouettes into sky.",

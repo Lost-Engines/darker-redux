@@ -14,8 +14,11 @@
 namespace darker::presentation {
 
 struct preferences {
+  static int constexpr minimum_dimension{64};
+  static int constexpr maximum_dimension{8192};
   int width{320};
   int height{240};
+  bool automatic_resolution{true};
   double field_of_view{2 * std::atan(120.0 / 256.0) * 180 / std::numbers::pi};
   unsigned int draw_distance{graphics::scene_limits::surface_radius_cells};
   double fog_start{graphics::fog_range{}.start_cells};
