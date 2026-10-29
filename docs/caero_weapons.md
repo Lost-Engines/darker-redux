@@ -98,29 +98,46 @@ verifying the selection changes, single follow-up launch and capsule target.
 
 ## Forbes Diffuser
 
-Key 5 selects the gas capsule (selection 5, definition slot 4). A successful
-secondary shot switches to its trigger (selection 4, slot 3), and the trigger
-switches back to gas. A pressed attempt with insufficient energy or a negative
-target token resets to gas; early player/pool gates preserve the selection.
-There is no separate key 4 binding.
+Key 5 selects the gas capsule (selection 5, definition slot 4); selection 4,
+slot 3 is the detonator. There is no separate key 4 binding. Redux changes the
+original alternating-shot controls:
 
-CE84 accepts only collision category 3 with cell state bit 40h. Gas records one
-shared target cell and a deadline 2800h ticks ahead, and emits recipe 75D4h at
-the building origin. A trigger must hit that cell when the wrapped difference
-`clock - deadline` is at least F000h: 6,144–10,239 ticks after gas impact, about
-12.29–20.48 seconds. Success uses ordinary building destruction; a rejected
-building hit emits 75A3h at the projectile. A later gas hit replaces the shared
-target and timer. Object and terrain impacts retain their ordinary paths.
+- Firing gas, missing, or failing to fire leaves gas selected. A valid warehouse
+  impact selects the detonator, provided the Diffuser is still selected.
+- Firing the detonator leaves it selected after a miss, an early impact or a
+  blocked firing attempt. Successful detonation or gas expiry returns to gas.
+- Pressing 5 selects gas again, even while a roof is smoking. Another gas hit on
+  that same active roof keeps its deadline and existing smoke unchanged, then
+  reselects the detonator. It does not emit another smoke sequence or impact effect.
+- Selecting another secondary weapon is respected: a delayed impact or gas
+  timeout does not switch back to the Diffuser.
+
+CE84's collision and detonation requirements are retained: collision category 3
+and cell state bit 40h. Gas records one shared target cell and a deadline 2800h
+ticks ahead, emitting recipe 75D4h at the building origin. A trigger must hit
+that cell in the final 1000h ticks: 6,144–10,239 ticks after gas impact, about
+12.29–20.48 seconds. An early trigger does not consume the gas. Success uses
+ordinary building destruction; a rejected building hit emits 75A3h at the
+projectile. Gas on a different valid roof replaces the shared target and timer;
+object and terrain impacts retain their ordinary paths.
+
+An explicit active flag is retired at expiry or detonation, so an old deadline
+cannot re-arm itself on the next 16-bit clock wrap. Gas can be applied afresh
+after expiry. The original switched stages on firing and restarted the timer
+on every gas hit; those behaviours remain in the faithful darker-cpp engine.
 
 The successful trigger also expires the fixed sound record at 37F6h by writing
 the current clock. The state retains that deadline; the general fixed ambient
 sound-record scheduler is not yet connected to playback.
 
-There are 768 full native firing comparisons and 1,024 native impact
-comparisons. A controlled mission-80 test uses real projectile flight and
-collision geometry to destroy three skylights with timed pairs, then the
-storage tank with Brent Ground, and verifies the return message and docking.
-It does not replace an interactive retail comparison of the gas appearance.
+Native firing fixtures still check energy costs, readiness and launch guards;
+impact fixtures retain the collision and detonation-window comparisons outside
+the deliberate repeat-gas change. Redux checks cover misses, repeated gas,
+early triggers, expiry, clock wrapping, manual reselection and successful
+warehouse destruction. The controlled mission-80 test uses real projectile
+flight and collision geometry to destroy three skylights with timed pairs,
+then the storage tank with Brent Ground, and verifies the return message and
+docking.
 
 ## Caero Weapon
 

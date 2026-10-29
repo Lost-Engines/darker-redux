@@ -82,9 +82,11 @@ Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/d
 - **Distant lights:** `--minimum-light-size N` sets a minimum city light disc diameter in 320×200 reference pixels (default **0.5**, **0** disables). It scales with rendering height, independently of FOV and window magnification, and rounds to whole pixels. Streetlights, beacon lights and fountain lights/reflections share this minimum; projectile effects are unchanged. Streetlight discs retain the original beacon-dependent colour ramp, including its residual glow at zero power, consistent with the model’s ground-light polygons. Fixed-colour fountain lights and reflections keep their authored lighting. Existing fog still applies. The disc rasteriser caps radii at 256 render pixels.
 
 ### Gameplay enhancements
+
+- **Forbes Diffuser:** gas switches to the detonator only after a warehouse hit. Misses and early detonator hits leave it ready to try again until the gas expires. Press **5** to return to gas manually; hitting a smoking roof with more gas no longer restarts the wait.
 - **Nightmare reinforcements:** restored the original authored spawn positions and fade-in, avoiding overlapping arrivals that immediately collide. This correction is also backported to the faithful engine.
 - **Nightmare steering:** removed the scripted height-512 altitude hold during the late truck hunt. Pitch remains under player control; the A-key altitude hold is still available. The beacon patterns, enemies and objective progression are unchanged.
-- 
+
 ### Bug fixes
 
 - **Joystick after mouse movement:** a one-unit tolerance in the mouse steering priority check prevents residual mouse smoothing from indefinitely blocking joystick control.

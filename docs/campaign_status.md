@@ -430,9 +430,10 @@ and flight entries, saved weapon masks/checksums and the stage-80 boundary.
 ### Forbes Diffuser and mission 80
 
 The final record of 04/9 is connected. The original presentation unlocks both
-Diffuser stages; key 5 selects gas, and secondary fire alternates gas/trigger.
-Native firing and timing checks cover 1,792 cases. The real-map combat check
-clears all four building objectives, observes the final return message and
+Diffuser stages; key 5 selects gas. Redux switches to the detonator on a valid
+gas impact, retains it for retries and does not restart smoke on repeated gas
+hits. Native firing and timing fixtures cover the unchanged rules. The real-map
+combat check clears all four building objectives, observes the final return message and
 completes docking. See [weapon behaviour](caero_weapons.md#forbes-diffuser)
 for timing, shared-target limitations and the remaining sound-scheduler scope.
 
@@ -609,9 +610,11 @@ their voice is lost. Remaining audio limits are explicit in `combat_audio.md`.
 
 ## Mission 80 retail comparison and retained city history
 
-Retail/reconstruction playtesting confirms the Forbes Diffuser's delayed gas
-window and retrigger behaviour: another gas hit restarts the wait, including
-after a missed trigger. Matching behaviour was observed in both games.
+Retail/faithful-reconstruction playtesting confirmed the Forbes Diffuser's
+delayed gas window and retrigger behaviour: another gas hit restarts the wait,
+including after a missed trigger. Redux now preserves the original timing
+window while changing mode selection and ignoring repeated gas on an active
+roof; see [Forbes Diffuser](caero_weapons.md#forbes-diffuser).
 
 The same comparison distinguished a fresh `--level=80` start from an established
 retail campaign. Three nearby Kalvin Storage tanks are explicitly marked by

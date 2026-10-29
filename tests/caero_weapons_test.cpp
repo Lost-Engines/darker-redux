@@ -1,7 +1,16 @@
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
+#include <filesystem>
+#include <string_view>
 #include "audio/flight_sounds.h"
 #include "game/caero_weapons.h"
+#include "game/mission_combat.h"
 #include "game/object_definitions.h"
+#include "game/projectile_steering.h"
+#include "game/weapon_selection.h"
+#include "maths/direction.h"
+#include "resources/archive_set.h"
+#include "resources/world_profile.h"
 #include "reference/caero_impact_samples.h"
 #include "reference/caero_weapon_samples.h"
 #include "reference/chargeable_samples.h"
@@ -125,8 +134,8 @@ TEST_CASE("Pinner Direct strength follows native world setup", "[game][weapons]"
   }
 }
 
-TEST_CASE("Diffuser firing matches native alternating selections and failure reset", "[game][weapons]") {
-  /// Compare the complete C8E9 secondary dispatch, including early gates which preserve the trigger selection
+TEST_CASE("Diffuser firing preserves its stage while retaining native launch guards and energy costs", "[game][weapons][diffuser]") {
+  /// Neither successful launches nor rejected attempts change the selected stage in Redux
   for(auto const &sample : darker::test_reference::diffuser_firing_samples) {
     CAPTURE(sample);
     darker::game::projectile_pool pool;
@@ -160,16 +169,22 @@ TEST_CASE("Diffuser firing matches native alternating selections and failure res
     })};
     CHECK(energy.reserve == sample[7]);
     CHECK(result.ready == (sample[8] != 0));
-    CHECK((result.next_selection ? result.next_selection : sample[0]) == sample[9]);
+    CHECK(result.next_selection == 0);
     CHECK((result.shot != nullptr) == (sample[10] != 0));
   }
 }
 
-TEST_CASE("Diffuser building impacts match native gas target and wrapped detonation window", "[game][weapons]") {
-  /// Compare valid skylights, rejected surfaces and both sides of the wrapped deadline against CE84
+TEST_CASE("Diffuser building impacts retain native target admission and detonation timing", "[game][weapons][diffuser]") {
+  /// Repeat gas on the same active roof deliberately diverges and is covered separately
   for(auto const &sample : darker::test_reference::diffuser_impact_samples) {
     CAPTURE(sample);
-    darker::game::diffuser_state state{static_cast<uint16_t>(sample[4]), static_cast<uint16_t>(sample[6]), static_cast<uint16_t>(sample[7])};
+    if(sample[0] && sample[3] == sample[4]) continue;
+    darker::game::diffuser_state state{
+      .cell{static_cast<uint16_t>(sample[4])},
+      .deadline{static_cast<uint16_t>(sample[6])},
+      .sound_deadline{static_cast<uint16_t>(sample[7])},
+      .active{true},
+    };
     auto const result{state.hit(sample[0] != 0, static_cast<darker::game::collision_category>(sample[1]), static_cast<uint8_t>(sample[2]), static_cast<uint16_t>(sample[3]), static_cast<uint16_t>(sample[5]))};
     auto const expected{sample[8] == 0x67ea   ? darker::game::diffuser_impact::gas
       : sample[8] == 0x67bf ? darker::game::diffuser_impact::destroyed : darker::game::diffuser_impact::rejected};
@@ -187,5 +202,194 @@ TEST_CASE("Caero Weapon impact strength matches native beacon sampling", "[game]
     darker::game::city_map cells{};
     cells[36 * 128 + 36] = {static_cast<uint8_t>(sample[3]), static_cast<uint8_t>(sample[4])};
     CHECK(darker::game::caero_weapon_strength(cells, {static_cast<uint16_t>(sample[0]), static_cast<uint16_t>(sample[1]), static_cast<uint16_t>(sample[2])}, static_cast<uint16_t>(sample[5])) == sample[6]);
+  }
+}
+
+TEST_CASE("Diffuser gas survives retry hits and expires permanently across clock wrapping", "[game][weapons][diffuser]") {
+  /// Check the original arming window, duplicate hits, manual retargeting and absence of phantom gas
+  using darker::game::clock_tick;
+  using darker::game::collision_category;
+  using darker::game::diffuser_impact;
+  using darker::game::diffuser_state;
+  auto constexpr permitted{darker::game::city_cell::permitted_target};
+  uint16_t constexpr roof{0x1717};
+  for(unsigned int const start : {0, 1024, 60000, 65000}) {
+    CAPTURE(start);
+    diffuser_state state;
+    CHECK(state.hit(false, collision_category::diffuser, permitted, 0, static_cast<clock_tick>(start)) == diffuser_impact::rejected);
+    REQUIRE(state.hit(true, collision_category::diffuser, permitted, roof, static_cast<clock_tick>(start)) == diffuser_impact::gas);
+    auto const deadline{state.deadline};
+    auto const arm_time{static_cast<clock_tick>(deadline - diffuser_state::trigger_window_ticks)};
+    REQUIRE(state.active);
+    CHECK(state.hit(false, collision_category::diffuser, permitted, roof, static_cast<clock_tick>(arm_time - 1)) == diffuser_impact::rejected);
+    CHECK(state.active);
+    CHECK(state.hit(true, collision_category::diffuser, permitted, roof, arm_time) == diffuser_impact::already_gassed);
+    CHECK(state.deadline == deadline);
+    CHECK(state.hit(false, collision_category::diffuser, permitted, roof + 1, arm_time) == diffuser_impact::rejected);
+    CHECK(state.active);
+
+    SECTION("Successful detonation closes the sequence at either end of the valid window") {
+      for(auto const clock : {arm_time, static_cast<clock_tick>(deadline - 1)}) {
+        auto attempt{state};
+        CHECK(attempt.hit(false, collision_category::diffuser, permitted, roof, clock) == diffuser_impact::destroyed);
+        CHECK_FALSE(attempt.active);
+        CHECK(attempt.sound_deadline == clock);
+        CHECK(attempt.hit(false, collision_category::diffuser, permitted, roof, clock) == diffuser_impact::rejected);
+      }
+    }
+    SECTION("Timeout permits new gas but cannot revive the old target on a later clock cycle") {
+      state.advance(static_cast<clock_tick>(deadline - 1));
+      CHECK(state.active);
+      state.advance(deadline);
+      CHECK_FALSE(state.active);
+      CHECK(state.hit(false, collision_category::diffuser, permitted, roof, deadline) == diffuser_impact::rejected);
+      state.advance(arm_time);
+      CHECK_FALSE(state.active);
+      CHECK(state.hit(false, collision_category::diffuser, permitted, roof, arm_time) == diffuser_impact::rejected);
+      CHECK(state.hit(true, collision_category::diffuser, permitted, roof, arm_time) == diffuser_impact::gas);
+      CHECK(state.deadline == static_cast<clock_tick>(arm_time + diffuser_state::gas_lifetime_ticks));
+    }
+    SECTION("Gas on another valid roof replaces the single shared target") {
+      REQUIRE(state.hit(true, collision_category::diffuser, permitted, roof + 1, arm_time) == diffuser_impact::gas);
+      CHECK(state.cell == roof + 1);
+      CHECK(state.deadline == static_cast<clock_tick>(arm_time + diffuser_state::gas_lifetime_ticks));
+    }
+  }
+}
+
+TEST_CASE("Diffuser controls follow actual warehouse impacts and preserve manual selection", "[game][weapons][diffuser][integration]") {
+  /// Use the retail warehouse geometry and real flight/collision paths without enemy interference
+  if(std::string_view{DARKER_TEST_RESOURCE_DIR}.empty()) SKIP("Requires extracted retail geometry");
+  using darker::game::caero_weapon;
+  using darker::game::clock_tick;
+  darker::resources::geometry_bank const bank{darker::resources::read_binary_file(
+    std::filesystem::path{DARKER_TEST_RESOURCE_DIR} / "00_030.bin", 1'000'000)};
+  darker::game::city_map cells{};
+  auto &roof{cells[darker::game::city_cell_index(23, 23)]};
+  roof = {
+    .type{76},
+    .state{darker::game::city_cell::permitted_target},
+  };
+  uint16_t constexpr target{0x1717};
+  uint16_t constexpr missed_target{0x0a0a};
+  cells[darker::game::packed_cell_reference{missed_target}.index()] = roof;
+  auto constexpr damage_mask{darker::resources::profile(darker::resources::world_kind::delphi).damage_mask};
+  auto const aim{darker::game::resolve_map_guidance(target, cells, bank, damage_mask)};
+  darker::maths::world_position const centre{
+    .column{aim.position.column},
+    .row{aim.position.row},
+    .height{static_cast<uint16_t>(aim.height - aim.height_extent / 2)},
+  };
+  darker::game::player_flight player;
+  auto &craft{std::get<darker::game::caero_flight_state>(player.craft)};
+  craft.flying = true;
+  player.pose().position = {
+    .column{static_cast<uint16_t>(centre.column + 32)},
+    .row{centre.row},
+    .height{static_cast<uint16_t>(aim.height + 2048)},
+  };
+  player.pose().speed = 496;
+  darker::game::mission_combat combat{{}};
+  combat.secondary_weapon = std::to_underlying(caero_weapon::diffuser_gas);
+  CHECK(combat.secondary_weapon == 5);
+  CHECK(std::to_underlying(caero_weapon::diffuser_trigger) == 4);
+  darker::game::campaign_clock clock{65000};
+  auto const step{[&](bool const fire = false){
+    clock += 8;
+    combat.advance(player, cells, bank, {
+      .elapsed_ticks{clock},
+      .frame_step{8},
+      .changes{static_cast<uint16_t>(clock ^ (clock - 8))},
+    }, {
+      .secondary_pressed{fire},
+    });
+  }};
+  auto const fire{[&](bool const hit_roof)->darker::game::projectile* {
+    craft.energy.reserve = 0xffff;
+    combat.target.token = hit_roof ? target : missed_target;
+    auto const direction{darker::maths::object_target_direction(player.pose().position, centre)};
+    player.pose().angles = {
+      .heading{direction.heading},
+      .pitch{hit_roof ? direction.pitch : uint16_t{0}},
+      .roll{0},
+    };
+    step(true);
+    REQUIRE(combat.player_fired);
+    return combat.projectiles.objects().head();
+  }};
+  auto const impact{[&](darker::game::projectile const *const shot){
+    for(unsigned int i{0}; i < 256 && !(shot->flags & 8); ++i) step();
+    REQUIRE((shot->flags & 8));
+  }};
+  auto const wait_until{[&](clock_tick const destination){
+    auto const ticks{static_cast<clock_tick>(destination - clock)};
+    REQUIRE(ticks < 0x8000);
+    auto const end{clock + ticks};
+    while(clock < end) step();
+  }};
+
+  SECTION("A missed gas shot never arms the detonator") {
+    auto const *shot{fire(false)};
+    CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
+    auto const deadline{shot->deadline};
+    wait_until(static_cast<clock_tick>(deadline + 256));
+    CHECK_FALSE(combat.diffuser.active);
+    CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
+  }
+  SECTION("Impact and timeout respect another weapon selected during flight") {
+    auto const *shot{fire(true)};
+    combat.secondary_weapon = std::to_underlying(caero_weapon::brent_ground);
+    impact(shot);
+    REQUIRE(combat.diffuser.active);
+    CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::brent_ground));
+    wait_until(combat.diffuser.deadline);
+    CHECK_FALSE(combat.diffuser.active);
+    CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::brent_ground));
+  }
+  SECTION("Successful gas arms retries until detonation or timeout") {
+    auto const *shot{fire(true)};
+    CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
+    impact(shot);
+    REQUIRE(combat.diffuser.active);
+    REQUIRE(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
+    auto const deadline{combat.diffuser.deadline};
+
+    SECTION("Manual gas reselection never restarts the existing smoke") {
+      REQUIRE(combat.effects.emitters.size() == 24);
+      auto const first_smoke_start{combat.effects.emitters.front().start};
+      combat.secondary_weapon = 5;                                              // same assignment as pressing the weapon selection key
+      step();
+      REQUIRE(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
+      impact(fire(true));
+      CHECK(combat.diffuser.deadline == deadline);
+      CHECK(combat.effects.emitters.size() == 24);
+      CHECK(combat.effects.emitters.front().start == first_smoke_start);
+      CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
+    }
+    SECTION("Early and missed detonators allow another attempt in the same smoke window") {
+      impact(fire(true));
+      CHECK_FALSE(roof.state & damage_mask);
+      CHECK(combat.diffuser.deadline == deadline);
+      CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
+      wait_until(static_cast<clock_tick>(deadline - darker::game::diffuser_state::trigger_window_ticks));
+      auto const *miss{fire(false)};
+      wait_until(static_cast<clock_tick>(miss->deadline + 256));
+      REQUIRE(combat.diffuser.active);
+      CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
+      impact(fire(true));
+      CHECK(roof.state & damage_mask);
+      CHECK_FALSE(combat.diffuser.active);
+      CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
+    }
+    SECTION("Expiry resets to gas without a firing attempt") {
+      wait_until(deadline);
+      CHECK_FALSE(combat.diffuser.active);
+      CHECK_FALSE(roof.state & damage_mask);
+      CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
+      impact(fire(true));
+      CHECK(combat.diffuser.active);
+      CHECK(combat.diffuser.deadline != deadline);
+      CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
+    }
   }
 }

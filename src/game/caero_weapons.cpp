@@ -1,28 +1,36 @@
 #include "game/caero_weapons.h"
-#include "game/weapon_selection.h"
 #include <algorithm>
+#include <bit>
 #include <stdexcept>
 #include "game/beacon_light.h"
 #include "game/object_definitions.h"
-#include "maths/world_coordinates.h"
-#include "game/target_reference.h"
 #include "game/player_flags.h"
+#include "game/target_reference.h"
+#include "game/weapon_selection.h"
+#include "maths/world_coordinates.h"
 
 namespace darker::game {
 
+void diffuser_state::advance(clock_tick const clock) noexcept {
+  /// Retire expired gas once so a later timer wrap cannot revive the armed target
+  if(active && std::bit_cast<int16_t>(static_cast<clock_tick>(clock - deadline)) >= 0) active = false;
+}
+
 diffuser_impact diffuser_state::hit(bool const gas, collision_category const category, uint8_t const state, uint16_t const target, clock_tick const clock) noexcept {
-  /// CE84 shares one gas target and accepts its trigger only in the final 1000h ticks before the 2800h deadline
-  int constexpr gas_lifetime_ticks{0x2800};
-  uint16_t constexpr trigger_window_start{0xf000};                             // wrapped -0x1000: the final 4096 ticks
+  /// Retain CE84's target and timing window, but leave an already-smoking roof's timer alone
+  advance(clock);
   if(category != collision_category::diffuser || !(state & city_cell::permitted_target)) return diffuser_impact::rejected;
   if(gas) {
+    if(active && target == cell) return diffuser_impact::already_gassed;
     cell = target;
-    deadline = static_cast<uint16_t>(clock + gas_lifetime_ticks);
+    deadline = static_cast<clock_tick>(clock + gas_lifetime_ticks);
+    active = true;
     return diffuser_impact::gas;
   }
-  if(target != cell || static_cast<uint16_t>(clock - deadline) < trigger_window_start) return diffuser_impact::rejected;
+  if(!active || target != cell || static_cast<game_duration>(deadline - clock) > trigger_window_ticks) return diffuser_impact::rejected;
   sound_deadline = clock;
   deadline = clock;
+  active = false;
   return diffuser_impact::destroyed;
 }
 
@@ -86,14 +94,12 @@ caero_fire_result fire_caero_weapon(projectile_pool &pool, caero_energy_state &e
       .ready{true}
     };
   } else if(selection == caero_weapon::diffuser_gas || selection == caero_weapon::diffuser_trigger) {
-    if(energy.reserve < cost || target_reference{request.target}.is_object_encoded()) return {
-      .next_selection{std::to_underlying(request.pressed ? caero_weapon::diffuser_trigger : caero_weapon::none)}
-    };
+    // impacts and gas expiry change the stage; a missed or blocked shot keeps it
+    if(energy.reserve < cost || target_reference{request.target}.is_object_encoded()) return {};
     if(!request.pressed) return {
       .ready{true}
     };
     energy.reserve -= cost;
-    next_selection = selection == caero_weapon::diffuser_gas ? caero_weapon::diffuser_trigger : caero_weapon::diffuser_gas;
   } else {
     if(energy.reserve < cost) return {};
     if(selection == caero_weapon::dual_launch_follow_up) {

@@ -1,6 +1,4 @@
 #include "game/mission_combat.h"
-#include "game/player_flags.h"
-#include "game/weapon_selection.h"
 #include <algorithm>
 #include <bit>
 #include <stdexcept>
@@ -11,19 +9,21 @@
 #include "game/caero_weapons.h"
 #include "game/dual_launch.h"
 #include "game/effect_tables.h"
+#include "game/native_object_layout.h"
+#include "game/object_catalogue.h"
 #include "game/object_deadline.h"
 #include "game/object_definitions.h"
 #include "game/objective_counter.h"
+#include "game/player_flags.h"
 #include "game/projectile_motion.h"
 #include "game/projectile_update.h"
 #include "game/random.h"
 #include "game/skimma_weapons.h"
+#include "game/target_reference.h"
 #include "game/tunnel_navigation.h"
 #include "game/vehicle_combat.h"
+#include "game/weapon_selection.h"
 #include "maths/world_coordinates.h"
-#include "game/native_object_layout.h"
-#include "game/object_catalogue.h"
-#include "game/target_reference.h"
 
 namespace darker::game {
 namespace {
@@ -305,6 +305,10 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
   player_hit = false;
   player_contact = {};
   auto *caero{std::get_if<caero_flight_state>(&player.craft)};
+  diffuser.advance(clock);
+  if(caero && !diffuser.active && secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger)) {
+    secondary_weapon = std::to_underlying(caero_weapon::diffuser_gas);
+  }
   auto &damage{std::visit([](auto &craft)->player_damage_state& {
     return craft.damage;
   }, player.craft)};
@@ -608,16 +612,23 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
       }
     }
     else if(!victim && contact.contact == city_contact::building
-      && (shot->parameters.definition == &original_object_definitions[3] || shot->parameters.definition == &original_object_definitions[4])) {
+      && (shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_trigger)]
+        || shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_gas)])) {
       auto const &cell{cells[city_cell_index(contact.column, contact.row)]};
-      auto const result{diffuser.hit(shot->parameters.definition == &original_object_definitions[4], contact.category, cell.state,
+      auto const result{diffuser.hit(shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_gas)], contact.category, cell.state,
         packed_cell_reference::from_coordinates(contact.column, contact.row).value, clock)};
+      // do not replace a different weapon selected while the capsule was in flight
+      if(caero && (secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas)
+        || secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger))) {
+        if(result == diffuser_impact::gas || result == diffuser_impact::already_gassed) secondary_weapon = std::to_underlying(caero_weapon::diffuser_trigger);
+        else if(result == diffuser_impact::destroyed) secondary_weapon = std::to_underlying(caero_weapon::diffuser_gas);
+      }
       if(result == diffuser_impact::destroyed) damage_world_cell(contact.column, contact.row, impact.height, cells, bank, effects, clock, world_damage_counter);
       else if(result == diffuser_impact::gas) {
         auto const &type{bank.city_types()[cell.type - 1]};
         effects.spawn(0x75d4, {static_cast<uint16_t>(contact.column * 256 + type.column_fraction),
           static_cast<uint16_t>(contact.row * 256 + type.row_fraction), impact.height}, clock);
-      } else effects.spawn(0x75a3, impact, clock);
+      } else if(result == diffuser_impact::rejected) effects.spawn(0x75a3, impact, clock);
     }
     else if(!victim) impact_projectile_world(contact, impact, *shot->parameters.definition, cells, bank, effects, clock, player.tunnel ? 0x7386 : 0x721c, world_damage_counter, damage_mask);
     shot->flags |= 0x28;

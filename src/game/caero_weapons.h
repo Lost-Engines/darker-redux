@@ -32,13 +32,18 @@ struct caero_fire_request {
   bool released{false};
 };
 
-enum class diffuser_impact { rejected, gas, destroyed };
+enum class diffuser_impact { rejected, gas, already_gassed, destroyed };
 
 struct diffuser_state {
+  static game_duration constexpr gas_lifetime_ticks{0x2800};
+  static game_duration constexpr trigger_window_ticks{0x1000};
+
   uint16_t cell{0};
   clock_tick deadline{0};
   clock_tick sound_deadline{0};
+  bool active{false};
 
+  void advance(clock_tick clock) noexcept;
   diffuser_impact hit(bool gas, collision_category category, uint8_t state, uint16_t target, clock_tick clock) noexcept;
 };
 
