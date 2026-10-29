@@ -1,8 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
+#include <numbers>
+#include "graphics/near_clip.h"
 #include "graphics/procedural_hud.h"
+#include "graphics/screen_layout.h"
 #include "reference/procedural_samples.h"
 
 namespace {
@@ -98,4 +102,67 @@ TEST_CASE("Camera picking cross retains its green shading and transparent surrou
   CHECK(frame.pixels[120 * 320 + 157] == 188);
   CHECK(frame.pixels[120 * 320 + 163] == 188);
   CHECK(std::ranges::count(frame.pixels, 42) == 320 * 240 - 13);
+}
+
+TEST_CASE("Target markers preserve the native projection at every overlay scale", "[graphics][hud]") {
+  /// Changing resolution alone must not move an existing lock within the native HUD
+  for(int const height : {240, 777, 1080, 1440, 2160}) {
+    double const focal_length{256.0 * height / 240};
+    for(int const centre_y : {92, 120}) {
+      for(int const x : {-54, -20, 0, 20, 54}) {
+        for(int const y : {-54, -20, 0, 20, 54}) {
+          CHECK(darker::graphics::project_target_marker({x, y}, focal_length, height, centre_y)
+            == darker::graphics::pixel_position{160 + x, centre_y + y});
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("Target marker placement agrees with scene projection across FOVs and framebuffers", "[graphics][hud]") {
+  /// Compare the magnified HUD centre against the world projector, allowing one native HUD pixel of quantisation
+  using darker::graphics::pixel_position;
+  std::array<pixel_position, 5> const sizes{{{320, 240}, {1920, 1080}, {3840, 2160}, {3440, 1440}, {1000, 777}}};
+  std::array<pixel_position, 5> const offsets{{{0, 0}, {48, 18}, {-45, 12}, {21, -32}, {-18, -45}}};
+  double const native_fov{2 * std::atan(120.0 / 256.0) * 180 / std::numbers::pi};
+  for(auto const &size : sizes) {
+    double const overlay_scale{static_cast<double>(size.y) / 240};
+    int const overlay_width{static_cast<int>(320 * overlay_scale)};
+    int const overlay_left{(size.x - overlay_width) / 2};
+    for(bool const cockpit : {false, true}) {
+      int const world_height{(cockpit ? darker::graphics::cockpit_view_layout::caero_height : 240) * size.y / 240};
+      int const world_top{cockpit ? static_cast<int>(darker::graphics::cockpit_view_layout::caero_top * overlay_scale) : 0};
+      int const centre_y{cockpit ? 92 : 120};
+      for(double const fov : {15.0, 35.0, native_fov, 75.0, 90.0, 120.0, 140.0}) {
+        double const focal_length{size.y / (2 * std::tan(fov * std::numbers::pi / 360))};
+        for(auto const &offset : offsets) {
+          CAPTURE(size.x, size.y, cockpit, fov, offset.x, offset.y);
+          auto const marker{darker::graphics::project_target_marker(offset, focal_length, size.y, centre_y)};
+          int const depth{1024};
+          auto const point{darker::graphics::project_vertex({
+            .horizontal{offset.x * depth},
+            .vertical{offset.y * depth},
+            .depth{depth * 256},
+          }, {static_cast<int16_t>(size.x / 2), static_cast<int16_t>(world_height / 2)}, focal_length)};
+          double const marker_x{overlay_left + static_cast<double>(marker.x) * overlay_width / 320};
+          double const marker_y{marker.y * overlay_scale};
+          CHECK(std::abs(marker_x - point.x) <= overlay_scale + 1);
+          CHECK(std::abs(marker_y - (point.y + world_top)) <= overlay_scale + 1);
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("Target marker outlines clip safely when a narrow FOV moves them beyond the HUD", "[graphics][hud]") {
+  /// A retained gameplay lock can leave the visible overlay without becoming an invalid drawing request
+  framework::render::indexed_cockpit_framebuffer frame;
+  frame.pixels.fill(42);
+  darker::graphics::draw_target_marker(frame, darker::graphics::target_marker::large, {-1, 92}, 243, 233);
+  CHECK(std::ranges::any_of(frame.pixels, [](auto const pixel){ return pixel != 42; }));
+  frame.pixels.fill(42);
+  auto const offscreen{darker::graphics::project_target_marker({-54, 0}, 912.0, 240)};
+  REQUIRE(offscreen.x < -20);
+  darker::graphics::draw_target_marker(frame, darker::graphics::target_marker::large, offscreen, 243, 233);
+  CHECK(std::ranges::all_of(frame.pixels, [](auto const pixel){ return pixel == 42; }));
 }

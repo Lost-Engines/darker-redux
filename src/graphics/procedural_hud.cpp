@@ -1,11 +1,13 @@
 #include "graphics/procedural_hud.h"
-#include "graphics/screen_layout.h"
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <span>
 #include <stdexcept>
 #include "graphics/cockpit_tables.h"
+#include "graphics/render_geometry.h"
+#include "graphics/screen_layout.h"
 #include "maths/angle.h"
 
 namespace darker::graphics {
@@ -91,6 +93,17 @@ attitude_line calculate_attitude(uint16_t const pitch_index, uint16_t const roll
   };
 }
 
+pixel_position project_target_marker(pixel_position const &native_offset,
+  double const focal_length, int const framebuffer_height, int const centre_y) noexcept {
+  /// Convert the lock's native projection into the cockpit overlay's coordinates at the scene's current FOV
+  double const overlay_scale{static_cast<double>(framebuffer_height) / display_layout::height};
+  double const scale{focal_length / (render_geometry::focal_length * overlay_scale)};
+  return {
+    display_layout::centre_x + static_cast<int>(std::lround(native_offset.x * scale)),
+    centre_y + static_cast<int>(std::lround(native_offset.y * scale)),
+  };
+}
+
 void draw_target_marker(framework::render::indexed_cockpit_framebuffer &target,
   target_marker const marker, pixel_position const &centre, uint8_t const upper_colour, uint8_t const lower_colour) {
   /// 5F39 emits paired outlines; E302/E305 consume horizontal/vertical step bits
@@ -108,7 +121,7 @@ void draw_target_marker(framework::render::indexed_cockpit_framebuffer &target,
   default:
     throw std::invalid_argument{"unknown target marker"};
   }
-  if(centre.x < 0 || centre.x >= display_layout::width || centre.y < 0 || centre.y >= display_layout::height) throw std::invalid_argument{"marker centre must be inside the display"};
+  // narrow FOVs can move a retained lock off the overlay; put_pixel clips its outline
   int const extent{stream.front()};
   size_t cursor{1};
   for(int half{0}; half < 2; ++half) {

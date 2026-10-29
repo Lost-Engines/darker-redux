@@ -776,7 +776,7 @@ auto main(int const argc, char const *const argv[])->int {
         bool const centred{combat->target.distance < 2};
         uint16_t const colours{static_cast<uint16_t>((combat->secondary_ready ? 0xe9f3 : 0x030c) + (centred ? 0x0606 : 0))};
         darker::graphics::draw_target_marker(display, centred ? darker::graphics::target_marker::small : darker::graphics::target_marker::large,
-          {static_cast<int16_t>(framework::render::display_layout::centre_x + combat->target.horizontal), static_cast<int16_t>(sight_y + combat->target.vertical)},
+          darker::graphics::project_target_marker({combat->target.horizontal, combat->target.vertical}, focal_length, display_height, sight_y),
           static_cast<uint8_t>(colours), static_cast<uint8_t>(colours >> 8));
       }
     }

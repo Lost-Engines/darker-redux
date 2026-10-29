@@ -28,6 +28,8 @@ struct attitude_line {
 attitude_line calculate_attitude(uint16_t pitch_index, uint16_t roll_index,
   int8_t pitch_high, bool alternate_colour, int centre_y = 92);
 void draw_attitude_surround(framework::render::indexed_cockpit_framebuffer &target, uint16_t colour_parameter, int centre_y = 92);
+pixel_position project_target_marker(pixel_position const &native_offset,
+  double focal_length, int framebuffer_height, int centre_y = 92) noexcept;
 void draw_target_marker(framework::render::indexed_cockpit_framebuffer &target,
   target_marker marker, pixel_position const &centre, uint8_t upper_colour, uint8_t lower_colour);
 
