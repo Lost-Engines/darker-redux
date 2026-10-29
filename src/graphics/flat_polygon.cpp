@@ -54,12 +54,13 @@ struct edge_walker {
   int direction{1};
   int end_y{0};
   int x{0};
-  int fraction{raster_arithmetic::edge_start_fraction};
+  int fraction{0};
   int step{0};
 };
 
+template<class Precision>
 void start_edge(edge_walker &edge, std::span<screen_vertex const> const points, int const y, bool const right) {
-  /// A47F/A4DB skip horizontal edges and reset the original 8-bit fractional accumulator
+  /// A47F/A4DB skip horizontal edges and reset the half-pixel starting fraction
   auto a{points[edge.index]};
   screen_vertex b{};
   do {
@@ -70,20 +71,22 @@ void start_edge(edge_walker &edge, std::span<screen_vertex const> const points, 
     a = b;
   } while(true);
   auto const delta{vec2<int>{b} - vec2<int>{a}};
-  int const quotient{(delta.x < 0 ? -delta.x - 1 : delta.x) * raster_arithmetic::edge_start_fraction / delta.y};
+  int const quotient{(delta.x < 0 ? -delta.x - 1 : delta.x) * Precision::start_fraction / delta.y};
   edge.step = delta.x < 0 ? -2 * (quotient + 1) + (right ? 0 : 1) : 2 * quotient;
   edge.x = a.x + (right ? 1 : 0);
-  edge.fraction = raster_arithmetic::edge_start_fraction;
+  edge.fraction = Precision::start_fraction;
   edge.end_y = b.y;
 }
 
+template<class Precision>
 void step_edge(edge_walker &edge) noexcept {
   /// Advance before drawing, preserving the native half-unit starting bias
-  int const fraction{edge.fraction + (edge.step & raster_arithmetic::edge_fraction_mask)};
-  edge.x += (edge.step >> raster_arithmetic::edge_fraction_bits) + (fraction >> raster_arithmetic::edge_fraction_bits);
-  edge.fraction = fraction & raster_arithmetic::edge_fraction_mask;
+  int const fraction{edge.fraction + (edge.step & Precision::fraction_mask)};
+  edge.x += (edge.step >> Precision::fraction_bits) + (fraction >> Precision::fraction_bits);
+  edge.fraction = fraction & Precision::fraction_mask;
 }
 
+template<class Precision>
 void rasterise(framework::render::indexed_surface target, std::span<screen_vertex const> const points, uint8_t const colour, int const right, lighten_blend const *const blend) {
   /// Walk the original edges and shade spans after visibility and clipping are resolved
   auto const first_point{std::min_element(points.begin(), points.end(), [](auto const &a, auto const &b){
@@ -103,10 +106,10 @@ void rasterise(framework::render::indexed_surface target, std::span<screen_verte
     .end_y{first_point->y}
   };
   for(int y{first_point->y}; y < last_point->y; ++y) {
-    if(y == left_edge.end_y) start_edge(left_edge, points, y, false);
-    if(y == right_edge.end_y) start_edge(right_edge, points, y, true);
-    step_edge(left_edge);
-    step_edge(right_edge);
+    if(y == left_edge.end_y) start_edge<Precision>(left_edge, points, y, false);
+    if(y == right_edge.end_y) start_edge<Precision>(right_edge, points, y, true);
+    step_edge<Precision>(left_edge);
+    step_edge<Precision>(right_edge);
     auto const left{std::clamp(left_edge.x, 0, right + 1)};
     auto const end{std::clamp(right_edge.x, left, right + 1)};
     fill_polygon_span(target.pixels.subspan(y * target.stride + left, end - left), colour, blend);
@@ -143,11 +146,15 @@ void draw_flat_polygon(framework::render::indexed_surface target, std::span<scre
   auto const previous{vertices[index == 0 ? vertices.size() - 1 : index - 1]};
   if(back_facing(*top, next, previous)) return;
 
+  // Keep original-resolution coverage exact; taller views need finer edges.
+  auto const fill{bottom <= display_layout::height ? rasterise<raster_arithmetic::native_edge_precision>
+    : rasterise<raster_arithmetic::high_resolution_edge_precision>};
+
   // Interior polygons need neither clipping nor temporary copies. Distant faces
   // often occupy only a few pixels, so buffer housekeeping otherwise dominates.
   if(leftmost->x >= 0 && rightmost->x <= right
     && top->y >= 0 && lowest->y <= bottom) {
-    rasterise(target, vertices, colour, right, blend);
+    fill(target, vertices, colour, right, blend);
     return;
   }
   polygon_buffer first{}, second{};
@@ -159,7 +166,7 @@ void draw_flat_polygon(framework::render::indexed_surface target, std::span<scre
     points = std::span{*output}.first(count);
     output = output == &first ? &second : &first;
   }
-  rasterise(target, points, colour, right, blend);
+  fill(target, points, colour, right, blend);
 }
 
 } // namespace darker::graphics

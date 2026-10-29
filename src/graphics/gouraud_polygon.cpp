@@ -54,12 +54,13 @@ struct edge_walker {
   int direction{1};
   int end_y{0};
   int x{0};
-  int fraction{raster_arithmetic::edge_start_fraction};
+  int fraction{0};
   int step{0};
   raster_arithmetic::palette_accumulator shade{0};
   int shade_step{0};
 };
 
+template<class Precision>
 void start_edge(edge_walker &edge, std::span<shaded_vertex const> const points, int const y, bool const right) {
   /// AD1D/AD8D initialise edge accumulators; shade differences include the original extra unit before division
   auto a{points[edge.index]};
@@ -72,20 +73,21 @@ void start_edge(edge_walker &edge, std::span<shaded_vertex const> const points, 
     a = b;
   } while(true);
   auto const delta{vec2<int>{b.position} - vec2<int>{a.position}};
-  int const quotient{(delta.x < 0 ? -delta.x - 1 : delta.x) * raster_arithmetic::edge_start_fraction / delta.y};
+  int const quotient{(delta.x < 0 ? -delta.x - 1 : delta.x) * Precision::start_fraction / delta.y};
   edge.step = delta.x < 0 ? -2 * (quotient + 1) + (right ? 0 : 1) : 2 * quotient;
   edge.x = a.position.x + (right ? 1 : 0);
-  edge.fraction = raster_arithmetic::edge_start_fraction;
+  edge.fraction = Precision::start_fraction;
   edge.end_y = b.position.y;
   edge.shade = a.shade;
   edge.shade_step = raster_arithmetic::wrap_palette(b.shade - a.shade + 1) / delta.y;
 }
 
+template<class Precision>
 void step_edge(edge_walker &edge) noexcept {
   /// AE69 advances both coordinate and colour accumulators before writing each row
-  int const fraction{edge.fraction + (edge.step & raster_arithmetic::edge_fraction_mask)};
-  edge.x += (edge.step >> raster_arithmetic::edge_fraction_bits) + (fraction >> raster_arithmetic::edge_fraction_bits);
-  edge.fraction = fraction & raster_arithmetic::edge_fraction_mask;
+  int const fraction{edge.fraction + (edge.step & Precision::fraction_mask)};
+  edge.x += (edge.step >> Precision::fraction_bits) + (fraction >> Precision::fraction_bits);
+  edge.fraction = fraction & Precision::fraction_mask;
   edge.shade = static_cast<uint16_t>(edge.shade + edge.shade_step);
 }
 
@@ -127,6 +129,7 @@ void draw_span(framework::render::indexed_surface target, int const y, int const
   }
 }
 
+template<class Precision>
 void rasterise(framework::render::indexed_surface target, std::span<shaded_vertex const> const points, int const right, framework::render::colour_translation const *const colours, lighten_blend const *const blend) {
   /// Walk the original edges and shade spans after visibility and clipping are resolved
   auto const first_point{std::min_element(points.begin(), points.end(), [](auto const &a, auto const &b){
@@ -146,10 +149,10 @@ void rasterise(framework::render::indexed_surface target, std::span<shaded_verte
     .end_y{first_point->position.y}
   };
   for(int y{first_point->position.y}; y < last_point->position.y; ++y) {
-    if(y == left_edge.end_y) start_edge(left_edge, points, y, false);
-    if(y == right_edge.end_y) start_edge(right_edge, points, y, true);
-    step_edge(left_edge);
-    step_edge(right_edge);
+    if(y == left_edge.end_y) start_edge<Precision>(left_edge, points, y, false);
+    if(y == right_edge.end_y) start_edge<Precision>(right_edge, points, y, true);
+    step_edge<Precision>(left_edge);
+    step_edge<Precision>(right_edge);
     int const left{std::clamp(left_edge.x, 0, right + 1)};
     int const end{std::clamp(right_edge.x, left, right + 1)};
     draw_span(target, y, left, end, left_edge.shade >> 8, right_edge.shade >> 8, colours, blend);
@@ -177,11 +180,14 @@ void draw_gouraud_polygon(framework::render::indexed_surface target,
   auto const index{static_cast<size_t>(top - vertices.begin())};
   auto const &next{vertices[index + 1 == vertices.size() ? 0 : index + 1]}, &previous{vertices[index == 0 ? vertices.size() - 1 : index - 1]};
   if(back_facing(top->position, next.position, previous.position)) return;
+  // Share the flat filler's precision so mixed flat/shaded faces still meet.
+  auto const fill{bottom <= display_layout::height ? rasterise<raster_arithmetic::native_edge_precision>
+    : rasterise<raster_arithmetic::high_resolution_edge_precision>};
   // Interior polygons need neither clipping nor temporary copies. Distant faces
   // often occupy only a few pixels, so buffer housekeeping otherwise dominates.
   if(leftmost->position.x >= 0 && rightmost->position.x <= right
     && top->position.y >= 0 && lowest->position.y <= bottom) {
-    rasterise(target, vertices, right, colours, blend);
+    fill(target, vertices, right, colours, blend);
     return;
   }
   polygon_buffer first{}, second{};
@@ -193,7 +199,7 @@ void draw_gouraud_polygon(framework::render::indexed_surface target,
     points = std::span{*output}.first(count);
     output = output == &first ? &second : &first;
   }
-  rasterise(target, points, right, colours, blend);
+  fill(target, points, right, colours, blend);
 }
 
 } // namespace darker::graphics

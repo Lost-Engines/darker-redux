@@ -10,10 +10,18 @@ struct raster_arithmetic {
   using division_quotient = int16_t;                                          // native IDIV result, shared by clipping coordinates and shades
   using palette_accumulator = uint16_t;
   using palette_difference = int16_t;
-  static unsigned int constexpr edge_fraction_bits{8};
-  static int constexpr edge_fraction_scale{1 << edge_fraction_bits};
-  static int constexpr edge_fraction_mask{edge_fraction_scale - 1};
-  static int constexpr edge_start_fraction{edge_fraction_scale / 2};
+  template<unsigned int FractionBits>
+  struct edge_precision {
+    static unsigned int constexpr fraction_bits{FractionBits};
+    static int constexpr fraction_scale{1 << fraction_bits};
+    static int constexpr fraction_mask{fraction_scale - 1};
+    static int constexpr start_fraction{fraction_scale / 2};
+  };
+
+  using native_edge_precision = edge_precision<8>;
+  // Opposing edge biases differ by one fractional unit per row. Keep that
+  // difference below the native one-pixel overlap even on tall framebuffers.
+  using high_resolution_edge_precision = edge_precision<16>;
 
   static constexpr palette_difference wrap_palette(int value) noexcept {
     /// Palette ramps retain word differences regardless of screen-coordinate precision

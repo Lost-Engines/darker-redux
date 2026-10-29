@@ -68,6 +68,7 @@ Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/d
 
 ### Visual enhancements
 
+- **Solid wall edges:** more precise polygon edges remove the hairline gaps that could appear along tall walls at high resolutions.
 - **Transparent enlarged radar:** hold Insert or keypad 0 to overlay the radar with a half-opacity backdrop. Contacts, heading and coordinates remain opaque, including in F4 and external views.
 - **Falling wrecks:** fatally damaged aircraft remain visible until they hit terrain or a building, instead of fading away when the original damage timer expires. Their original falling motion, smoke and impact effects are retained. Cleanup and mission kill credit now wait for the impact and its short cleanup timer; scripted departures retain their original expiry behaviour.
 - **Distant smoke and fire:** particle sprites shrink with projected size, becoming a single actual render pixel only when sufficiently distant for the current resolution and field of view.
