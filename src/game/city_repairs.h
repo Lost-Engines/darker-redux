@@ -27,6 +27,7 @@ public:
 };
 
 city_cell_set scripted_destruction_targets(resources::scenario_record const &record, std::span<std::byte const> program);
+void repair_power_station_buildings(city_map &cells);
 void repair_scenario_buildings(city_map &cells, resources::scenario_record const &record, std::span<std::byte const> program);
 
 } // namespace darker::game

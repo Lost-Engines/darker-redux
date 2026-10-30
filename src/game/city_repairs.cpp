@@ -3,6 +3,7 @@
 #include <bit>
 #include <stdexcept>
 #include <vector>
+#include "game/power_grid.h"
 
 namespace darker::game {
 namespace {
@@ -136,6 +137,14 @@ city_cell_set scripted_destruction_targets(resources::scenario_record const &rec
     }
   }
   return targets;
+}
+
+void repair_power_station_buildings(city_map &cells) {
+  /// Restore power-site components between missions unless their saved authorisation marks them for destruction
+  for(auto &cell : cells) {
+    if(cell.type >= delphi_power_rules::first_structure_type && cell.type <= delphi_power_rules::transformer_type
+      && !(cell.state & city_cell::permitted_target)) cell.state &= static_cast<uint8_t>(~delphi_damage_bit);
+  }
 }
 
 void repair_scenario_buildings(city_map &cells, resources::scenario_record const &record, std::span<std::byte const> const program) {

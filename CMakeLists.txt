@@ -312,6 +312,8 @@ add_library(darker_game STATIC
   src/graphics/radar_beacons.h
   src/game/beacon_changes.cpp
   src/game/beacon_changes.h
+  src/game/power_grid.cpp
+  src/game/power_grid.h
   src/game/beacon_light.cpp
   src/game/beacon_light.h
   src/game/weapon_target.cpp
@@ -531,6 +533,7 @@ if(BUILD_TESTING)
     tests/chargeable_test.cpp
     tests/caero_flight_test.cpp
     tests/beacon_changes_test.cpp
+    tests/power_grid_test.cpp
     tests/beacon_energy_test.cpp
     tests/object_impact_test.cpp
     tests/player_crash_test.cpp

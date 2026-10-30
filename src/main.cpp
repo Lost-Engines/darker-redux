@@ -39,6 +39,7 @@
 #include "game/native_object_layout.h"
 #include "game/player_flags.h"
 #include "game/player_flight.h"
+#include "game/power_grid.h"
 #include "game/scenario_setup.h"
 #include "game/scenario_world.h"
 #include "game/tunnel_portal.h"
@@ -442,6 +443,7 @@ auto main(int const argc, char const *const argv[])->int {
   auto const *scenario{&campaign.scenario(1)};
   auto mission{scenario->records().front()};
   darker::game::beacon_changes beacon_changes;
+  darker::game::delphi_power_grid power_grid;
   darker::game::world_objectives objectives{
     .list{mission.objective_cell_list}
   };
@@ -1491,11 +1493,15 @@ auto main(int const argc, char const *const argv[])->int {
       bool const headquarters_lost{host.exit_requested == session_exit::headquarters_lost};
       auto const completed{static_cast<uint8_t>(combat->completed_objectives)};
       bool const completed_mission{host.exit_requested == session_exit::completed};
+      if(world_mode == world_kind::delphi) power_grid.restore_beacons(cells);
       if(front) darker::game::commit_beacon_queue(cells, scenario->bytes(mission.beacon_sequence));
       if(completed_mission && front && !front->nightmare_selected()) {
         auto updated{front->selected_pilot()};
         if(!host.player.tunnel) {
-          if(world_mode == world_kind::delphi) combat->collateral.repair_services(cells);
+          if(world_mode == world_kind::delphi) {
+            combat->collateral.repair_services(cells);
+            darker::game::repair_power_station_buildings(cells);
+          }
           darker::game::pack_city_state(cells, bank.city_types(), world_mode == world_kind::halon ? std::span<std::byte>{updated.halon} : std::span<std::byte>{updated.delphi});
           updated.return_site = host.hangar.return_site;
           updated.weapons = host.available_weapons;
@@ -1518,6 +1524,7 @@ auto main(int const argc, char const *const argv[])->int {
       host.shield_ready = false;
       if(audio_device) audio.publish({});
       cells = initial_cells;
+      power_grid = {};
       combat = std::make_unique<darker::game::mission_combat>(initial_actors);
       combat->reserve_mode = front->nightmare_selected() ? darker::game::air_reserve_mode::nightmare : darker::game::air_reserve_mode::campaign;
       host.combat = combat.get();
@@ -1723,6 +1730,7 @@ auto main(int const argc, char const *const argv[])->int {
             tunnel_network.reset();
             darker::game::restore_city_state(cells, bank.city_types(), world_mode == world_kind::halon ? std::span<std::byte const>{pilot.halon} : std::span<std::byte const>{pilot.delphi}, pilot.stage);
           }
+          if(world_mode == world_kind::delphi) darker::game::repair_power_station_buildings(cells);
           darker::game::repair_scenario_buildings(cells, mission, scenario->bytes(mission.shared));
           darker::game::apply_scenario_cells(cells, mission);
           objectives = {
@@ -1858,6 +1866,8 @@ auto main(int const argc, char const *const argv[])->int {
           host.ambient_audio = {};
           host.world_audio = {};
           beacon_changes = {};
+          power_grid = {};
+          if(world_mode == world_kind::delphi) power_grid.advance(cells, beacon_changes, 0, 0);
           messages.fill(std::nullopt);
           game_clock = {};
           host.clock = 0;
@@ -1931,7 +1941,8 @@ auto main(int const argc, char const *const argv[])->int {
       }
       if(front) {
         combat->update_difficulty((static_cast<uint32_t>(game_clock.wraps) << 16) | game_clock.frame_ticks);
-        beacon_changes.advance(cells, game_clock.frame_ticks);
+        if(world_mode == world_kind::delphi) power_grid.advance(cells, beacon_changes, game_clock.frame_ticks, step);
+        else beacon_changes.advance(cells, game_clock.frame_ticks);
         auto const *previous_missile{combat->camera_projectile};
         combat->advance(host.player, cells, bank,
         {
