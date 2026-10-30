@@ -15,6 +15,8 @@
 #include "resources/archive_set.h"
 #include "resources/campaign.h"
 #include "resources/save_file.h"
+#include "resources/font.h"
+#include "presentation/power_warnings.h"
 
 namespace {
 
@@ -339,10 +341,63 @@ TEST_CASE("Real Brent Ground impacts disable the three retail transformer pairs"
       for(unsigned int i{0}; i < 32; ++i) step();                            // let supply fade and the weapon recover before the next shot
       ++destroyed;
       CHECK(cells[nearby[station]].state == (destroyed == 2 ? 0 : 255));
+      CHECK(combat.collateral.take_power_warning() == (destroyed == 2 ? std::optional{static_cast<game::power_loss_warning>(station)} : std::nullopt));
     }
   }
   CHECK(cells[game::city_cell_index(0, 126)].state == 0);
   CHECK(std::ranges::none_of(cells, [](auto const &cell) {
     return cell.type == game::delphi_beacon_type && cell.state != 0;
   }));
+}
+
+TEST_CASE("Power-loss warnings escalate and exclude authorised demolition", "[game][power]") {
+  auto cells{power_test_city()};
+  game::delphi_collateral_damage collateral;
+  for(unsigned int station{0}; station < game::delphi_power_stations.size(); ++station) {
+    auto const &pair{game::delphi_power_stations[station].transformers};
+    destroy_transformer(cells, station, 0);
+    collateral.record_power_loss(cells, game::city_cell_index(pair[0].column, pair[0].row));
+    CHECK_FALSE(collateral.take_power_warning());
+    destroy_transformer(cells, station, 1);
+    collateral.record_power_loss(cells, game::city_cell_index(pair[1].column, pair[1].row));
+    CHECK(collateral.take_power_warning() == static_cast<game::power_loss_warning>(station));
+    CHECK_FALSE(collateral.take_power_warning());
+  }
+  SECTION("Either transformer's permission suppresses a demolition warning") {
+    for(auto const &station : game::delphi_power_stations) {
+      auto const &first{station.transformers[0]};
+      auto const &second{station.transformers[1]};
+      cells[game::city_cell_index(first.column, first.row)].state |= game::city_cell::permitted_target;
+      collateral.record_power_loss(cells, game::city_cell_index(second.column, second.row));
+      CHECK_FALSE(collateral.take_power_warning());
+    }
+  }
+  SECTION("Other buildings and pre-existing ruins do not generate new warnings") {
+    collateral.record_power_loss(cells, game::city_cell_index(23, 14));
+    CHECK_FALSE(collateral.take_power_warning());
+    game::delphi_collateral_damage next_mission;
+    game::delphi_power_grid grid;
+    game::beacon_changes script;
+    grid.advance(cells, script, 0, 0);
+    CHECK_FALSE(next_mission.take_power_warning());
+  }
+}
+
+TEST_CASE("Power warnings fit the compact retail HUD font in all languages", "[presentation][power]") {
+  if(std::string_view{DARKER_TEST_INSTALL_DIR}.empty()) SKIP("Requires retail packs");
+  resources::archive_set const archives{DARKER_TEST_INSTALL_DIR};
+  resources::font_resource const font{archives.load({0, 29})};
+  for(auto const language : {resources::scenario_language::english, resources::scenario_language::french, resources::scenario_language::german}) {
+    for(auto const warning : {game::power_loss_warning::local, game::power_loss_warning::spreading, game::power_loss_warning::blackout}) {
+      auto const text{darker::presentation::power_warning_text(warning, language)};
+      unsigned int width{0};
+      for(auto const code : text) width += font.glyph(resources::font_face::compact, static_cast<uint8_t>(code)).advance;
+      CAPTURE(text, width);
+      CHECK(width <= 296);
+      auto const notice{darker::presentation::make_power_warning(warning, language, font, 65000)};
+      CHECK(notice.text == text);
+      CHECK(notice.width == width);
+      CHECK(notice.expiry == static_cast<game::clock_tick>(65000 + darker::presentation::power_warning_duration));
+    }
+  }
 }

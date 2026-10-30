@@ -42,6 +42,35 @@ diffuser_impact diffuser_state::hit(bool const gas, collision_category const cat
   return diffuser_impact::destroyed;
 }
 
+diffuser_state const *diffuser_targets::find(uint16_t const cell) const noexcept {
+  /// Look up the independent gas deadline for one building
+  auto const found{std::ranges::find(clouds, cell, &diffuser_state::cell)};
+  return found == clouds.end() ? nullptr : &*found;
+}
+
+void diffuser_targets::advance(clock_tick const clock) noexcept {
+  /// Expire every cloud independently; removed records cannot revive on a later clock wrap
+  for(auto &cloud : clouds) cloud.advance(clock);
+  std::erase_if(clouds, [](auto const &cloud) { return !cloud.active; });
+}
+
+diffuser_impact diffuser_targets::hit(bool const gas, collision_category const category, uint8_t const state, bool const linked,
+  uint16_t const target, clock_tick const clock, bool const unrestricted) {
+  /// Additional gas belongs to its own building and never replaces another active cloud
+  advance(clock);
+  auto found{std::ranges::find(clouds, target, &diffuser_state::cell)};
+  if(found == clouds.end()) {
+    if(!gas) return diffuser_impact::rejected;
+    diffuser_state cloud;
+    auto const result{cloud.hit(true, category, state, linked, target, clock, unrestricted)};
+    if(result == diffuser_impact::gas) clouds.push_back(cloud);
+    return result;
+  }
+  auto const result{found->hit(gas, category, state, linked, target, clock, unrestricted)};
+  if(!found->active) clouds.erase(found);
+  return result;
+}
+
 uint8_t caero_weapon_strength(city_map const &cells, maths::world_position const position, uint16_t const victim) {
   /// CF21 leaves the victim pointer in AX, so 8450 uses its nibbles as sub-coordinate fractions
   auto const light{beacon_light(cells, position, {static_cast<uint8_t>(victim), static_cast<uint8_t>(victim >> 8)})};
@@ -100,7 +129,7 @@ caero_fire_result fire_caero_weapon(projectile_pool &pool, caero_energy_state &e
     }
     lifetime = charge >> 4;
     charge = 0;
-    if(!lifetime || !target_reference{request.target}.permits_air_weapon()) return {
+    if(!lifetime) return {
       .ready{true}
     };
   } else if(selection == caero_weapon::diffuser_gas || selection == caero_weapon::diffuser_trigger) {
@@ -113,8 +142,10 @@ caero_fire_result fire_caero_weapon(projectile_pool &pool, caero_energy_state &e
   } else {
     if(energy.reserve < cost) return {};
     if(selection == caero_weapon::dual_launch_follow_up) {
-      auto const *capsule{pool.objects().tail()};
-      if(!capsule || capsule->parameters.definition != &original_object_definitions[caero_definition_slot(caero_weapon::dual_launch_capsule)]) return {
+      auto const *capsule{pool.objects().head()};
+      while(capsule && capsule->native_id != request.target) capsule = capsule->next;
+      if(!capsule || (capsule->flags & 8)
+        || capsule->parameters.definition != &original_object_definitions[caero_definition_slot(caero_weapon::dual_launch_capsule)]) return {
         .ready{true},
         .next_selection{std::to_underlying(caero_weapon::dual_launch_capsule)}
       };
@@ -140,6 +171,8 @@ caero_fire_result fire_caero_weapon(projectile_pool &pool, caero_energy_state &e
     .lifetime{lifetime},
     .target_token{target},
   })};
+  // self-guidance retains Chargeable's spin, charge-dependent speed and lifetime damage
+  if(shot && selection == caero_weapon::chargeable && !target_reference{target}.permits_air_weapon()) shot->target_token = shot->native_id;
   if(shot && unguided) shot->parameters.update_entry = object_update::direct_projectile;
   return {
     .shot{shot},

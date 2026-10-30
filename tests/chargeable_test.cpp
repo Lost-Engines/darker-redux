@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "game/object_definitions.h"
+#include "game/caero_weapons.h"
+#include "game/projectile_update.h"
 #include "game/projectile_steering.h"
 #include "reference/chargeable_motion_samples.h"
 
@@ -37,4 +39,52 @@ TEST_CASE("Chargeable steering, spin and displacement match native updates", "[w
     CHECK(shot.placement.speed == sample[30]);
     CHECK(shot.inherited_roll == sample[31]);
   }
+}
+
+TEST_CASE("An unlocked Chargeable release retains charge-dependent flight and damage", "[game][weapons][chargeable]") {
+  namespace game = darker::game;
+  game::projectile_pool pool;
+  game::caero_energy_state energy{
+    .reserve{65535},
+  };
+  uint16_t charge{0};
+  game::launch_emitter const emitter{
+    .position{10000, 10000, 4000},
+    .speed{496},
+  };
+  auto const fire{[&](bool const pressed, bool const held, game::clock_tick const clock) {
+    return game::fire_caero_weapon(pool, energy, charge, {
+      .emitter{emitter},
+      .selection{9},
+      .pressed{pressed},
+      .held{held},
+      .clock{clock},
+      .frame_step{8},
+    });
+  }};
+  CHECK_FALSE(fire(true, true, 64000).shot);
+  REQUIRE(charge > 0);
+  for(unsigned int elapsed{8}; charge < 65535; elapsed += 8) {
+    energy.reserve = 65535;
+    CHECK_FALSE(fire(false, true, static_cast<game::clock_tick>(64000 + elapsed)).shot);
+  }
+  auto const before{energy.reserve};
+  auto const result{fire(false, false, 65520)};
+  REQUIRE(result.shot);
+  auto &shot{*result.shot};
+  CHECK(energy.reserve == before);
+  CHECK(charge == 0);
+  CHECK(shot.target_token == shot.native_id);
+  CHECK(shot.parameters.update_entry == game::object_update::chargeable);
+  CHECK(shot.deadline == static_cast<game::clock_tick>(65520 + 4095));
+  CHECK(game::chargeable_impact_strength(shot.deadline, 65520) == 127);
+  auto const start{shot.placement.position};
+  for(unsigned int elapsed{8}; elapsed <= 1024; elapsed += 8) {
+    CHECK(game::update_projectile(shot, static_cast<game::clock_tick>(65520 + elapsed), 8, &shot.placement)
+      == game::projectile_update_result::advanced);
+  }
+  CHECK(shot.placement.position != start);
+  CHECK(shot.placement.angles.roll != 0);
+  CHECK(game::chargeable_impact_strength(shot.deadline, static_cast<game::clock_tick>(65520 + 1024)) < 127);
+  CHECK_FALSE(fire(false, false, 1024).shot);
 }

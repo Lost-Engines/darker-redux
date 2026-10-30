@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <vector>
 #include "game/city_map.h"
@@ -66,6 +67,10 @@ inline std::array<delphi_power_station, 3> constexpr delphi_power_stations{{
     }},
   },
 }};
+
+enum class power_loss_warning { local, spreading, blackout };
+
+std::optional<power_loss_warning> unauthorised_power_loss(city_map const &cells, unsigned int destroyed_cell);
 
 class delphi_power_grid {
 private:

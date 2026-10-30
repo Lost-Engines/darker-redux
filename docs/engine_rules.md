@@ -32,7 +32,7 @@ arithmetic boundary can share a number without being the same rule.
 | Target references | [`target_reference`](../src/game/target_reference.h) | Native object/ground encoding, no-target sentinel and the distinct air-weapon firing predicate. |
 | Player flags | [`player_flag`](../src/game/player_flags.h) | Known protection/death bits, action gates and bit-preserving mutation; other native flags remain intact. |
 | Simulation time | [`clock_tick`, `game_duration`, `campaign_clock`](../src/game/time.h) | Wrapping tick/deadline arithmetic is distinct from campaign elapsed time and host wall time. |
-| Effects | [`effects`](../src/game/effects.h) | Shared trail/emitter capacities, typed packed animation and effect recipes. |
+| Effects | [`effects`](../src/game/effects.h) | Original stationary-trail capacity, configurable moving-emitter capacity (`--particle-limit`, default 50), typed packed animation and effect recipes. |
 
 The world profile deliberately does not choose the cockpit or infer the palette
 from the ship family. The final Skimma mission uses Delphi. Palette selection

@@ -397,6 +397,7 @@ add_library(darker_presentation STATIC
   src/presentation/options_menu.cpp
   src/presentation/options_menu.h
   src/presentation/front_end.cpp
+  src/presentation/power_warnings.h
   src/presentation/quit_confirmation.h
   src/presentation/front_end.h
 )

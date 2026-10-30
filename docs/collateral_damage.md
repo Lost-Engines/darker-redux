@@ -83,6 +83,14 @@ transformers again. There is no extra save field and no cumulative dimming from
 reapplying the effect each frame. Station positions, falloff distances and fade
 time are collected in [`power_grid.h`](../src/game/power_grid.h).
 
+Unauthorised player demolition also queues a short radio warning, escalating
+with the number of stations currently offline. These Redux-only lines are
+localised for the three game languages, use the existing message chirp and wait
+for mission instructions to clear. Existing saved ruins, enemy attacks and
+stations with either transformer authorised for destruction do not trigger them.
+Several losses before a free radio slot retain the most urgent warning. The
+feature is intentionally omitted from the user-facing README as an easter egg.
+
 ## Finding scripted dependencies
 
 `scripted_destruction_targets` reads the current scenario's active building

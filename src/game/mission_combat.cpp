@@ -33,6 +33,7 @@ std::array constexpr aircraft_collision_group{actor_category::air};
 
 bool building_has_damage_link(city_cell const &cell, resources::geometry_bank const &bank, uint8_t const damage_mask) {
   /// Require a further damaged model, including when a permitted target is already a ruin
+  if(cell.type == 0) return false;
   auto const model{bank.city_model_offset(cell.type, cell.state, damage_mask)};
   auto const bytes{bank.model_pool()};
   return bytes[model] != std::byte{0} || bytes[model + 1] != std::byte{0};
@@ -42,8 +43,10 @@ void damage_world_cell(uint8_t const column, uint8_t const row, uint16_t const h
   city_map &cells, resources::geometry_bank const &bank, effect_system &effects, clock_tick const clock, uint8_t &counter, delphi_collateral_damage *const collateral = nullptr) {
   /// 67BF adds a damage stage, carries the resulting high bit into C221 and emits the type's effect at its origin
   auto &cell{cells.at(city_cell_index(column, row))};
+  bool const newly_destroyed{!(cell.state & delphi_damage_bit)};
   if(collateral) collateral->record_player_destruction(city_cell_index(column, row), cell);
   cell.state = static_cast<uint8_t>(cell.state + 32);
+  if(collateral && newly_destroyed && cell.type == delphi_power_rules::transformer_type) collateral->record_power_loss(cells, city_cell_index(column, row));
   counter = static_cast<uint8_t>(counter + ((cell.state & 128) != 0));
   if(cell.type == 0) return;
   auto const &type{bank.city_types()[cell.type - 1]};
@@ -71,7 +74,7 @@ void impact_projectile_world(city_collision_result const &contact, maths::world_
 
 } // anonymous namespace
 
-mission_combat::mission_combat(std::vector<scenario_actor> initial) : actors{std::move(initial)} {
+mission_combat::mission_combat(std::vector<scenario_actor> initial, unsigned int const particle_limit) : actors{std::move(initial)}, effects{particle_limit} {
   /// Keep stable native identities and reverse source order within the original air/ground/static category traversal
   std::stable_sort(actors.begin(), actors.end(), [](auto const &a, auto const &b){
     return a.category < b.category;
@@ -117,6 +120,10 @@ void mission_combat::release_target(uint16_t const token) noexcept {
     }
   }
   if(target.token == token) target.clear();
+  if(dual_launch_capsule == token) {
+    dual_launch_capsule = weapon_target::no_target;
+    if(primary_weapon == std::to_underlying(caero_weapon::dual_launch_follow_up)) primary_weapon = std::to_underlying(caero_weapon::dual_launch_capsule);
+  }
   if(camera_actor && token == native_object_layout::actor(*camera_actor)) camera_actor.reset();
 }
 
@@ -312,7 +319,7 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
   player_contact = {};
   auto *caero{std::get_if<caero_flight_state>(&player.craft)};
   diffuser.advance(clock);
-  if(caero && !diffuser.active && secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger)) {
+  if(caero && !diffuser.active() && secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger)) {
     secondary_weapon = std::to_underlying(caero_weapon::diffuser_gas);
   }
   auto &damage{std::visit([](auto &craft)->player_damage_state& {
@@ -472,11 +479,16 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
       .model{bank.special_models()[caero_definition_slot(static_cast<caero_weapon>(primary_weapon))]},
       .clock{clock},
       .frame_step{frame_step},
+      .target{dual_launch_capsule},
       .underground{player.tunnel.has_value()},
       .released{trigger_released}
     })};
     weapon_ready = result.ready;
-    if(result.next_selection) primary_weapon = result.next_selection;
+    if(result.next_selection) {
+      primary_weapon = result.next_selection;
+      dual_launch_capsule = result.shot && primary_weapon == std::to_underlying(caero_weapon::dual_launch_follow_up)
+        ? result.shot->native_id : weapon_target::no_target;
+    }
     player_fired = result.shot != nullptr;
     if(result.shot && missile_camera_enabled) camera_projectile = result.shot;
   }
@@ -580,11 +592,10 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
           .row{aim.position.row},
           .height{aim.height}
         };
-        if(caero) target.project_caero(pose.position, position, aim.height_extent, targeting_basis, secondary_weapon, cell.type, cell.state);
-        else {
-          bool const linked{building_has_damage_link(cell, bank, damage_mask)};
-          target.project_skimma(pose.position, position, aim.height_extent, targeting_basis, skimma.selection, true, false, linked);
-        }
+        bool const linked{building_has_damage_link(cell, bank, damage_mask)};
+        if(!linked) target.clear();
+        else if(caero) target.project_caero(pose.position, position, aim.height_extent, targeting_basis, secondary_weapon, cell.type, cell.state);
+        else target.project_skimma(pose.position, position, aim.height_extent, targeting_basis, skimma.selection, true, false, linked);
       }
     }
   }
@@ -627,7 +638,7 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
       if(caero && (secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas)
         || secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger))) {
         if(result == diffuser_impact::gas || result == diffuser_impact::already_gassed) secondary_weapon = std::to_underlying(caero_weapon::diffuser_trigger);
-        else if(result == diffuser_impact::destroyed) secondary_weapon = std::to_underlying(caero_weapon::diffuser_gas);
+        else if(result == diffuser_impact::destroyed && !diffuser.active()) secondary_weapon = std::to_underlying(caero_weapon::diffuser_gas);
       }
       if(result == diffuser_impact::destroyed) damage_world_cell(contact.column, contact.row, impact.height, cells, bank, effects, clock, world_damage_counter, player_collateral);
       else if(result == diffuser_impact::gas) {
@@ -663,6 +674,9 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
     shot->parameters.update_entry = object_update::effect_only;
     shot->deadline = static_cast<uint16_t>(clock + 256);
   }
+  // hide a completed building's ring on the impact frame; further damage stages remain targetable
+  if(target_reference{target.token}.is_ground_encoded()
+    && !building_has_damage_link(cells[packed_cell_reference{target.token}.index()], bank, damage_mask)) target.clear();
   if(player_damage_is_lethal(damage) && start_player_crash(player.pose(), player.lifecycle, clock)) player.engine_flags = 0;
 }
 

@@ -76,13 +76,16 @@ particle_emitter make_damage_trail(maths::world_position position, damage_severi
 class effect_system {
 public:
   static unsigned int constexpr trail_capacity{20};                            // shared pool for damage trails and stationary impact sparks
-  static unsigned int constexpr emitter_capacity{25};                          // separate pool for moving recipe emitters
+  static unsigned int constexpr default_emitter_capacity{50};                  // Redux doubles the original 25 moving recipe emitters
 
 private:
+  unsigned int emitter_capacity;
   effect_sound_pool effect_sounds{1};
   effect_sound_pool impact_sounds{1 + effect_sound_pool::capacity};
 
 public:
+  explicit effect_system(unsigned int particle_limit = default_emitter_capacity);
+
   std::vector<particle_emitter> emitters;
   std::vector<particle_emitter> trails;
   std::span<effect_sound const> sounds() const noexcept { return effect_sounds.records(); }

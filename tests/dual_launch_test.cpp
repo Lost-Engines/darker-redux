@@ -55,7 +55,7 @@ TEST_CASE("Dual Launch blast matches native category bounds and impact strength"
 }
 
 TEST_CASE("Dual Launch firing matches native stage changes and capsule targeting", "[game][weapons]") {
-  /// Check insufficient energy, exhausted pools and an oldest projectile with the wrong definition
+  /// Retain native firing guards while supplying the explicitly remembered capsule as the target
   for(auto const &s : darker::test_reference::dual_firing_samples) {
     CAPTURE(s);
     darker::game::projectile_pool pool;
@@ -87,7 +87,7 @@ TEST_CASE("Dual Launch firing matches native stage changes and capsule targeting
       .selection{static_cast<uint8_t>(s[0])},
       .player_flags{static_cast<uint8_t>(s[2])},
       .pressed{s[4] != 0},
-      .target{0xec00},
+      .target{s[0] == 7 && tail ? tail->native_id : uint16_t{0xec00}},
       .released{s[12] != 0}
     })};
     CHECK(energy.reserve == s[6]);
@@ -137,5 +137,61 @@ TEST_CASE("Dual Launch steering and displacement match native updates", "[weapon
     CHECK(shot.angular_motion.turn == sample[26]);
     CHECK(shot.placement.speed == sample[30]);
     CHECK(pitch == sample[31]);
+  }
+}
+
+TEST_CASE("Dual Launch follows its remembered capsule despite older or newer projectiles", "[game][weapons][dual-launch]") {
+  namespace game = darker::game;
+  game::projectile_pool pool;
+  game::launch_emitter const emitter{
+    .position{1000, 2000, 3000},
+  };
+  auto const launch{[&](unsigned int const slot) {
+    return pool.launch({
+      .definition{game::original_object_definitions[slot]},
+      .emitter{emitter},
+    });
+  }};
+  auto const *old_pinner{launch(0)};
+  auto *capsule{launch(2)};
+  auto const *new_pinner{launch(1)};
+  auto const *other_capsule{launch(2)};
+  REQUIRE(pool.objects().tail() == old_pinner);
+  REQUIRE(pool.objects().head() == other_capsule);
+  game::caero_energy_state energy{
+    .reserve{65535},
+  };
+  uint16_t charge{0};
+  auto const fire{[&] {
+    return game::fire_caero_weapon(pool, energy, charge, {
+      .emitter{emitter},
+      .selection{7},
+      .target{capsule->native_id},
+      .released{true},
+    });
+  }};
+  SECTION("Unrelated shots do not change the remembered pairing") {
+    auto const result{fire()};
+    REQUIRE(result.shot);
+    CHECK(result.shot->target_token == capsule->native_id);
+    CHECK(result.shot->target_token != new_pinner->native_id);
+    CHECK(result.shot->target_token != other_capsule->native_id);
+    CHECK(result.next_selection == 3);
+  }
+  SECTION("An impacted capsule cannot be used again") {
+    capsule->flags |= 8;
+    auto const result{fire()};
+    CHECK_FALSE(result.shot);
+    CHECK(result.next_selection == 3);
+    CHECK(energy.reserve == 65535);
+  }
+  SECTION("A retired capsule cannot be confused with an unrelated reused slot") {
+    auto const id{capsule->native_id};
+    pool.recycle(*capsule);
+    REQUIRE(launch(0)->native_id == id);
+    auto const result{fire()};
+    CHECK_FALSE(result.shot);
+    CHECK(result.next_selection == 3);
+    CHECK(energy.reserve == 65535);
   }
 }

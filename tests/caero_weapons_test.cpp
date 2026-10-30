@@ -62,7 +62,7 @@ TEST_CASE("Caero Pinner and Brent firing matches original guards, targets and re
   }
 }
 
-TEST_CASE("Chargeable charging and release match the native firing handler", "[game][weapons]") {
+TEST_CASE("Chargeable retains native charging and adds unlocked release", "[game][weapons]") {
   /// Compare edge, held and released inputs with native reserve, charge, readiness and lifetime results
   for(auto const &sample : darker::test_reference::chargeable_samples) {
     CAPTURE(sample);
@@ -100,10 +100,12 @@ TEST_CASE("Chargeable charging and release match the native firing handler", "[g
     CHECK(energy.reserve == sample[9]);
     CHECK(charge == sample[10]);
     CHECK(result.ready == (sample[11] != 0));
-    CHECK((result.shot != nullptr) == (sample[12] != 0));
+    bool const unlocked_release{!sample[2] && sample[3] && !sample[4] && !sample[5] && sample[1] >= 16
+      && !darker::game::target_reference{static_cast<uint16_t>(sample[6])}.permits_air_weapon()};
+    CHECK((result.shot != nullptr) == (sample[12] != 0 || unlocked_release));
     if(result.shot) {
-      CHECK(result.shot->deadline == static_cast<uint16_t>(65000 + sample[13]));
-      CHECK(result.shot->target_token == sample[6]);
+      CHECK(result.shot->deadline == static_cast<uint16_t>(65000 + (unlocked_release ? sample[1] >> 4 : sample[13])));
+      CHECK(result.shot->target_token == (unlocked_release ? result.shot->native_id : sample[6]));
       CHECK(result.shot->parameters.definition == &darker::game::original_object_definitions[8]);
     }
   }
@@ -381,7 +383,7 @@ TEST_CASE("Diffuser controls follow actual building impacts and preserve manual 
     // this warehouse block has collision geometry and a target flag, but no destroyed model
     auto const initial_state{building.state};
     impact(fire(true));
-    CHECK_FALSE(combat.diffuser.active);
+    CHECK_FALSE(combat.diffuser.active());
     CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
     CHECK(building.state == initial_state);
     CHECK(combat.effects.emitters.size() == rejected_impact_emitters);
@@ -392,40 +394,40 @@ TEST_CASE("Diffuser controls follow actual building impacts and preserve manual 
     building.state = 0;
     unlocked = true;
     impact(fire(true));
-    REQUIRE(combat.diffuser.active);
+    REQUIRE(combat.diffuser.active());
     CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
     CHECK(building.state == 0);
     CHECK(combat.effects.emitters.size() == gas_emitters);
-    wait_until(static_cast<clock_tick>(combat.diffuser.deadline - darker::game::diffuser_state::trigger_window_ticks));
+    wait_until(static_cast<clock_tick>(combat.diffuser.find(target)->deadline - darker::game::diffuser_state::trigger_window_ticks));
     impact(fire(true));
     CHECK(building.state == damage_mask);
-    CHECK_FALSE(combat.diffuser.active);
+    CHECK_FALSE(combat.diffuser.active());
   }
   SECTION("A missed gas shot never arms the detonator") {
     auto const *shot{fire(false)};
     CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
     auto const deadline{shot->deadline};
     wait_until(static_cast<clock_tick>(deadline + 256));
-    CHECK_FALSE(combat.diffuser.active);
+    CHECK_FALSE(combat.diffuser.active());
     CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
   }
   SECTION("Impact and timeout respect another weapon selected during flight") {
     auto const *shot{fire(true)};
     combat.secondary_weapon = std::to_underlying(caero_weapon::brent_ground);
     impact(shot);
-    REQUIRE(combat.diffuser.active);
+    REQUIRE(combat.diffuser.active());
     CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::brent_ground));
-    wait_until(combat.diffuser.deadline);
-    CHECK_FALSE(combat.diffuser.active);
+    wait_until(combat.diffuser.find(target)->deadline);
+    CHECK_FALSE(combat.diffuser.active());
     CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::brent_ground));
   }
   SECTION("Successful gas arms retries until detonation or timeout") {
     auto const *shot{fire(true)};
     CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
     impact(shot);
-    REQUIRE(combat.diffuser.active);
+    REQUIRE(combat.diffuser.active());
     REQUIRE(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
-    auto const deadline{combat.diffuser.deadline};
+    auto const deadline{combat.diffuser.find(target)->deadline};
 
     SECTION("Manual gas reselection never restarts the existing smoke") {
       REQUIRE(combat.effects.emitters.size() == gas_emitters);
@@ -434,7 +436,7 @@ TEST_CASE("Diffuser controls follow actual building impacts and preserve manual 
       step();
       REQUIRE(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
       impact(fire(true));
-      CHECK(combat.diffuser.deadline == deadline);
+      CHECK(combat.diffuser.find(target)->deadline == deadline);
       CHECK(combat.effects.emitters.size() == gas_emitters);
       CHECK(combat.effects.emitters.front().start == first_smoke_start);
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
@@ -442,27 +444,244 @@ TEST_CASE("Diffuser controls follow actual building impacts and preserve manual 
     SECTION("Early and missed detonators allow another attempt in the same smoke window") {
       impact(fire(true));
       CHECK_FALSE(building.state & damage_mask);
-      CHECK(combat.diffuser.deadline == deadline);
+      CHECK(combat.diffuser.find(target)->deadline == deadline);
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
       wait_until(static_cast<clock_tick>(deadline - darker::game::diffuser_state::trigger_window_ticks));
       auto const *miss{fire(false)};
       wait_until(static_cast<clock_tick>(miss->deadline + 256));
-      REQUIRE(combat.diffuser.active);
+      REQUIRE(combat.diffuser.active());
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
       impact(fire(true));
       CHECK(building.state & damage_mask);
-      CHECK_FALSE(combat.diffuser.active);
+      CHECK_FALSE(combat.diffuser.active());
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
     }
     SECTION("Expiry resets to gas without a firing attempt") {
       wait_until(deadline);
-      CHECK_FALSE(combat.diffuser.active);
+      CHECK_FALSE(combat.diffuser.active());
       CHECK_FALSE(building.state & damage_mask);
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
       impact(fire(true));
-      CHECK(combat.diffuser.active);
-      CHECK(combat.diffuser.deadline != deadline);
+      CHECK(combat.diffuser.active());
+      CHECK(combat.diffuser.find(target)->deadline != deadline);
       CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
     }
+  }
+}
+
+TEST_CASE("Diffuser clouds keep independent deadlines and detonation windows", "[game][weapons][diffuser]") {
+  namespace game = darker::game;
+  auto const start{GENERATE(game::clock_tick{0}, game::clock_tick{60000})};
+  game::diffuser_targets clouds;
+  auto const hit{[&](bool const gas, uint16_t const cell, game::clock_tick const clock) {
+    return clouds.hit(gas, game::collision_category::diffuser, game::city_cell::permitted_target, true, cell, clock);
+  }};
+  REQUIRE(hit(true, 0x1717, start) == game::diffuser_impact::gas);
+  auto const first_deadline{clouds.find(0x1717)->deadline};
+  auto const later{static_cast<game::clock_tick>(start + 2048)};
+  REQUIRE(hit(true, 0x1818, later) == game::diffuser_impact::gas);
+  auto const second_deadline{clouds.find(0x1818)->deadline};
+  CHECK(clouds.find(0x1717)->deadline == first_deadline);
+  CHECK(second_deadline == static_cast<game::clock_tick>(later + game::diffuser_state::gas_lifetime_ticks));
+  CHECK(hit(true, 0x1717, later) == game::diffuser_impact::already_gassed);
+  CHECK(clouds.find(0x1717)->deadline == first_deadline);
+  auto const first_ready{static_cast<game::clock_tick>(first_deadline - game::diffuser_state::trigger_window_ticks)};
+  CHECK(hit(false, 0x1818, first_ready) == game::diffuser_impact::rejected);
+  REQUIRE(clouds.find(0x1717));
+  REQUIRE(clouds.find(0x1818));
+  SECTION("Detonating the first cloud leaves the second armed") {
+    CHECK(hit(false, 0x1717, first_ready) == game::diffuser_impact::destroyed);
+    CHECK_FALSE(clouds.find(0x1717));
+    CHECK(clouds.active());
+    CHECK(hit(false, 0x1818, static_cast<game::clock_tick>(second_deadline - 1)) == game::diffuser_impact::destroyed);
+    CHECK_FALSE(clouds.active());
+  }
+  SECTION("Expiry affects one cloud at a time and never revives old gas") {
+    clouds.advance(first_deadline);
+    CHECK_FALSE(clouds.find(0x1717));
+    REQUIRE(clouds.find(0x1818));
+    CHECK(clouds.find(0x1818)->deadline == second_deadline);
+    clouds.advance(second_deadline);
+    CHECK_FALSE(clouds.active());
+    CHECK(hit(false, 0x1717, first_ready) == game::diffuser_impact::rejected);
+    CHECK(hit(false, 0x1818, first_ready) == game::diffuser_impact::rejected);
+  }
+}
+
+TEST_CASE("Real Diffuser hits prime two buildings and retain the detonator between them", "[game][weapons][diffuser][integration]") {
+  namespace game = darker::game;
+  namespace resources = darker::resources;
+  if(std::string_view{DARKER_TEST_RESOURCE_DIR}.empty()) SKIP("Requires extracted retail geometry");
+  resources::geometry_bank const bank{resources::read_binary_file(std::filesystem::path{DARKER_TEST_RESOURCE_DIR} / "00_030.bin", 1'000'000)};
+  game::city_map cells{};
+  std::array<uint16_t, 2> constexpr targets{0x1717, 0x1a1a};
+  for(auto const cell : targets) cells[game::packed_cell_reference{cell}.index()] = {
+    .type{76},
+    .state{game::city_cell::permitted_target},
+  };
+  game::player_flight player;
+  auto &craft{std::get<game::caero_flight_state>(player.craft)};
+  craft.flying = true;
+  player.pose().speed = 496;
+  game::mission_combat combat{{}};
+  game::campaign_clock clock{60000};
+  auto const step{[&](bool const fire = false) {
+    clock += 8;
+    combat.advance(player, cells, bank, {
+      .elapsed_ticks{clock},
+      .frame_step{8},
+      .changes{static_cast<uint16_t>(clock ^ (clock - 8))},
+    }, {
+      .secondary_pressed{fire},
+    });
+  }};
+  auto const impact{[&](uint16_t const token) {
+    auto const aim{game::resolve_map_guidance(token, cells, bank, game::delphi_damage_bit)};
+    darker::maths::world_position const centre{
+      .column{aim.position.column},
+      .row{aim.position.row},
+      .height{static_cast<uint16_t>(aim.height - aim.height_extent / 2)},
+    };
+    player.pose().position = {
+      .column{static_cast<uint16_t>(centre.column + 32)},
+      .row{centre.row},
+      .height{static_cast<uint16_t>(aim.height + 2048)},
+    };
+    auto const direction{darker::maths::object_target_direction(player.pose().position, centre)};
+    player.pose().angles = {
+      .heading{direction.heading},
+      .pitch{direction.pitch},
+      .roll{0},
+    };
+    combat.targeting_basis = darker::maths::make_view_basis(player.pose().angles);
+    combat.target.token = token;
+    craft.energy.reserve = 0xffff;
+    step(true);
+    REQUIRE(combat.player_fired);
+    auto const *shot{combat.projectiles.objects().head()};
+    REQUIRE(shot);
+    for(unsigned int i{0}; i < 256 && !(shot->flags & 8); ++i) step();
+    REQUIRE(shot->flags & 8);
+  }};
+  for(auto const target : targets) {
+    combat.secondary_weapon = std::to_underlying(game::caero_weapon::diffuser_gas);
+    impact(target);
+    REQUIRE(combat.diffuser.find(target));
+    CHECK(combat.secondary_weapon == std::to_underlying(game::caero_weapon::diffuser_trigger));
+  }
+  CHECK(combat.effects.emitters.size() == 48);                                 // both complete smoke recipes fit the new default pool
+  auto const ready{static_cast<game::clock_tick>(combat.diffuser.find(targets.back())->deadline - game::diffuser_state::trigger_window_ticks)};
+  auto const destination{clock + static_cast<game::clock_tick>(ready - clock)};
+  while(clock < destination) step();
+  for(auto const target : targets) {
+    REQUIRE(combat.diffuser.find(target));
+    impact(target);
+    CHECK(cells[game::packed_cell_reference{target}.index()].state & game::delphi_damage_bit);
+    CHECK_FALSE(combat.diffuser.find(target));
+    CHECK(combat.secondary_weapon == std::to_underlying(target == targets.front() ? game::caero_weapon::diffuser_trigger : game::caero_weapon::diffuser_gas));
+    CHECK(combat.target.token == game::weapon_target::no_target);               // the destroyed roof loses its ring on the impact frame
+  }
+}
+
+TEST_CASE("Destroyed authorised buildings no longer acquire or retain target rings", "[game][weapons][integration]") {
+  namespace game = darker::game;
+  namespace resources = darker::resources;
+  if(std::string_view{DARKER_TEST_RESOURCE_DIR}.empty()) SKIP("Requires extracted retail geometry");
+  resources::geometry_bank const bank{resources::read_binary_file(std::filesystem::path{DARKER_TEST_RESOURCE_DIR} / "00_030.bin", 1'000'000)};
+  auto const type{GENERATE(uint8_t{46}, uint8_t{48}, uint8_t{85})};
+  game::city_map cells{};
+  uint16_t constexpr token{0x1717};
+  auto &cell{cells[game::packed_cell_reference{token}.index()]};
+  cell = {
+    .type{type},
+    .state{game::city_cell::permitted_target},
+  };
+  auto const aim{game::resolve_map_guidance(token, cells, bank, game::delphi_damage_bit)};
+  game::player_flight player;
+  std::get<game::caero_flight_state>(player.craft).flying = true;
+  player.pose().position = {
+    .column{aim.position.column},
+    .row{static_cast<uint16_t>(aim.position.row + 512)},
+    .height{static_cast<uint16_t>(aim.height - aim.height_extent / 2)},
+  };
+  game::mission_combat combat{{}};
+  combat.secondary_weapon = std::to_underlying(game::caero_weapon::brent_ground);
+  auto const step{[&](game::clock_tick const clock) {
+    combat.advance(player, cells, bank, {
+      .elapsed_ticks{clock},
+      .frame_step{8},
+    });
+  }};
+  step(8);
+  REQUIRE(combat.target.token == token);
+  cell.state |= game::delphi_damage_bit;
+  step(16);
+  CHECK(combat.target.token == game::weapon_target::no_target);
+  for(game::clock_tick clock{24}; clock < 128; clock += 8) {
+    step(clock);
+    CHECK(combat.target.token == game::weapon_target::no_target);
+  }
+  CHECK(cell.state & game::city_cell::permitted_target);                        // historical authorisation remains saved
+}
+
+TEST_CASE("Combat remembers Dual Launch pairing and clears it before projectile reuse", "[game][weapons][dual-launch][integration]") {
+  namespace game = darker::game;
+  namespace resources = darker::resources;
+  if(std::string_view{DARKER_TEST_RESOURCE_DIR}.empty()) SKIP("Requires extracted retail geometry");
+  resources::geometry_bank const bank{resources::read_binary_file(std::filesystem::path{DARKER_TEST_RESOURCE_DIR} / "00_030.bin", 1'000'000)};
+  game::city_map cells{};
+  game::player_flight player;
+  auto &craft{std::get<game::caero_flight_state>(player.craft)};
+  craft.flying = true;
+  player.pose().position = {10000, 10000, 4000};
+  game::mission_combat combat{{}};
+  game::clock_tick clock{0};
+  auto const step{[&](bool const press = false, bool const release = false) {
+    clock += 8;
+    craft.energy.reserve = 65535;
+    combat.advance(player, cells, bank, {
+      .elapsed_ticks{clock},
+      .frame_step{8},
+    }, {
+      .primary_pressed{press},
+      .primary_released{release},
+    });
+  }};
+  combat.primary_weapon = 1;
+  step(true);
+  auto const *pinner{combat.projectiles.objects().head()};
+  REQUIRE(pinner);
+  combat.primary_weapon = 3;
+  step(true);
+  auto *capsule{combat.projectiles.objects().head()};
+  REQUIRE(capsule != pinner);
+  REQUIRE(combat.primary_weapon == 7);
+  auto const capsule_id{capsule->native_id};
+  SECTION("The follow-up targets its own capsule even with an older Pinner in flight") {
+    for(unsigned int i{0}; i < 32; ++i) step();
+    step(false, true);
+    REQUIRE(combat.player_fired);
+    auto const *followup{combat.projectiles.objects().head()};
+    REQUIRE(followup->parameters.definition == &game::original_object_definitions[6]);
+    CHECK(followup->target_token == capsule_id);
+    CHECK(combat.primary_weapon == 3);
+  }
+  SECTION("A reused capsule slot is not an invitation to fire at a different shot") {
+    capsule->flags |= 8;
+    capsule->deadline = static_cast<game::clock_tick>(clock - 256);
+    step();
+    auto const *replacement{combat.projectiles.launch({
+      .definition{game::original_object_definitions[2]},
+      .emitter{
+        .position{10000, 9500, 4000},
+      },
+      .clock{clock},
+      .lifetime{4096},
+    })};
+    REQUIRE(replacement->native_id == capsule_id);
+    combat.primary_weapon = 7;
+    step(false, true);
+    CHECK_FALSE(combat.player_fired);
+    CHECK(combat.primary_weapon == 3);
   }
 }

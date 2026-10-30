@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <vector>
 #include "game/caero_energy.h"
 #include "game/city_map.h"
 #include "game/collision_box.h"
@@ -46,6 +47,17 @@ struct diffuser_state {
 
   void advance(clock_tick clock) noexcept;
   diffuser_impact hit(bool gas, collision_category category, uint8_t state, bool linked, uint16_t target, clock_tick clock, bool unrestricted = false) noexcept;
+};
+
+class diffuser_targets {
+private:
+  std::vector<diffuser_state> clouds;
+
+public:
+  bool active() const noexcept { return !clouds.empty(); }
+  diffuser_state const *find(uint16_t cell) const noexcept;
+  void advance(clock_tick clock) noexcept;
+  diffuser_impact hit(bool gas, collision_category category, uint8_t state, bool linked, uint16_t target, clock_tick clock, bool unrestricted = false);
 };
 
 uint8_t caero_weapon_strength(city_map const &cells, maths::world_position position, uint16_t victim);

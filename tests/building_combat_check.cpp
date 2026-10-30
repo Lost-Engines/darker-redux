@@ -203,14 +203,16 @@ void check_building_combat(darker::resources::archive_set const &archives) {
         if(token != previous_target) combat.target.clear();
         previous_target = token;
       }
-      if(!attacking_actor && warehouse && weapon == 4 && static_cast<uint16_t>(clock - combat.diffuser.deadline) < 0xf400) {
+      auto const *cloud{combat.diffuser.find(previous_target)};
+      bool const gas_ready{cloud && static_cast<uint16_t>(cloud->deadline - clock) < darker::game::diffuser_state::trigger_window_ticks};
+      if(!attacking_actor && warehouse && weapon == 4 && !gas_ready) {
         // leave the defended roof during the gas delay; this fixture controls position rather than navigating an escape route
         player.pose().position.column += 4096;
         player.pose().position.height += 4096;
       }
       beacon_changes.advance(cells, static_cast<uint16_t>(clock));
       bool const fire_building{target != targets.end() && clock % 256 == 0
-        && (!warehouse || weapon == 5 || static_cast<uint16_t>(clock - combat.diffuser.deadline) >= 0xf400)};
+        && (!warehouse || weapon == 5 || gas_ready)};
       combat.spawn_aircraft(player, cells, bank, static_cast<uint16_t>(clock), 8);
       combat.advance(player, cells, bank,
         {

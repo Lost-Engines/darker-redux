@@ -2,6 +2,7 @@
 #include <array>
 #include <bit>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 #include "game/power_grid.h"
 
@@ -34,6 +35,17 @@ void delphi_collateral_damage::record_player_destruction(unsigned int const inde
   if(before.state & delphi_damage_bit) return;
   if(index == headquarters_cell && before.type == 17) headquarters_destroyed = true;
   else if(repairable_service(before.type)) service_repairs.set(index);
+}
+
+void delphi_collateral_damage::record_power_loss(city_map const &cells, unsigned int const destroyed_cell) {
+  /// Called only after a fresh player destruction; keep the most urgent pending warning until radio space is available
+  auto const warning{unauthorised_power_loss(cells, destroyed_cell)};
+  if(warning && (!power_warning || *warning > *power_warning)) power_warning = warning;
+}
+
+std::optional<power_loss_warning> delphi_collateral_damage::take_power_warning() noexcept {
+  /// Consume the pending warning once; retained or restored damage never repeats it
+  return std::exchange(power_warning, std::nullopt);
 }
 
 void delphi_collateral_damage::repair_services(city_map &cells) {

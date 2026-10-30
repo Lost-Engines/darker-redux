@@ -52,7 +52,7 @@ public:
   uint16_t weapon_charge{0};
   std::array<uint8_t, 4> threat_errors{64, 64, 64, 64};
   skimma_armament skimma;
-  diffuser_state diffuser;
+  diffuser_targets diffuser;
   delphi_collateral_damage collateral;
   uint8_t primary_weapon{0};
   uint8_t secondary_weapon{0};
@@ -71,7 +71,7 @@ public:
   unsigned int completed_objectives{0};
   uint8_t world_damage_counter{0};
 
-  explicit mission_combat(std::vector<scenario_actor> initial);
+  explicit mission_combat(std::vector<scenario_actor> initial, unsigned int particle_limit = effect_system::default_emitter_capacity);
   void spawn_aircraft(player_flight const &player, city_map const &cells, resources::geometry_bank const &bank, clock_tick clock, game_duration frame_step);
   void collide_player(player_flight &player, maths::world_position const &start,
     city_map &cells, resources::geometry_bank const &bank, clock_tick clock);
@@ -92,6 +92,7 @@ public:
 private:
   std::array<uint8_t, 256> retained_flags{};
   uint8_t outstanding_objectives{0};
+  uint16_t dual_launch_capsule{weapon_target::no_target};
   void release_target(uint16_t token) noexcept;
   void fire_skimma_primary(player_flight const &player, city_map const &cells, resources::geometry_bank const &bank, clock_tick clock, game_duration frame_step, bool pressed);
   void detonate_dual_launch(projectile &shot, clock_tick clock, bool underground);

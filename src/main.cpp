@@ -63,6 +63,7 @@
 #include "presentation/options_menu.h"
 #include "presentation/menu_text.h"
 #include "presentation/quit_confirmation.h"
+#include "presentation/power_warnings.h"
 #include "render/framebuffer.h"
 #include "resources/archive_set.h"
 #include "resources/geometry_bank.h"
@@ -223,6 +224,7 @@ auto main(int const argc, char const *const argv[])->int {
     ("resolution", boost::program_options::value<std::string>()->default_value("auto"), "world resolution: auto follows framebuffer size (default), or WIDTHxHEIGHT (64..8192 per axis)")
     ("fov", boost::program_options::value<double>(), "full-screen vertical field of view in degrees, 15..140 (original/default: approximately 50.2 degrees)")
     ("draw-distance", boost::program_options::value<unsigned int>()->default_value(darker::graphics::scene_limits::surface_radius_cells), "surface draw radius in map cells, 2..182 (original: 15; 182 includes the whole city)")
+    ("particle-limit", boost::program_options::value<int>()->default_value(darker::game::effect_system::default_emitter_capacity), "maximum active smoke/explosion emitters (original: 25); each emitter can draw multiple particles")
     ("minimum-light-size", boost::program_options::value<double>()->default_value(0.5), "minimum city light disc diameter in 320x200 reference pixels (scaled by height); 0 disables")
     ("fog-start", boost::program_options::value<double>()->default_value(darker::graphics::fog_range{}.start_cells), "surface fog start in map cells; Delphi reaches full natural fog at fade-distance")
     ("fade-distance", boost::program_options::value<double>()->default_value(darker::graphics::scene_limits::surface_fade_cells), "Delphi: full natural fog here, then background fade until draw-distance (default capped to draw-distance)")
@@ -303,6 +305,9 @@ auto main(int const argc, char const *const argv[])->int {
   if(language_name != "english" && language_name != "french" && language_name != "german") return startup_failure("--language must be english, french or german");
   auto const language{language_name == "english"  ? darker::resources::scenario_language::english
     : language_name == "french" ? darker::resources::scenario_language::french : darker::resources::scenario_language::german};
+  auto const requested_particle_limit{arguments["particle-limit"].as<int>()};
+  if(requested_particle_limit < 1) return startup_failure("--particle-limit must be at least 1");
+  auto const particle_limit{static_cast<unsigned int>(requested_particle_limit)};
   auto draw_distance{arguments["draw-distance"].as<unsigned int>()};
   auto fog_start{arguments["fog-start"].as<double>()};
   auto fog_target{arguments["fog-target"].as<std::string>()};
@@ -481,10 +486,11 @@ auto main(int const argc, char const *const argv[])->int {
     .text_cursor{0}
   };
   std::array<std::optional<darker::game::mission_message>, 3> messages;
+  std::optional<darker::presentation::power_warning_notice> power_notice;
   host.briefing = front != nullptr;
   auto initial_actors{caero ? darker::game::make_scenario_group(mission.groups[0], bank, 1, darker::resources::world_kind::delphi, mission.shared.offset)
     : std::vector<darker::game::scenario_actor>{}};
-  auto combat{std::make_unique<darker::game::mission_combat>(initial_actors)};
+  auto combat{std::make_unique<darker::game::mission_combat>(initial_actors, particle_limit)};
   combat->reserve_mode = front->nightmare_selected() ? darker::game::air_reserve_mode::nightmare : darker::game::air_reserve_mode::campaign;
   if(caero) combat->reserves = darker::game::make_scenario_group(mission.groups[1], bank, static_cast<uint8_t>(1 + mission.groups[0].objects.size()), darker::resources::world_kind::delphi, mission.shared.offset);
   auto const activate_reserves{[&](uint8_t const opcode, uint8_t const count){
@@ -732,7 +738,7 @@ auto main(int const argc, char const *const argv[])->int {
       host.engine_indicator = darker::graphics::caero_engine_indicator(host.engine_indicator, host.player.engine_flags & 1, state->pose.speed);
       instruments = {host.player.tunnel ? uint8_t{0} : measured.altitude, measured.impact, measured.damage_lights, measured.power_cells, measured.charging,
         state->energy.incoming_display, state->energy.reserve_display, host.engine_indicator,
-        darker::graphics::caero_receiver_indicator(clock, messages[0].has_value(),
+        darker::graphics::caero_receiver_indicator(clock, messages[0].has_value() || power_notice.has_value(),
           script.stopped, context.objectives_complete, host.player.lifecycle.flags)};
     } else {
       auto const &skimma{std::get<darker::game::skimma_flight_state>(host.player.craft)};
@@ -838,6 +844,13 @@ auto main(int const argc, char const *const argv[])->int {
             .edge{18}
           });
       }
+    }
+    if(power_notice && std::ranges::none_of(messages, [](auto const &message) { return message.has_value(); })) {
+      darker::graphics::draw_message(foreground, font, darker::resources::font_face::compact,
+        std::as_bytes(std::span{power_notice->text}), {(321 - power_notice->width) / 2, 231}, power_notice->width, {
+          .ink{24},
+          .edge{18},
+        });
     }
     if(host.quit_prompt.visible(clock)) {
       auto const &prompt{darker::presentation::original_menu_text.at(static_cast<unsigned int>(language)).flight_quit};
@@ -1525,7 +1538,7 @@ auto main(int const argc, char const *const argv[])->int {
       if(audio_device) audio.publish({});
       cells = initial_cells;
       power_grid = {};
-      combat = std::make_unique<darker::game::mission_combat>(initial_actors);
+      combat = std::make_unique<darker::game::mission_combat>(initial_actors, particle_limit);
       combat->reserve_mode = front->nightmare_selected() ? darker::game::air_reserve_mode::nightmare : darker::game::air_reserve_mode::campaign;
       host.combat = combat.get();
       host.primary_held = false;
@@ -1546,6 +1559,7 @@ auto main(int const argc, char const *const argv[])->int {
       context.text_cursor = 0;
       context.messages.clear();
       messages.fill(std::nullopt);
+      power_notice.reset();
       host.mouse_started = false;
       host.shield_deadline = 0;
       host.clock = 0;
@@ -1780,7 +1794,7 @@ auto main(int const argc, char const *const argv[])->int {
           initial_player = host.player;
           initial_cells = cells;
           auto const spawning{combat->spawning};
-          combat = std::make_unique<darker::game::mission_combat>(initial_actors);
+          combat = std::make_unique<darker::game::mission_combat>(initial_actors, particle_limit);
           combat->reserve_mode = front->nightmare_selected() ? darker::game::air_reserve_mode::nightmare : darker::game::air_reserve_mode::campaign;
           combat->spawning = spawning;
           combat->spawning.enabled = true;
@@ -1869,6 +1883,7 @@ auto main(int const argc, char const *const argv[])->int {
           power_grid = {};
           if(world_mode == world_kind::delphi) power_grid.advance(cells, beacon_changes, 0, 0);
           messages.fill(std::nullopt);
+          power_notice.reset();
           game_clock = {};
           host.clock = 0;
           host.quit_prompt = {};
@@ -1978,6 +1993,13 @@ auto main(int const argc, char const *const argv[])->int {
         }
         for(auto &message : messages) {
           if(message && std::bit_cast<int16_t>(static_cast<uint16_t>(game_clock.frame_ticks - message->expiry)) >= 0) message.reset();
+        }
+        if(power_notice && std::bit_cast<int16_t>(static_cast<uint16_t>(game_clock.frame_ticks - power_notice->expiry)) >= 0) power_notice.reset();
+        if(!context.suppress_messages && std::ranges::none_of(messages, [](auto const &message) { return message.has_value(); })) {
+          if(auto const warning{combat->collateral.take_power_warning()}) {
+            power_notice = darker::presentation::make_power_warning(*warning, language, font, game_clock.frame_ticks);
+            host.sounds.trigger(caero ? darker::audio::flight_sound::message : darker::audio::flight_sound::skimma_message, game_clock.frame_ticks);
+          }
         }
         if(host.player.tunnel) darker::game::update_tunnel_portal(host.player, cells, host.hangar, step);
         else if(caero) {

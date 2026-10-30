@@ -36,6 +36,22 @@ game_duration advance_fade(game_duration const previous, bool const lost, game_d
 
 } // anonymous namespace
 
+std::optional<power_loss_warning> unauthorised_power_loss(city_map const &cells, unsigned int const destroyed_cell) {
+  /// Warn only for a newly destroyed transformer completing an unauthorised station demolition
+  for(auto const &station : delphi_power_stations) {
+    bool const hit{std::ranges::any_of(station.transformers, [&](auto const &position) {
+      return city_cell_index(position.column, position.row) == destroyed_cell;
+    })};
+    if(!hit || !disabled(station, cells)) continue;
+    if(std::ranges::any_of(station.transformers, [&](auto const &position) {
+      return cells[city_cell_index(position.column, position.row)].state & city_cell::permitted_target;
+    })) return std::nullopt;
+    auto const lost{std::ranges::count_if(delphi_power_stations, [&](auto const &candidate) { return disabled(candidate, cells); })};
+    return static_cast<power_loss_warning>(lost - 1);
+  }
+  return std::nullopt;
+}
+
 void delphi_power_grid::initialise(city_map const &cells) {
   /// Cache spatial falloff once per mission and immediately reflect stations already destroyed in the saved campaign
   bool all_disabled{true};

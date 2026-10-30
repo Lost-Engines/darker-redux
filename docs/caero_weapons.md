@@ -25,7 +25,9 @@ squared-radius limits. Negative projected coordinates use one's-complement
 magnitude, preserving the original asymmetry.
 
 Object-only and building-only weapons reject the other target class. Caero
-building locks additionally reject energy towers and require state bit 40.
+building locks additionally reject energy towers, require state bit 40 and
+require a further destroyed model. Terminal ruins lose their ring on impact
+and cannot be acquired again; authorisation remains in the save.
 The target marker follows the projected coordinates, switches size at native
 radial bucket two and uses secondary readiness colours. Camera rendering and
 lock projection share the same fixed-point basis construction. Caps Lock clears
@@ -60,14 +62,25 @@ These comparisons do not establish an uncontrolled retail-equivalent playthrough
 or exact camera/input ordering in every exterior view. The live synchronised
 DOSBox comparison tool remains deferred.
 
+## Chargeable without a lock
+
+Redux retains hold-to-charge and release-to-fire. A release without an aircraft
+lock launches a self-guided shot along its existing attitude, using the same
+path as a Chargeable whose target has disappeared. The original spin, additional
+speed, lifetime and damage loss during flight remain in force. Lock loss no
+longer discards the charge without firing; a locked release still homes normally.
+
 ## Dual Launch: press for the capsule, release for the follow-up
 
 Mission 57 unlocks selection 3 (number key 3) and its automatic selection 7.
 CA4A launches the primary capsule on primary-fire press and changes selection
 to 7. CA99 launches its homing follow-up on **primary-fire release**, provided
-there is enough reserve energy and the oldest active player projectile still
-has capsule definition 1956h. A missing or different oldest projectile resets
-selection to 3. A successful follow-up targets the capsule and also resets to 3.
+there is enough reserve energy and the remembered capsule is still active. Redux
+remembers the capsule created by that primary shot, rather than inspecting the
+oldest player projectile as the original did. Other Pinners or capsules cannot
+steal or block the pairing. An impacted or retired capsule resets selection to
+3; its reference is cleared before pool reuse. A successful follow-up targets
+that capsule and also resets to 3.
 Holding fire does not launch the follow-up. If release occurs before sufficient
 energy is available, another press/release is needed; it is not a queued shot.
 
@@ -96,6 +109,8 @@ vertical ordering and horizontal one's-complement quirk. A controlled scene
 also exercises the three blast categories, retained distant object, counted
 removals, effects and both projectile deadlines. A further combat check presses, holds for 512 ticks and releases primary fire,
 verifying the selection changes, single follow-up launch and capsule target.
+Redux regression cases add older and newer unrelated projectiles, destroyed
+capsules and recycled slots, preserving the explicit pairing throughout.
 
 ## Forbes Diffuser
 
@@ -106,7 +121,8 @@ original alternating-shot controls:
 - Firing gas, missing, or failing to fire leaves gas selected. A valid building
   impact selects the detonator, provided the Diffuser is still selected.
 - Firing the detonator leaves it selected after a miss, an early impact or a
-  blocked firing attempt. Successful detonation or gas expiry returns to gas.
+  blocked firing attempt. Successful detonation or gas expiry returns to gas
+  only when no other building remains primed.
 - Pressing 5 selects gas again, even while a building is smoking. Another gas hit on
   that same active building keeps its deadline and existing smoke unchanged, then
   reselects the detonator. It does not emit another smoke sequence or impact effect.
@@ -124,22 +140,27 @@ their special resistance to ordinary ground weapons. Outside Delphi the Diffuser
 retains its permission check. Without a permitted lock, a Delphi shot uses the
 direct projectile update instead of resolving a nonexistent homing target.
 
-Gas records one shared target cell and a deadline 2800h ticks ahead, emitting
+Each building records its own deadline 2800h ticks ahead, emitting
 recipe 75D4h at the building origin. A trigger must hit
 that cell in the final 1000h ticks: 6,144–10,239 ticks after gas impact, about
 12.29–20.48 seconds. An early trigger does not consume the gas. Success uses
 ordinary building destruction; a rejected building hit emits 75A3h at the
-projectile. Gas on a different valid building replaces the shared target and timer;
-object and terrain impacts retain their ordinary paths.
+projectile. Gas on another valid building starts an independent cloud without
+replacing existing targets or timers. Object and terrain impacts retain their ordinary
+paths. The shared moving-emitter pool defaults to 50 instead of 25, enough for
+two complete 24-emitter smoke recipes; `--particle-limit` can increase it further.
+At capacity, the oldest visual emitters are still replaced, independently of
+the gameplay timers. Stationary trails retain their separate original limit.
 
-An explicit active flag is retired at expiry or detonation, so an old deadline
+Each cloud is removed at expiry or detonation, so an old deadline
 cannot re-arm itself on the next 16-bit clock wrap. Gas can be applied afresh
 after expiry. The original switched stages on firing and restarted the timer
 on every gas hit; those behaviours remain in the faithful darker-cpp engine.
 
-The successful trigger also expires the fixed sound record at 37F6h by writing
-the current clock. The state retains that deadline; the general fixed ambient
-sound-record scheduler is not yet connected to playback.
+The original successful trigger also expires the fixed sound record at 37F6h
+by writing the current clock. The individual cloud transition retains that
+value; the general fixed ambient sound-record scheduler is not yet connected
+to playback.
 
 Native firing fixtures still check energy costs, readiness and launch guards;
 impact fixtures retain the protected-surface and warehouse detonation-window

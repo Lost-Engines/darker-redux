@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <bit>
+#include <stdexcept>
 #include <algorithm>
 #include "game/effects.h"
 #include "graphics/particles.h"
@@ -125,4 +126,26 @@ TEST_CASE("Distant particles become dots according to projected pixel size", "[e
   CHECK(count_pixels(80000, 1024) == 1);
   // Scaling distance and focal length together leaves the projected footprint unchanged.
   CHECK(count_pixels(10000, 256) == count_pixels(40000, 1024));
+}
+
+TEST_CASE("The particle pool is larger by default and honours a configured limit", "[game][effects]") {
+  using darker::game::effect_system;
+  CHECK(effect_system::default_emitter_capacity == 50);
+  CHECK_THROWS_AS(effect_system{0}, std::invalid_argument);
+  for(unsigned int const limit : {1u, 25u, 50u, 100u}) {
+    effect_system effects{limit};
+    for(unsigned int cloud{0}; cloud < 6; ++cloud) effects.spawn(0x75d4, {
+      .column{static_cast<uint16_t>(cloud * 256)},
+      .row{0},
+      .height{1000},
+    }, 0);
+    REQUIRE(effects.emitters.size() == limit);
+    CHECK(effects.emitters.back().position.column == 5 * 256);
+  }
+  effect_system effects;
+  effects.spawn(0x75d4, {}, 0);
+  effects.spawn(0x75d4, {1024, 1024, 1000}, 0);
+  CHECK(effects.emitters.size() == 48);
+  CHECK(effects.emitters.front().position.column == 0);
+  CHECK(effects.emitters.back().position.column == 1024);
 }

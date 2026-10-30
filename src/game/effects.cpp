@@ -58,6 +58,11 @@ particle_emitter make_damage_trail(maths::world_position position, damage_severi
   };
 }
 
+effect_system::effect_system(unsigned int const particle_limit) : emitter_capacity{particle_limit} {
+  /// Keep capacity local to each combat world and reject a pool that cannot admit any effect
+  if(!particle_limit) throw std::invalid_argument{"Particle limit must be at least 1"};
+}
+
 void effect_system::spawn(uint16_t const recipe, maths::world_position const position, clock_tick const clock) {
   /// 6820 expands the executable recipe into independently delayed, moving emitter records
   auto const found{std::ranges::find(original_effect_recipes, recipe, &effect_recipe::address)};
@@ -75,7 +80,7 @@ void effect_system::spawn(uint16_t const recipe, maths::world_position const pos
       .animation{emitter_animation{source.flags}},
     };
     for(unsigned int axis{0}; axis < 3; ++axis) emitter.position[axis] = static_cast<uint16_t>(emitter.position[axis] + source.offset[axis]);
-    if(emitters.size() == emitter_capacity) emitters.erase(emitters.begin());
+    if(emitters.size() >= emitter_capacity) emitters.erase(emitters.begin());
     emitters.push_back(emitter);
   }
   for(auto const &sound : found->sounds) {
