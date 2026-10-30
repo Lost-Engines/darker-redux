@@ -8,6 +8,7 @@
 #include "game/actor_activation.h"
 #include "game/aircraft_spawning.h"
 #include "game/caero_weapons.h"
+#include "game/city_repairs.h"
 #include "game/effects.h"
 #include "game/player_flight.h"
 #include "game/projectile_pool.h"
@@ -52,6 +53,7 @@ public:
   std::array<uint8_t, 4> threat_errors{64, 64, 64, 64};
   skimma_armament skimma;
   diffuser_state diffuser;
+  delphi_collateral_damage collateral;
   uint8_t primary_weapon{0};
   uint8_t secondary_weapon{0};
   uint8_t difficulty{2};

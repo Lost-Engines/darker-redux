@@ -12,7 +12,7 @@ enum class front_key { accept, back, up, down, erase_character, select, erase, q
 
 class front_end {
 private:
-  enum class screen { introduction, title, credits, games, name, hidden_command, run, erase, quit, briefing, outcome, flight };
+  enum class screen { introduction, title, credits, games, name, hidden_command, run, erase, quit, briefing, outcome, headquarters_loss, flight };
   resources::archive_set const &archives;
   resources::font_resource const &font;
   resources::campaign_resources &campaign;
@@ -74,6 +74,7 @@ public:
   void return_to_menu();
   void show_death(uint8_t completed_objects);
   void show_abort(uint8_t completed_objects);
+  void show_headquarters_loss();
   resources::pilot_record &selected_pilot() noexcept;
   void continue_campaign();
   void start_level(uint8_t stage);

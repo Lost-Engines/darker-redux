@@ -39,9 +39,10 @@ bool building_has_damage_link(city_cell const &cell, resources::geometry_bank co
 }
 
 void damage_world_cell(uint8_t const column, uint8_t const row, uint16_t const height,
-  city_map &cells, resources::geometry_bank const &bank, effect_system &effects, clock_tick const clock, uint8_t &counter) {
+  city_map &cells, resources::geometry_bank const &bank, effect_system &effects, clock_tick const clock, uint8_t &counter, delphi_collateral_damage *const collateral = nullptr) {
   /// 67BF adds a damage stage, carries the resulting high bit into C221 and emits the type's effect at its origin
   auto &cell{cells.at(city_cell_index(column, row))};
+  if(collateral) collateral->record_player_destruction(city_cell_index(column, row), cell);
   cell.state = static_cast<uint8_t>(cell.state + 32);
   counter = static_cast<uint8_t>(counter + ((cell.state & 128) != 0));
   if(cell.type == 0) return;
@@ -51,20 +52,20 @@ void damage_world_cell(uint8_t const column, uint8_t const row, uint16_t const h
 }
 
 void impact_projectile_world(city_collision_result const &contact, maths::world_position const impact, object_definition const &definition,
-  city_map &cells, resources::geometry_bank const &bank, effect_system &effects, clock_tick const clock, uint16_t const terrain_recipe, uint8_t &counter, uint8_t const damage_mask) {
+  city_map &cells, resources::geometry_bank const &bank, effect_system &effects, clock_tick const clock, uint16_t const terrain_recipe, uint8_t &counter, uint8_t const damage_mask, delphi_collateral_damage *const collateral = nullptr) {
   /// CDB9 distinguishes marked player targets, hostile bombing and universal category-two breakable components
   if(contact.contact != city_contact::building) {
     effects.spawn(terrain_recipe, impact, clock);
     return;
   }
   auto const &cell{cells[city_cell_index(contact.column, contact.row)]};
-  bool const linked{building_has_damage_link(cell, bank, damage_mask)};
+  bool const linked{!(damage_mask == delphi_damage_bit && cell.type == delphi_beacon_type) && building_has_damage_link(cell, bank, damage_mask)};
   auto const found{std::ranges::find_if(original_object_definitions, [&](auto const &original){
     return &original == &definition;
   })};
   auto const slot{static_cast<size_t>(found - original_object_definitions.begin())};
-  if(projectile_damages_building(slot, contact.category, cell.state, linked)) {
-    damage_world_cell(contact.column, contact.row, impact.height, cells, bank, effects, clock, counter);
+  if(projectile_damages_building(slot, contact.category, cell.state, linked, collateral != nullptr)) {
+    damage_world_cell(contact.column, contact.row, impact.height, cells, bank, effects, clock, counter, collateral);
   } else effects.spawn(0x7386, impact, clock);
 }
 
@@ -319,6 +320,7 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
   }, player.craft)};
   auto const player_definition{player.definition_slot()};
   auto const damage_mask{player.world_damage_mask()};
+  auto *const player_collateral{damage_mask == delphi_damage_bit ? &collateral : nullptr};
   auto const player_extent{bank.header_at(bank.special_models()[player_definition]).extent};
   std::erase_if(actors, [&](auto &actor){
     if(!advance_actor_deadline(actor, clock)) return false;
@@ -490,7 +492,8 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
       .clock{clock},
       .frame_step{frame_step},
       .target{target.token},
-      .underground{player.tunnel.has_value()}
+      .underground{player.tunnel.has_value()},
+      .unrestricted_ground_targets{player_collateral != nullptr},
     })};
     secondary_ready = result.ready;
     if(result.next_selection) secondary_weapon = result.next_selection;
@@ -618,22 +621,22 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
       && (shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_trigger)]
         || shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_gas)])) {
       auto const &cell{cells[city_cell_index(contact.column, contact.row)]};
-      auto const result{diffuser.hit(shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_gas)], contact.category, cell.state, building_has_damage_link(cell, bank, damage_mask),
-        packed_cell_reference::from_coordinates(contact.column, contact.row).value, clock)};
+      auto const result{diffuser.hit(shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_gas)], contact.category, cell.state, !(damage_mask == delphi_damage_bit && cell.type == delphi_beacon_type) && building_has_damage_link(cell, bank, damage_mask),
+        packed_cell_reference::from_coordinates(contact.column, contact.row).value, clock, player_collateral != nullptr)};
       // do not replace a different weapon selected while the capsule was in flight
       if(caero && (secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas)
         || secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger))) {
         if(result == diffuser_impact::gas || result == diffuser_impact::already_gassed) secondary_weapon = std::to_underlying(caero_weapon::diffuser_trigger);
         else if(result == diffuser_impact::destroyed) secondary_weapon = std::to_underlying(caero_weapon::diffuser_gas);
       }
-      if(result == diffuser_impact::destroyed) damage_world_cell(contact.column, contact.row, impact.height, cells, bank, effects, clock, world_damage_counter);
+      if(result == diffuser_impact::destroyed) damage_world_cell(contact.column, contact.row, impact.height, cells, bank, effects, clock, world_damage_counter, player_collateral);
       else if(result == diffuser_impact::gas) {
         auto const &type{bank.city_types()[cell.type - 1]};
         effects.spawn(0x75d4, {static_cast<uint16_t>(contact.column * 256 + type.column_fraction),
           static_cast<uint16_t>(contact.row * 256 + type.row_fraction), impact.height}, clock);
       } else if(result == diffuser_impact::rejected) effects.spawn(0x75a3, impact, clock);
     }
-    else if(!victim) impact_projectile_world(contact, impact, *shot->parameters.definition, cells, bank, effects, clock, player.tunnel ? 0x7386 : 0x721c, world_damage_counter, damage_mask);
+    else if(!victim) impact_projectile_world(contact, impact, *shot->parameters.definition, cells, bank, effects, clock, player.tunnel ? 0x7386 : 0x721c, world_damage_counter, damage_mask, player_collateral);
     shot->flags |= 0x28;
     shot->parameters.update_entry = object_update::effect_only;
     shot->deadline = static_cast<uint16_t>(clock + 256);

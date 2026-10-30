@@ -9,7 +9,8 @@ separate from this weapon reserve.
 
 The guards reject protected/crashing players, exhausted projectile pools and
 insufficient reserve. Brent Hunter requires a negative object token other than
-FFFF; Brent Ground requires a map-cell token. A valid weapon remains ready
+FFFF. Brent Ground ordinarily requires a map-cell token; Redux also permits
+unguided shots without a target in Delphi. A valid weapon remains ready
 without a trigger edge. Ordinary trigger-edge weapons do not repeat while held; the Dual Launch follow-up has the release-edge condition described below.
 Primary and secondary readiness now drive their original cockpit colours.
 
@@ -39,9 +40,9 @@ The existing CC61 guidance then continues from the missile's own attitude.
 
 1 and 2 select the unlocked Pinners; Space or left mouse fires the primary.
 Mission 21 introduces Brent Hunter: **0 selects it; Alt or right mouse fires**.
-6 selects Brent Ground when unlocked; its firing and map-guidance primitives
-are connected, but its later mission introduction remains beyond the current
-campaign gate. Remaining weapon handlers are still outstanding.
+Mission 50 introduces Brent Ground on key 6; mission 80 introduces the Forbes
+Diffuser on key 5. Both are connected to projectile flight, building collisions
+and campaign objectives.
 
 ## Verification
 
@@ -112,15 +113,16 @@ original alternating-shot controls:
 - Selecting another secondary weapon is respected: a delayed impact or gas
   timeout does not switch back to the Diffuser.
 
-Redux extends CE84's warehouse-only admission to every permitted destructible
-building. Both stages require cell state bit 40h and a nonzero damage link in
-the currently selected model. Collision categories 0 (ordinary ground target),
-2 (fragile) and 3 (Diffuser warehouse) accept the sequence; category 1 remains
-protected, so office walls and protected hangar surfaces still reject it.
-Unlike ordinary shots against fragile objects, the Diffuser still requires
-permission. Unmarked buildings, scenery without a damage model and terminal
-ruins cannot be primed or detonated. Warehouse roofs retain their special
-resistance to ordinary ground weapons.
+Redux extends CE84's warehouse-only admission to destructible Delphi buildings,
+including unmarked ones under the [collateral damage rules](collateral_damage.md).
+Both stages require a nonzero damage link in the currently selected model.
+Collision categories 0 (ordinary ground target), 2 (fragile) and 3 (Diffuser
+warehouse) accept the sequence; category 1 remains protected, so office walls
+and protected hangar surfaces still reject it. Beacons, scenery without a damage
+model and terminal ruins cannot be primed or detonated. Warehouse roofs retain
+their special resistance to ordinary ground weapons. Outside Delphi the Diffuser
+retains its permission check. Without a permitted lock, a Delphi shot uses the
+direct projectile update instead of resolving a nonexistent homing target.
 
 Gas records one shared target cell and a deadline 2800h ticks ahead, emitting
 recipe 75D4h at the building origin. A trigger must hit

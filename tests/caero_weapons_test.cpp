@@ -352,9 +352,10 @@ TEST_CASE("Diffuser controls follow actual building impacts and preserve manual 
       .secondary_pressed{fire},
     });
   }};
+  bool unlocked{false};
   auto const fire{[&](bool const hit_building)->darker::game::projectile* {
     craft.energy.reserve = 0xffff;
-    combat.target.token = hit_building ? target : missed_target;
+    combat.target.token = unlocked ? darker::game::weapon_target::no_target : hit_building ? target : missed_target;
     auto const direction{darker::maths::object_target_direction(player.pose().position, centre)};
     player.pose().angles = {
       .heading{direction.heading},
@@ -387,13 +388,18 @@ TEST_CASE("Diffuser controls follow actual building impacts and preserve manual 
     return;
   }
 
-  SECTION("An unmarked building never starts the gas sequence") {
+  SECTION("An unmarked Delphi building accepts gas and detonation without becoming a marked target") {
     building.state = 0;
+    unlocked = true;
     impact(fire(true));
-    CHECK_FALSE(combat.diffuser.active);
-    CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
+    REQUIRE(combat.diffuser.active);
+    CHECK(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_trigger));
     CHECK(building.state == 0);
-    CHECK(combat.effects.emitters.size() == rejected_impact_emitters);
+    CHECK(combat.effects.emitters.size() == gas_emitters);
+    wait_until(static_cast<clock_tick>(combat.diffuser.deadline - darker::game::diffuser_state::trigger_window_ticks));
+    impact(fire(true));
+    CHECK(building.state == damage_mask);
+    CHECK_FALSE(combat.diffuser.active);
   }
   SECTION("A missed gas shot never arms the detonator") {
     auto const *shot{fire(false)};

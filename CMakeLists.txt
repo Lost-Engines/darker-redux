@@ -317,6 +317,8 @@ add_library(darker_game STATIC
   src/game/weapon_target.cpp
   src/game/weapon_target.h
   src/game/building_impact.cpp
+  src/game/city_repairs.cpp
+  src/game/city_repairs.h
   src/game/caero_weapons.cpp
   src/game/caero_weapons.h
   src/game/caero_energy.cpp
@@ -523,6 +525,7 @@ if(BUILD_TESTING)
     tests/mimic_test.cpp
     tests/weapon_target_test.cpp
     tests/building_impact_test.cpp
+    tests/city_repairs_test.cpp
     tests/dual_launch_test.cpp
     tests/caero_weapons_test.cpp
     tests/chargeable_test.cpp
@@ -555,7 +558,7 @@ if(BUILD_TESTING)
   )
   configure_first_party(framework_tests)
   include("${catch2_SOURCE_DIR}/extras/Catch.cmake")
-  target_compile_definitions(framework_tests PRIVATE DARKER_TEST_SCC1A_ROM_DIR="${DARKER_TEST_SCC1A_ROM_DIR}" DARKER_TEST_GUS_DIR="${DARKER_TEST_GUS_DIR}" DARKER_TEST_AWE32_ROM="${DARKER_TEST_AWE32_ROM}" DARKER_TEST_RESOURCE_DIR="${DARKER_REFERENCE_DIR}" DARKER_TEST_SC55_ROM_DIR="${DARKER_TEST_SC55_ROM_DIR}")
+  target_compile_definitions(framework_tests PRIVATE DARKER_TEST_INSTALL_DIR="${DARKER_INSTALL_DIR}" DARKER_TEST_SCC1A_ROM_DIR="${DARKER_TEST_SCC1A_ROM_DIR}" DARKER_TEST_GUS_DIR="${DARKER_TEST_GUS_DIR}" DARKER_TEST_AWE32_ROM="${DARKER_TEST_AWE32_ROM}" DARKER_TEST_RESOURCE_DIR="${DARKER_REFERENCE_DIR}" DARKER_TEST_SC55_ROM_DIR="${DARKER_TEST_SC55_ROM_DIR}")
   catch_discover_tests(framework_tests)
   if(DARKER_INSTALL_DIR AND DARKER_REFERENCE_DIR)
     add_test(NAME resources.original_pack_comparison

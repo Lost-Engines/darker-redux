@@ -30,6 +30,7 @@ struct caero_fire_request {
   uint16_t target{0xffff};
   bool underground{false};
   bool released{false};
+  bool unrestricted_ground_targets{false};
 };
 
 enum class diffuser_impact { rejected, gas, already_gassed, destroyed };
@@ -44,7 +45,7 @@ struct diffuser_state {
   bool active{false};
 
   void advance(clock_tick clock) noexcept;
-  diffuser_impact hit(bool gas, collision_category category, uint8_t state, bool linked, uint16_t target, clock_tick clock) noexcept;
+  diffuser_impact hit(bool gas, collision_category category, uint8_t state, bool linked, uint16_t target, clock_tick clock, bool unrestricted = false) noexcept;
 };
 
 uint8_t caero_weapon_strength(city_map const &cells, maths::world_position position, uint16_t victim);

@@ -88,7 +88,7 @@ int startup_failure(std::string_view const message) {
   return EXIT_FAILURE;
 }
 
-enum class session_exit { none, menu, death, aborted, completed, previous };
+enum class session_exit { none, menu, death, aborted, headquarters_lost, completed, previous };
 
 struct flight_host {
   darker::presentation::options_menu options;
@@ -1488,12 +1488,14 @@ auto main(int const argc, char const *const argv[])->int {
       if(previous_level) debug_session = true;
       bool const died{host.exit_requested == session_exit::death};
       bool const aborted{host.exit_requested == session_exit::aborted};
+      bool const headquarters_lost{host.exit_requested == session_exit::headquarters_lost};
       auto const completed{static_cast<uint8_t>(combat->completed_objectives)};
       bool const completed_mission{host.exit_requested == session_exit::completed};
       if(front) darker::game::commit_beacon_queue(cells, scenario->bytes(mission.beacon_sequence));
       if(completed_mission && front && !front->nightmare_selected()) {
         auto updated{front->selected_pilot()};
         if(!host.player.tunnel) {
+          if(world_mode == world_kind::delphi) combat->collateral.repair_services(cells);
           darker::game::pack_city_state(cells, bank.city_types(), world_mode == world_kind::halon ? std::span<std::byte>{updated.halon} : std::span<std::byte>{updated.delphi});
           updated.return_site = host.hangar.return_site;
           updated.weapons = host.available_weapons;
@@ -1527,6 +1529,7 @@ auto main(int const argc, char const *const argv[])->int {
         if(front->nightmare_selected()) front->finish_nightmare(static_cast<uint8_t>(host.score_base + completed), context.progress ? context.progress : died            ? 2 : aborted           ? 3 : completed_mission ? 1 : 255);
         else if(previous_level) front->previous_level();
         else if(completed_mission) front->continue_campaign();
+        else if(headquarters_lost) front->show_headquarters_loss();
         else if(died) front->show_death(completed);
         else if(aborted) front->show_abort(completed);
         else front->return_to_menu();
@@ -1720,6 +1723,7 @@ auto main(int const argc, char const *const argv[])->int {
             tunnel_network.reset();
             darker::game::restore_city_state(cells, bank.city_types(), world_mode == world_kind::halon ? std::span<std::byte const>{pilot.halon} : std::span<std::byte const>{pilot.delphi}, pilot.stage);
           }
+          darker::game::repair_scenario_buildings(cells, mission, scenario->bytes(mission.shared));
           darker::game::apply_scenario_cells(cells, mission);
           objectives = {
             .list{mission.objective_cell_list}
@@ -1968,7 +1972,9 @@ auto main(int const argc, char const *const argv[])->int {
         else if(caero) {
           // Nightmare has an entry position, not a campaign return hangar.
           if(!front->nightmare_selected()) {
-            darker::game::begin_hangar_return(host.player, cells, host.hangar, context.objectives_complete);
+            if(darker::game::begin_hangar_return(host.player, cells, host.hangar, context.objectives_complete)) {
+              combat->collateral.repair_return_hangar(cells, host.hangar.return_site);
+            }
             darker::game::advance_hangar_departure(host.player, cells, host.hangar, step);
           }
         } else if(world_mode == world_kind::halon && darker::game::begin_supply_approach(host.player, cells, host.player.supply)) {
@@ -1986,6 +1992,10 @@ auto main(int const argc, char const *const argv[])->int {
       && !(contact.contact == darker::game::city_contact::terrain && (darker::game::has_player_flag(host.player.lifecycle.flags, darker::game::player_flag::ground_protection)))) {
       std::cout << "Contact: " << (contact.contact == darker::game::city_contact::building ? "building" : "terrain")
                 << "; position " << host.player.pose().position.column << ',' << host.player.pose().position.row << ',' << host.player.pose().position.height << std::endl;
+    }
+    if(front && !front->nightmare_selected() && combat->collateral.headquarters_lost()) {
+      host.exit_requested = session_exit::headquarters_lost;
+      continue;
     }
     if(darker::game::player_crash_finished(host.player.lifecycle, game_clock.frame_ticks)) {
       host.exit_requested = session_exit::death;

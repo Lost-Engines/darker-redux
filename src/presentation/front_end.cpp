@@ -211,6 +211,11 @@ void front_end::key(front_key const input) {
     if(title_ticks >= 128) current = screen::games;
     return;
   }
+  if(current == screen::headquarters_loss) {
+    if(input == front_key::accept) begin_briefing();
+    else if(input == front_key::back) current = screen::run;
+    return;
+  }
   if(current == screen::outcome) {
     if((input == front_key::back || input == front_key::accept) && (scene->input_policy & 4)) current = screen::run;
     else if(input == front_key::accept && (scene->input_policy & 1) && !scene->continue_page()) current = screen::run;
@@ -335,6 +340,8 @@ void front_end::click(int const x, int const y) {
     choose_game();
   } else if(current == screen::run && x >= 70 && x < 250 && y >= 160 && y < 224) {
     key(std::array{front_key::accept, front_key::select, front_key::erase, front_key::quit}[static_cast<size_t>((y - 160) / 16)]);
+  } else if(current == screen::headquarters_loss && x >= 32 && x < 288 && y >= 160 && y < 192) {
+    key(y < 176 ? front_key::accept : front_key::back);
   } else if(current == screen::quit || current == screen::erase) {
     int const answer_y{current == screen::erase ? 216 : 168};
     if(y >= answer_y && y < answer_y + 15) {
@@ -441,6 +448,12 @@ void front_end::show_abort(uint8_t const completed_objects) {
   show_outcome(3, completed_objects);
 }
 
+void front_end::show_headquarters_loss() {
+  /// Explain the Redux failure without changing the committed pilot or inventing a retail outcome script
+  retained_music = -1;
+  current = screen::headquarters_loss;
+}
+
 void front_end::show_outcome(uint8_t const outcome, uint8_t const completed_objects) {
   /// Failure presentations leave the committed pilot untouched for the next attempt
   retained_music = -1;
@@ -526,6 +539,39 @@ void front_end::draw(framework::render::cockpit_framebuffer &output) const {
     }
     panel(54, 217, 212, 18);
     centred(selection_prompt, 222, 125);
+  } else if(current == screen::headquarters_loss) {
+    struct failure_labels {
+      std::string_view title;
+      std::array<std::string_view, 2> explanation;
+      std::array<std::string_view, 2> actions;
+    };
+    static std::array<failure_labels, 3> constexpr failure_text{{
+      {
+        .title{"Mission failed"},
+        .explanation{"Hemmersan has been destroyed.", "There is no base to return to."},
+        .actions{"Retry mission (Enter)", "Back to menu (Esc)"},
+      },
+      {
+        .title{"Mission perdue"},
+        .explanation{"Hemmersan a disparu.", "Il ne reste plus de base."},
+        .actions{"Recommencer (Enter)", "Retour au menu (Esc)"},
+      },
+      {
+        .title{"Mission gescheitert"},
+        .explanation{"Hemmersan existiert nicht mehr.", "Die Basis ist verloren."},
+        .actions{"Neuer Versuch (Enter)", "Abbrechen (Esc)"},
+      },
+    }};
+    auto const &lines{failure_text.at(static_cast<unsigned int>(language))};
+    panel(24, 72, 272, 128);
+    centred(lines.title, 80, 126);
+    centred(lines.explanation[0], 112, 125);
+    centred(lines.explanation[1], 128, 125);
+    for(unsigned int i{0}; i < 2; ++i) {
+      int const y{160 + static_cast<int>(i) * 16};
+      bool const hover{pointer[0] >= 32 && pointer[0] < 288 && pointer[1] >= y && pointer[1] < y + 16};
+      centred(lines.actions[i], y, hover ? 126 : 125);
+    }
   } else if(editing_text()) {
     bool const hidden{current == screen::hidden_command};
     panel(48, hidden ? 91 : 171, 224, 54);

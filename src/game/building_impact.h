@@ -6,6 +6,6 @@
 
 namespace darker::game {
 
-bool projectile_damages_building(size_t definition_slot, collision_category category, uint8_t state, bool linked);
+bool projectile_damages_building(size_t definition_slot, collision_category category, uint8_t state, bool linked, bool unrestricted = false);
 
 } // namespace darker::game

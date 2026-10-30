@@ -83,7 +83,8 @@ Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/d
 
 ### Gameplay enhancements
 
-- **Forbes Diffuser:** now works on all permitted destructible buildings, with the usual protected-wall and doorway rules. Gas switches to the detonator only after a successful hit. Misses and early detonator hits leave it ready to try again until the gas expires. Press **5** to return to gas manually; hitting a smoking building with more gas no longer restarts the wait.
+- **[Delphi collateral damage](docs/collateral_damage.md):** buildings with destroyed models can be demolished even when unmarked; target markers still identify authorised targets. Fire ground weapons without a lock to aim manually. Player-damaged radar masts and other hangars are repaired between missions, and buildings needed for later scripted objectives are restored when needed. Beacons remain indestructible. Destroying Hemmersan fails the current attempt.
+- **Forbes Diffuser:** works on destructible Delphi buildings, with the usual protected-wall and doorway rules. Gas switches to the detonator only after a successful hit. Misses and early detonator hits leave it ready to try again until the gas expires. Press **5** to return to gas manually; hitting a smoking building with more gas no longer restarts the wait.
 - **Nightmare reinforcements:** restored the original authored spawn positions and fade-in, avoiding overlapping arrivals that immediately collide. This correction is also backported to the faithful engine.
 - **Nightmare steering:** removed the scripted height-512 altitude hold during the late truck hunt. Pitch remains under player control; the A-key altitude hold is still available. The beacon patterns, enemies and objective progression are unchanged.
 
@@ -98,7 +99,7 @@ Preferences live in `$XDG_CONFIG_HOME/darker-redux/options.cfg`, or `~/.config/d
 - **Mission 80 convoy:** staggered vehicles execute their own approach distance, then join the common route instead of accumulating the other vehicles' approach distances. This repairs the translated routes responsible for the observed building traversal. The common authored route, speed, spacing and mission logic are retained. Joining the shared route is an inferred correction to the original route data.
 - **German mission 76:** the missing capital Ö in “Örtlichkeiten” is composed from the original O and Ü artwork, replacing the invalid font lookup and retaining the letter's normal spacing.
 
-All of these repairs happen in memory. Original packs and saves are not rewritten to apply them, and the alternative [faithful engine](https://github.com/Lost-Engines/darker-cpp) remains unchanged.
+Original asset corrections happen in memory without rewriting the packs. Gameplay damage is saved through the normal campaign progression. The alternative [faithful engine](https://github.com/Lost-Engines/darker-cpp) retains its original rules.
 
 ### Developer additions
 

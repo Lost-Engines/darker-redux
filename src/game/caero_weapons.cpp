@@ -16,10 +16,10 @@ void diffuser_state::advance(clock_tick const clock) noexcept {
   if(active && std::bit_cast<int16_t>(static_cast<clock_tick>(clock - deadline)) >= 0) active = false;
 }
 
-diffuser_impact diffuser_state::hit(bool const gas, collision_category const category, uint8_t const state, bool const linked, uint16_t const target, clock_tick const clock) noexcept {
-  /// Extend CE84 to permitted destructible buildings while retaining its timing window and retry state
+diffuser_impact diffuser_state::hit(bool const gas, collision_category const category, uint8_t const state, bool const linked, uint16_t const target, clock_tick const clock, bool const unrestricted) noexcept {
+  /// Extend CE84 to destructible buildings while retaining its timing window, retry state and optional authorisation gate
   advance(clock);
-  if(!linked || !(state & city_cell::permitted_target)) return diffuser_impact::rejected;
+  if(!linked || (!unrestricted && !(state & city_cell::permitted_target))) return diffuser_impact::rejected;
   switch(category) {
   case collision_category::ground_target:
   case collision_category::fragile:
@@ -75,6 +75,8 @@ caero_fire_result fire_caero_weapon(projectile_pool &pool, caero_energy_state &e
   if(player_actions_blocked(request.player_flags) || !pool.objects().free_head()) return {};
   auto lifetime{static_cast<uint16_t>(definition.role_data.projectile().lifetime * 256)};
   auto target{request.target};
+  bool const ground_weapon{selection == caero_weapon::brent_ground || selection == caero_weapon::diffuser_gas || selection == caero_weapon::diffuser_trigger};
+  bool const unguided{ground_weapon && request.unrestricted_ground_targets && target_reference{target}.is_none()};
   caero_weapon next_selection{caero_weapon::none};
   if(selection == caero_weapon::chargeable) {
     if(request.pressed) {
@@ -103,7 +105,7 @@ caero_fire_result fire_caero_weapon(projectile_pool &pool, caero_energy_state &e
     };
   } else if(selection == caero_weapon::diffuser_gas || selection == caero_weapon::diffuser_trigger) {
     // impacts and gas expiry change the stage; a missed or blocked shot keeps it
-    if(energy.reserve < cost || target_reference{request.target}.is_object_encoded()) return {};
+    if(energy.reserve < cost || (target_reference{request.target}.is_object_encoded() && !unguided)) return {};
     if(!request.pressed) return {
       .ready{true}
     };
@@ -122,7 +124,7 @@ caero_fire_result fire_caero_weapon(projectile_pool &pool, caero_energy_state &e
       target = capsule->native_id;
     }
     if((selection == caero_weapon::caero_weapon || selection == caero_weapon::brent_hunter) && !target_reference{request.target}.permits_air_weapon()) return {};
-    if(selection == caero_weapon::brent_ground && target_reference{request.target}.is_object_encoded()) return {};
+    if(selection == caero_weapon::brent_ground && target_reference{request.target}.is_object_encoded() && !unguided) return {};
     if(selection != caero_weapon::dual_launch_follow_up && !request.pressed) return {
       .ready{true}
     };
@@ -130,15 +132,17 @@ caero_fire_result fire_caero_weapon(projectile_pool &pool, caero_energy_state &e
     if(selection == caero_weapon::dual_launch_capsule) next_selection = caero_weapon::dual_launch_follow_up;
     else if(selection == caero_weapon::dual_launch_follow_up) next_selection = caero_weapon::dual_launch_capsule;
   }
+  auto *shot{pool.launch({
+    .definition{definition},
+    .emitter{request.emitter},
+    .model_token{request.model},
+    .clock{request.clock},
+    .lifetime{lifetime},
+    .target_token{target},
+  })};
+  if(shot && unguided) shot->parameters.update_entry = object_update::direct_projectile;
   return {
-    .shot{pool.launch({
-      .definition{definition},
-      .emitter{request.emitter},
-      .model_token{request.model},
-      .clock{request.clock},
-      .lifetime{lifetime},
-      .target_token{target}
-    })},
+    .shot{shot},
     .ready{true},
     .next_selection{std::to_underlying(next_selection)},
   };
