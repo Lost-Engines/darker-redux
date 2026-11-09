@@ -56,9 +56,9 @@ endfunction()
 
 if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   # MinGW LTO can discard Boost.ProgramOptions exception thunks referenced by
-  # its prebuilt static library. Keep these two consumers as ordinary objects;
+  # its prebuilt static library. Keep these consumers as ordinary objects;
   # engine libraries still use LTO and the final executable remains static.
-  set_property(SOURCE src/main.cpp tests/resource_check_main.cpp APPEND PROPERTY COMPILE_OPTIONS -fno-lto)
+  set_property(SOURCE src/main.cpp src/input/joystick_options.cpp tests/resource_check_main.cpp APPEND PROPERTY COMPILE_OPTIONS -fno-lto)
 endif()
 
 # Third-party device implementation, compiled separately from first-party warning settings
