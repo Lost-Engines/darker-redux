@@ -13,6 +13,13 @@ if(DARKER_STATIC_RUNTIME)
   endif()
 endif()
 
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+    AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16
+    AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 17)
+  # GCC 16 has duplicate exception copy-constructor definitions in C++26 Debug builds.
+  add_compile_options("$<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CXX>>:-D__cpp_lib_constexpr_exceptions=0>")
+endif()
+
 include(CTest)
 find_package(Boost 1.85 CONFIG REQUIRED COMPONENTS program_options)
 find_package(OpenGL REQUIRED)
