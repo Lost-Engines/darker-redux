@@ -13,6 +13,13 @@ if(DARKER_STATIC_RUNTIME)
   endif()
 endif()
 
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+    AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16
+    AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 17)
+  # GCC 16 has duplicate exception copy-constructor definitions in C++26 Debug builds.
+  add_compile_options("$<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CXX>>:-D__cpp_lib_constexpr_exceptions=0>")
+endif()
+
 include(CTest)
 find_package(Boost 1.85 CONFIG REQUIRED COMPONENTS program_options)
 find_package(OpenGL REQUIRED)
@@ -49,9 +56,9 @@ endfunction()
 
 if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   # MinGW LTO can discard Boost.ProgramOptions exception thunks referenced by
-  # its prebuilt static library. Keep these two consumers as ordinary objects;
+  # its prebuilt static library. Keep these consumers as ordinary objects;
   # engine libraries still use LTO and the final executable remains static.
-  set_property(SOURCE src/main.cpp tests/resource_check_main.cpp APPEND PROPERTY COMPILE_OPTIONS -fno-lto)
+  set_property(SOURCE src/main.cpp src/input/joystick_options.cpp tests/resource_check_main.cpp APPEND PROPERTY COMPILE_OPTIONS -fno-lto)
 endif()
 
 # Third-party device implementation, compiled separately from first-party warning settings
