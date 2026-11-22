@@ -118,9 +118,9 @@ TEST_CASE("Distant objects with shade code 31 render without a preceding mesh", 
   // A zero-extent special model selects the point path without drawing bytecode.
   // Its colour must come from its own lighting, even without a preceding mesh.
   std::vector<std::byte> bytes(17);
-  bytes[1] = std::byte{1}; // one special model at pool offset zero
-  bytes[4] = std::byte{11}; // pool size
-  bytes[11] = std::byte{255}; // header +5: ramp 7, shade code 31
+  bytes[1] = std::byte{1};                                                      // one special model at pool offset zero
+  bytes[4] = std::byte{11};                                                     // pool size
+  bytes[11] = std::byte{255};                                                   // header +5: ramp 7, shade code 31
   darker::resources::geometry_bank const bank{std::move(bytes)};
   darker::game::city_map cells{};
   darker::graphics::city_renderer renderer;
@@ -220,7 +220,7 @@ TEST_CASE("Moving models become dots only when their projected bounds are subpix
   std::vector<std::byte> bytes(17);
   bytes[1] = std::byte{1};
   bytes[4] = std::byte{11};
-  bytes[15] = std::byte{32}; // model extent; deliberately zero original LOD cutoffs
+  bytes[15] = std::byte{32};                                                    // model extent; deliberately zero original LOD cutoffs
   darker::resources::geometry_bank const bank{std::move(bytes)};
   scene_object const object{
     .model_offset{0},

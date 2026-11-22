@@ -94,7 +94,7 @@ TEST_CASE("Level 80 staggered vehicles join the same route at the same location"
   std::array<unsigned int, 12> constexpr rows{62, 63, 64, 67, 68, 69, 70, 71, 72, 73, 74, 75};
   std::vector<std::byte> program;
   for(auto const command : commands) program.push_back(static_cast<std::byte>(command));
-  program.push_back(std::byte{3}); // common left turn after the sixteen-cell run
+  program.push_back(std::byte{3});                                              // common left turn after the sixteen-cell run
   program.push_back(std::byte{0});
   darker::game::scenario_actor_groups groups;
   for(unsigned int i{0}; i < rows.size(); ++i) {

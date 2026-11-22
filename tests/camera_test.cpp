@@ -118,7 +118,7 @@ TEST_CASE("Full angle sine table is rounded mathematical sine with symmetric pea
     CHECK(render_sine(static_cast<uint16_t>(angle + angle_format::half_turn)) == -value);
     CHECK(render_cosine(static_cast<uint16_t>(angle)) == render_sine(static_cast<uint16_t>(angle + angle_format::quarter_turn)));
   }
-  CHECK(original_sine[256] == 32766); // retain the source quirk for simulation
+  CHECK(original_sine[256] == 32766);                                           // retain the source quirk for simulation
 }
 
 TEST_CASE("Camera and model rotations resolve steps inside one original sine phase", "[graphics][camera]") {

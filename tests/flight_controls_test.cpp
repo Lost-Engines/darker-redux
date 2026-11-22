@@ -109,7 +109,7 @@ TEST_CASE("Joystick buttons require release after focus, connection and menu cha
 TEST_CASE("Joystick has one configurable centre threshold with unchanged maximum force", "[controls][joystick]") {
   auto const response{[](int16_t position, uint16_t deadzone){
     darker::game::steering_axis_state axis;
-    axis.previous_joystick = position; // Settled input, so smoothing does not alter the test position.
+    axis.previous_joystick = position;                                          // Settled input, so smoothing does not alter the test position.
     axis.joystick(position, 16, deadzone);
     return axis.reference;
   }};

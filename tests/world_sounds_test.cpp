@@ -420,9 +420,9 @@ TEST_CASE("Playback volume scales effects without restarting synthesis", "[audio
   REQUIRE(reference.publish(frame));
   REQUIRE(adjusted.publish(frame));
   std::array<float, 2048> original{}, quieter{};
-  adjusted.set_volumes(0, 50); // Music mute must not mute flight effects.
+  adjusted.set_volumes(0, 50);                                                  // Music mute must not mute flight effects.
   reference.render(original);
-  adjusted.render(quieter); // Allow the short gain ramp to finish.
+  adjusted.render(quieter);                                                     // Allow the short gain ramp to finish.
   reference.render(original);
   adjusted.render(quieter);
   CHECK(std::ranges::any_of(original, [](float sample){ return sample != 0; }));
@@ -438,7 +438,7 @@ TEST_CASE("Playback volume scales effects without restarting synthesis", "[audio
   adjusted.render(quieter);
   reference.render(original);
   adjusted.render(quieter);
-  CHECK(original == quieter); // Muting did not pause or reset the chip.
+  CHECK(original == quieter);                                                   // Muting did not pause or reset the chip.
 }
 
 TEST_CASE("Music volume is independent of effects and keeps the song advancing", "[audio][volume]") {

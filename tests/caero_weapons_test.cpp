@@ -569,7 +569,7 @@ TEST_CASE("Real Diffuser hits prime two buildings and retain the detonator betwe
     REQUIRE(combat.diffuser.find(target));
     CHECK(combat.secondary_weapon == std::to_underlying(game::caero_weapon::diffuser_trigger));
   }
-  CHECK(combat.effects.emitters.size() == 48);                                 // both complete smoke recipes fit the new default pool
+  CHECK(combat.effects.emitters.size() == 48);                                  // both complete smoke recipes fit the new default pool
   auto const ready{static_cast<game::clock_tick>(combat.diffuser.find(targets.back())->deadline - game::diffuser_state::trigger_window_ticks)};
   auto const destination{clock + static_cast<game::clock_tick>(ready - clock)};
   while(clock < destination) step();

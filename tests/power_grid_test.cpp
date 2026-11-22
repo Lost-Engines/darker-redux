@@ -160,12 +160,12 @@ TEST_CASE("Power loss leaves radio coverage and unrelated world cells alone", "[
   game::beacon_changes script;
   game::delphi_power_grid grid;
   grid.advance(cells, script, 0, 0);
-  CHECK(cells[game::city_cell_index(18, 18)].state == 255);                      // generators and components do not substitute for transformers
+  CHECK(cells[game::city_cell_index(18, 18)].state == 255);                     // generators and components do not substitute for transformers
   destroy_station(cells, 0);
   grid.advance(cells, script, 256, 256);
   CHECK(cells[game::city_cell_index(18, 18)].state == 0);
   CHECK(cells[game::city_cell_index(13, 13)].state == 0);
-  CHECK(cells[game::city_cell_index(18, 17)].state == 0x43);                     // streetlight appearance follows beacon lighting, not destruction
+  CHECK(cells[game::city_cell_index(18, 17)].state == 0x43);                    // streetlight appearance follows beacon lighting, not destruction
   CHECK(cells[game::city_cell_index(23, 14)].state == 0x20);
   CHECK(cells[game::city_cell_index(21, 11)].state == 0x20);
 }
@@ -201,7 +201,7 @@ TEST_CASE("Script fades and restoration remain independent of temporary supply l
   }
   grid.restore_beacons(cells);
   for(unsigned int i{0}; i < cells.size(); ++i) CHECK(cells[i].state == expected[i].state);
-  grid.restore_beacons(cells);                                                // save cleanup is safe when repeated
+  grid.restore_beacons(cells);                                                  // save cleanup is safe when repeated
   for(unsigned int i{0}; i < cells.size(); ++i) CHECK(cells[i].state == expected[i].state);
 }
 
@@ -249,7 +249,7 @@ TEST_CASE("Retail transformer pairs and mission-75 authorisation survive a saved
   game::beacon_changes script;
   game::delphi_power_grid grid;
   grid.advance(cells, script, 0, 0);
-  CHECK(cells[game::city_cell_index(0, 126)].state == 0);                        // all three sites down, including already authorised Spervent
+  CHECK(cells[game::city_cell_index(0, 126)].state == 0);                       // all three sites down, including already authorised Spervent
   grid.restore_beacons(cells);
   game::commit_beacon_queue(cells, std::array{std::byte{0x22}});
   game::repair_power_station_buildings(cells);
@@ -263,12 +263,12 @@ TEST_CASE("Retail transformer pairs and mission-75 authorisation survive a saved
     CHECK(bool(cell.state & game::delphi_damage_bit) == bool(cell.state & game::city_cell::permitted_target));
     marked_ruins += bool(cell.state & game::delphi_damage_bit);
   }
-  CHECK(marked_ruins == 14);                                                  // all of Spervent, but neither of the other two sites
-  CHECK(cells[game::city_cell_index(18, 18)].state == 0);                        // explicit script outage was saved
-  CHECK(cells[game::city_cell_index(27, 18)].state == 255);                      // temporary supply loss was not saved
+  CHECK(marked_ruins == 14);                                                    // all of Spervent, but neither of the other two sites
+  CHECK(cells[game::city_cell_index(18, 18)].state == 0);                       // explicit script outage was saved
+  CHECK(cells[game::city_cell_index(27, 18)].state == 255);                     // temporary supply loss was not saved
   game::delphi_power_grid next_run;
   next_run.advance(cells, script, 0, 0);
-  CHECK(cells[game::city_cell_index(27, 18)].state == 0);                        // persisted authorised ruins still disable their own station
+  CHECK(cells[game::city_cell_index(27, 18)].state == 0);                       // persisted authorised ruins still disable their own station
   CHECK(cells[game::city_cell_index(117, 54)].state == 255);
   CHECK(cells[game::city_cell_index(117, 108)].state == 255);
   CHECK(cells[game::city_cell_index(0, 126)].state == 255);
@@ -338,7 +338,7 @@ TEST_CASE("Real Brent Ground impacts disable the three retail transformer pairs"
       for(unsigned int i{0}; i < 256 && !(shot->flags & 8); ++i) step();
       REQUIRE(shot->flags & 8);
       REQUIRE(cell.state == game::delphi_damage_bit);
-      for(unsigned int i{0}; i < 32; ++i) step();                            // let supply fade and the weapon recover before the next shot
+      for(unsigned int i{0}; i < 32; ++i) step();                               // let supply fade and the weapon recover before the next shot
       ++destroyed;
       CHECK(cells[nearby[station]].state == (destroyed == 2 ? 0 : 255));
       CHECK(combat.collateral.take_power_warning() == (destroyed == 2 ? std::optional{static_cast<game::power_loss_warning>(station)} : std::nullopt));

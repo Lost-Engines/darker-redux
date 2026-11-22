@@ -177,7 +177,7 @@ TEST_CASE("Background fade starts only after the original palette fog is complet
   }
   auto const halfway{fog.colours(95 * render_geometry::camera_units_per_cell, model_path::direct, 255)};
   CHECK(halfway.apply_fog(0) >= 61);
-  CHECK(halfway.apply_fog(0) <= 64); // linear halfway blend, quantised to a shade-table row
+  CHECK(halfway.apply_fog(0) <= 64);                                            // linear halfway blend, quantised to a shade-table row
   for(auto const distance : {100, 110}) {
     auto const far{fog.colours(distance * render_geometry::camera_units_per_cell, model_path::direct, 255)};
     for(unsigned int i{0}; i < 256; ++i) CHECK(far.point_colour(static_cast<uint8_t>(i)) == 127);

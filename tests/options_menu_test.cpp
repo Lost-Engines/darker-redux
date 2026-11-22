@@ -37,7 +37,7 @@ TEST_CASE("Options apply is a save request and defaults remain a cancellable pre
   for(int i{0}; i < 12; ++i) menu.key(options_key::down);
   menu.key(options_key::accept);
   CHECK(menu.save_requested);
-  CHECK(menu.active); // The host only closes after a successful write.
+  CHECK(menu.active);                                                           // The host only closes after a successful write.
 }
 
 TEST_CASE("Resolution defaults to the window and fixed choices can return to automatic sizing", "[options]") {
@@ -126,7 +126,7 @@ TEST_CASE("Control bindings preserve defaults and report conflicting assignments
   options_menu menu;
   auto const original{menu.values};
   menu.open();
-  menu.click(30, 35 + 9 * 11); // Controls.
+  menu.click(30, 35 + 9 * 11);                                                  // Controls.
   menu.key(options_key::right);
   CHECK(menu.values.controls.mouse_sensitivity == 1.1);
   menu.key(options_key::down);
@@ -135,22 +135,22 @@ TEST_CASE("Control bindings preserve defaults and report conflicting assignments
   menu.key(options_key::down);
   menu.key(options_key::down);
   menu.key(options_key::down);
-  menu.key(options_key::down); // Bank left.
+  menu.key(options_key::down);                                                  // Bank left.
   menu.key(options_key::accept);
   REQUIRE(menu.capturing_key());
-  menu.capture_key('E'); // Already assigned to engine/shield.
+  menu.capture_key('E');                                                        // Already assigned to engine/shield.
   CHECK(menu.capturing_key());
   CHECK_FALSE(menu.notice.empty());
-  menu.capture_key(299); // F10 stays available regardless of bindings.
+  menu.capture_key(299);                                                        // F10 stays available regardless of bindings.
   CHECK(menu.capturing_key());
   menu.capture_key('J');
   CHECK_FALSE(menu.capturing_key());
   CHECK(menu.values.controls.command_key('J') == original.controls.keys[0]);
   CHECK(menu.values.controls.command_key(original.controls.keys[0]) == -1);
-  menu.key(options_key::cancel); // Back to options, retaining the preview.
+  menu.key(options_key::cancel);                                                // Back to options, retaining the preview.
   CHECK(menu.active);
   CHECK(menu.values.controls.keys[0] == 'J');
-  menu.key(options_key::cancel); // Cancel all changes.
+  menu.key(options_key::cancel);                                                // Cancel all changes.
   CHECK(menu.values == original);
   CHECK_FALSE(menu.active);
 }
@@ -161,11 +161,11 @@ TEST_CASE("Control capture can cancel, clear and reassign a previously occupied 
   menu.click(30, 35 + 9 * 11);
   for(int i{0}; i < 5; ++i) menu.key(options_key::down);
   menu.key(options_key::accept);
-  menu.capture_key(256); // Escape cancels only capture.
+  menu.capture_key(256);                                                        // Escape cancels only capture.
   CHECK_FALSE(menu.capturing_key());
   CHECK(menu.active);
   menu.key(options_key::accept);
-  menu.capture_key(261); // Delete unbinds.
+  menu.capture_key(261);                                                        // Delete unbinds.
   CHECK(menu.values.controls.keys[0] == -1);
   menu.key(options_key::down);
   menu.key(options_key::accept);
@@ -193,7 +193,7 @@ TEST_CASE("Mouse settings preserve fractional motion, wrapping and capture reset
 TEST_CASE("Legacy key aliases follow the rebound action rather than remaining hardcoded", "[controls]") {
   darker::input::control_preferences settings;
   auto const index{std::to_underlying(darker::input::control_action::boost)};
-  CHECK(settings.command_key(335) == 257); // Keypad Enter, Enter.
+  CHECK(settings.command_key(335) == 257);                                      // Keypad Enter, Enter.
   settings.keys[index] = 'B';
   CHECK(settings.command_key('B') == 257);
   CHECK(settings.command_key(335) == -1);
@@ -206,9 +206,9 @@ TEST_CASE("Scrolling controls reaches the last weapon and control defaults", "[o
   options_menu menu;
   menu.open();
   menu.click(30, 35 + 9 * 11);
-  menu.key(options_key::up); // Back to options.
-  menu.key(options_key::up); // Restore control defaults.
-  menu.key(options_key::up); // Weapon 0.
+  menu.key(options_key::up);                                                    // Back to options.
+  menu.key(options_key::up);                                                    // Restore control defaults.
+  menu.key(options_key::up);                                                    // Weapon 0.
   menu.key(options_key::accept);
   menu.capture_key('J');
   CHECK(menu.values.controls.keys.back() == 'J');
@@ -222,20 +222,20 @@ TEST_CASE("Mouse wheel stops at list boundaries and control footer remains fixed
   menu.open();
   menu.wheel(-1);
   menu.key(options_key::right);
-  CHECK_FALSE(menu.values.automatic_resolution); // Top-level wheel did not wrap to Return.
+  CHECK_FALSE(menu.values.automatic_resolution);                                // Top-level wheel did not wrap to Return.
   CHECK(menu.values.width == 320);
   menu.click(30, 35 + 9 * 11);
   for(int i{0}; i < 100; ++i) menu.wheel(1);
-  menu.click(30, 35 + 11 * 11); // Last visible binding remains Weapon 0.
+  menu.click(30, 35 + 11 * 11);                                                 // Last visible binding remains Weapon 0.
   REQUIRE(menu.capturing_key());
   menu.capture_key('J');
   CHECK(menu.values.controls.keys.back() == 'J');
-  menu.click(30, 176); // Defaults stays outside the scrolling list.
+  menu.click(30, 176);                                                          // Defaults stays outside the scrolling list.
   CHECK(menu.values.controls == darker::input::control_preferences{});
   for(int i{0}; i < 100; ++i) menu.wheel(-1);
-  menu.click(250, 35); // First setting remains mouse sensitivity.
+  menu.click(250, 35);                                                          // First setting remains mouse sensitivity.
   CHECK(menu.values.controls.mouse_sensitivity == 1.1);
-  menu.click(30, 187); // Back stays in the same place at either end.
+  menu.click(30, 187);                                                          // Back stays in the same place at either end.
   menu.key(options_key::cancel);
   CHECK_FALSE(menu.active);
 }
