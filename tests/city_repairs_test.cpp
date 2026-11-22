@@ -101,7 +101,7 @@ TEST_CASE("Service repairs retain other destruction and never repair authored da
   CHECK_FALSE(damage.headquarters_lost());
   cells[0].state |= game::delphi_damage_bit;
   damage.repair_services(cells);
-  CHECK(cells[0].state == 0xe7);                                               // old repair tracking cannot undo a later authored event
+  CHECK(cells[0].state == 0xe7);                                                // old repair tracking cannot undo a later authored event
 }
 
 TEST_CASE("Hemmersan destruction fails only when the player newly destroys its entrance", "[game][collateral]") {
