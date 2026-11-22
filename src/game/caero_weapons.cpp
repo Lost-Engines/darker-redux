@@ -51,7 +51,7 @@ diffuser_state const *diffuser_targets::find(uint16_t const cell) const noexcept
 void diffuser_targets::advance(clock_tick const clock) noexcept {
   /// Expire every cloud independently; removed records cannot revive on a later clock wrap
   for(auto &cloud : clouds) cloud.advance(clock);
-  std::erase_if(clouds, [](auto const &cloud){ return !cloud.active; });
+  std::erase_if(clouds, [](auto const &cloud){return !cloud.active;});
 }
 
 diffuser_impact diffuser_targets::hit(bool const gas, collision_category const category, uint8_t const state, bool const linked,
@@ -129,15 +129,19 @@ caero_fire_result fire_caero_weapon(projectile_pool &pool, caero_energy_state &e
     }
     lifetime = charge >> 4;
     charge = 0;
-    if(!lifetime) return {
-      .ready{true}
-    };
+    if(!lifetime) {
+      return {
+        .ready{true}
+      };
+    }
   } else if(selection == caero_weapon::diffuser_gas || selection == caero_weapon::diffuser_trigger) {
     // impacts and gas expiry change the stage; a missed or blocked shot keeps it
     if(energy.reserve < cost || (target_reference{request.target}.is_object_encoded() && !unguided)) return {};
-    if(!request.pressed) return {
-      .ready{true}
-    };
+    if(!request.pressed) {
+      return {
+        .ready{true}
+      };
+    }
     energy.reserve -= cost;
   } else {
     if(energy.reserve < cost) return {};
@@ -145,23 +149,30 @@ caero_fire_result fire_caero_weapon(projectile_pool &pool, caero_energy_state &e
       auto const *capsule{pool.objects().head()};
       while(capsule && capsule->native_id != request.target) capsule = capsule->next;
       if(!capsule || (capsule->flags & 8)
-        || capsule->parameters.definition != &original_object_definitions[caero_definition_slot(caero_weapon::dual_launch_capsule)]) return {
-        .ready{true},
-        .next_selection{std::to_underlying(caero_weapon::dual_launch_capsule)}
-      };
-      if(!request.released) return {
-        .ready{true}
-      };
+        || capsule->parameters.definition != &original_object_definitions[caero_definition_slot(caero_weapon::dual_launch_capsule)]) {
+        return {
+          .ready{true},
+          .next_selection{std::to_underlying(caero_weapon::dual_launch_capsule)}
+        };
+      }
+      if(!request.released) {
+        return {
+          .ready{true}
+        };
+      }
       target = capsule->native_id;
     }
     if((selection == caero_weapon::caero_weapon || selection == caero_weapon::brent_hunter) && !target_reference{request.target}.permits_air_weapon()) return {};
     if(selection == caero_weapon::brent_ground && target_reference{request.target}.is_object_encoded() && !unguided) return {};
-    if(selection != caero_weapon::dual_launch_follow_up && !request.pressed) return {
-      .ready{true}
-    };
+    if(selection != caero_weapon::dual_launch_follow_up && !request.pressed) {
+      return {
+        .ready{true}
+      };
+    }
     energy.reserve -= cost;
-    if(selection == caero_weapon::dual_launch_capsule) next_selection = caero_weapon::dual_launch_follow_up;
-    else if(selection == caero_weapon::dual_launch_follow_up) next_selection = caero_weapon::dual_launch_capsule;
+    if(selection == caero_weapon::dual_launch_capsule) {
+      next_selection = caero_weapon::dual_launch_follow_up;
+    } else if(selection == caero_weapon::dual_launch_follow_up) next_selection = caero_weapon::dual_launch_capsule;
   }
   auto *shot{pool.launch({
     .definition{definition},

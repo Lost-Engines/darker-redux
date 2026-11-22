@@ -47,7 +47,10 @@ TEST_CASE("Joystick fallback matches retail calibrated response and smoothing", 
   darker::game::flight_controls_state state;
   int sequence{-1};
   for(auto const &sample : darker::test_reference::joystick_samples) {
-    if(sequence != sample[0]) { state = {}; sequence = sample[0]; }
+    if(sequence != sample[0]) {
+      state = {};
+      sequence = sample[0];
+    }
     auto const drive{state.update({
       .joystick_enabled{true},
       .joystick_bank{static_cast<int16_t>(sample[1])},

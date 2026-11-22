@@ -42,11 +42,16 @@ camera_basis orient_model(camera_basis const &camera, camera_angles const angles
   auto const sine{precision == maths::angle_precision::full ? maths::render_sine : maths::angle_sine};
   auto const cosine{precision == maths::angle_precision::full ? maths::render_cosine : maths::angle_cosine};
   auto const heading{static_cast<uint16_t>(maths::angle_format::half_turn - angles.heading)};
-  auto const hs{sine(heading)}, hc{cosine(heading)};
-  auto const ps{sine(angles.pitch)}, pc{cosine(angles.pitch)};
-  auto const rs{sine(angles.roll)}, rc{cosine(angles.roll)};
-  auto const hsrs{multiply(hs, rs)}, hcrs{multiply(hc, rs)};
-  auto const hsrc{multiply(hs, rc)}, hcrc{multiply(hc, rc)};
+  auto const hs{sine(heading)};
+  auto const hc{cosine(heading)};
+  auto const ps{sine(angles.pitch)};
+  auto const pc{cosine(angles.pitch)};
+  auto const rs{sine(angles.roll)};
+  auto const rc{cosine(angles.roll)};
+  auto const hsrs{multiply(hs, rs)};
+  auto const hcrs{multiply(hc, rs)};
+  auto const hsrc{multiply(hs, rc)};
+  auto const hcrc{multiply(hc, rc)};
   mat3<int16_t> const axes{
     multiply(hc, pc), multiply(hs, pc), ps,
     word(multiply(ps, hcrs) - hsrc), word(hcrc + multiply(ps, hsrs)), word(-multiply(rs, pc)),

@@ -16,10 +16,12 @@ TEST_CASE("Effect ring projection retains native sprite order", "[effects]") {
       .angle{static_cast<uint16_t>(v[1])},
       .sampling{static_cast<uint16_t>(v[2])}
     };
-    auto const term{[](int64_t const value){ return darker::graphics::projection_term{
+    auto const term{[](int64_t const value){
+      return darker::graphics::projection_term{
       .whole{static_cast<darker::graphics::render_geometry::coordinate_bits>(std::bit_cast<int16_t>(static_cast<uint16_t>(value >> 8)))},
       .fraction{static_cast<uint8_t>(value)}
-    }; }};
+    };
+    }};
     darker::graphics::model_placement const centre{
       .horizontal{term(v[3])},
       .vertical{term(v[4])},
@@ -118,7 +120,7 @@ TEST_CASE("Distant particles become dots according to projected pixel size", "[e
       .y{80},
       .depth{depth},
     }, 0, {}, focal_length);
-    return std::ranges::count_if(frame.pixels, [](auto const pixel){ return pixel != 0; });
+    return std::ranges::count_if(frame.pixels, [](auto const pixel){return pixel != 0;});
   }};
   CHECK(count_pixels(8190, 256) > 1);
   CHECK(count_pixels(20000, 256) == 1);
@@ -134,11 +136,13 @@ TEST_CASE("The particle pool is larger by default and honours a configured limit
   CHECK_THROWS_AS(effect_system{0}, std::invalid_argument);
   for(unsigned int const limit : {1u, 25u, 50u, 100u}) {
     effect_system effects{limit};
-    for(unsigned int cloud{0}; cloud < 6; ++cloud) effects.spawn(0x75d4, {
-      .column{static_cast<uint16_t>(cloud * 256)},
-      .row{0},
-      .height{1000},
-    }, 0);
+    for(unsigned int cloud{0}; cloud < 6; ++cloud) {
+      effects.spawn(0x75d4, {
+        .column{static_cast<uint16_t>(cloud * 256)},
+        .row{0},
+        .height{1000},
+      }, 0);
+    }
     REQUIRE(effects.emitters.size() == limit);
     CHECK(effects.emitters.back().position.column == 5 * 256);
   }

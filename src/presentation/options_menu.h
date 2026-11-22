@@ -33,14 +33,23 @@ struct preferences {
   input::joystick_preferences joystick;
 
   bool valid() const noexcept;
-  bool operator==(preferences const&) const = default;
+  bool operator==(preferences const &) const = default;
 };
 
 std::filesystem::path preferences_path();
 preferences read_preferences(std::filesystem::path const &path);
 void write_preferences(std::filesystem::path const &path, preferences const &value);
 
-enum class options_key { up, down, left, right, accept, cancel, page_up, page_down };
+enum class options_key {
+  up,
+  down,
+  left,
+  right,
+  accept,
+  cancel,
+  page_up,
+  page_down
+};
 
 class options_menu {
   preferences original;

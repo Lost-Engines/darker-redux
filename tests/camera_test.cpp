@@ -39,7 +39,7 @@ TEST_CASE("Camera coefficients and model origins match native fixed-point transf
     // The captured camera positions have already lost their upper world bits.
     // Only compare their unaliased neighbourhood; long-range placement has separate analytic tests.
     if(column < -16384 || column > 16383 || row < -16384 || row > 16383 || height < -32768 || height > 32767) continue;
-    auto const signed_whole{[](auto value){ return darker::graphics::render_geometry::wrap_coordinate(value); }};
+    auto const signed_whole{[](auto value){return darker::graphics::render_geometry::wrap_coordinate(value);}};
     if(signed_whole(placement.horizontal.whole) < -32768 || signed_whole(placement.horizontal.whole) > 32767
       || signed_whole(placement.vertical.whole) < -32768 || signed_whole(placement.vertical.whole) > 32767
       || signed_whole(placement.depth.whole) < -32768 || signed_whole(placement.depth.whole) > 32767) continue;

@@ -105,21 +105,33 @@ TEST_CASE("Display preferences round-trip and reject malformed values", "[option
   darker::presentation::write_preferences(path, saved);
   CHECK(darker::presentation::read_preferences(path) == saved);
   for(auto const legacy : {"width=853\nheight=479\n", "height=479\nwidth=853\n"}) {
-    { std::ofstream output{path}; output << legacy; }
+    {
+      std::ofstream output{path};
+      output << legacy;
+    }
     auto const loaded{darker::presentation::read_preferences(path)};
     CHECK_FALSE(loaded.automatic_resolution);
     CHECK(loaded.width == 853);
     CHECK(loaded.height == 479);
   }
   for(auto const automatic : {"automatic-resolution=1\nwidth=853\nheight=479\n", "width=853\nheight=479\nautomatic-resolution=1\n"}) {
-    { std::ofstream output{path}; output << automatic; }
+    {
+      std::ofstream output{path};
+      output << automatic;
+    }
     CHECK(darker::presentation::read_preferences(path).automatic_resolution);
   }
-  { std::ofstream output{path}; output << "joystick-deadzone=0\n"; }
+  {
+    std::ofstream output{path};
+    output << "joystick-deadzone=0\n";
+  }
   CHECK(darker::presentation::read_preferences(path).automatic_resolution);
   CHECK(darker::presentation::read_preferences(path).joystick.deadzone_percent == 6.25);
   for(auto const bad : {"fov=nan", "width=12", "automatic-resolution=2", "draw-distance=999", "fog-start=100", "gouraud=2", "fog-curve=12garbage", "mouse-sensitivity=0", "mouse-sensitivity=nan", "invert-mouse=2", "bind.left=69", "bind.left=256", "music-volume=101", "effects-volume=-1", "mouse-primary=1", "mouse-secondary=8", "joystick-device=16", "joystick-bank-axis=1", "joystick-deadzone-percent=51", "joystick-deadzone-percent=-1", "joystick-sensitivity=0", "joystick-button.left=0"}) {
-    { std::ofstream output{path}; output << bad << '\n'; }
+    {
+      std::ofstream output{path};
+      output << bad << '\n';
+    }
     CHECK_THROWS(darker::presentation::read_preferences(path));
   }
 }

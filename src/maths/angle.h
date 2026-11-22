@@ -5,7 +5,10 @@
 
 namespace darker::maths {
 
-enum class angle_precision { original, full };
+enum class angle_precision {
+  original,
+  full
+};
 
 struct angle_format {
   using angle = uint16_t;

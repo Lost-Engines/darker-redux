@@ -73,8 +73,11 @@ TEST_CASE("Skimma masked callbacks match independently extracted sprite coverage
   for(auto const &sample : darker::test_reference::skimma) {
     auto target{cache};
     darker::graphics::skimma_bitmap_state state;
-    if(sample.bearing) state.bearing = sample.state;
-    else state.weapons[sample.index] = sample.state;
+    if(sample.bearing) {
+      state.bearing = sample.state;
+    } else {
+      state.weapons[sample.index] = sample.state;
+    }
     darker::graphics::update_skimma_bitmaps(cache, target, darker::graphics::craft::upgraded_skimma, {}, state);
     if(sample.bearing && sample.state == 7) {
       // Redux omits only the retail mask's stray blue pixel. Restore it for

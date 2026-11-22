@@ -34,7 +34,12 @@ struct caero_fire_request {
   bool unrestricted_ground_targets{false};
 };
 
-enum class diffuser_impact { rejected, gas, already_gassed, destroyed };
+enum class diffuser_impact {
+  rejected,
+  gas,
+  already_gassed,
+  destroyed
+};
 
 struct diffuser_state {
   static game_duration constexpr gas_lifetime_ticks{0x2800};

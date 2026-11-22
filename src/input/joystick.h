@@ -24,7 +24,7 @@ struct joystick_preferences {
 
   joystick_preferences();
   bool valid() const noexcept;
-  bool operator==(joystick_preferences const&) const = default;
+  bool operator==(joystick_preferences const &) const = default;
 };
 
 struct joystick_sample {
@@ -44,7 +44,10 @@ int16_t joystick_axis(joystick_sample const &sample, int axis, bool invert,
 class joystick_buttons {
   int device{joystick_disabled};
   bool enabled{false};
-  std::array<bool, joystick_button_limit> previous{}, blocked{}, held{}, pressed{};
+  std::array<bool, joystick_button_limit> previous{};
+  std::array<bool, joystick_button_limit> blocked{};
+  std::array<bool, joystick_button_limit> held{};
+  std::array<bool, joystick_button_limit> pressed{};
 public:
   void update(joystick_sample const &sample, bool accept_input) noexcept;
   void suppress() noexcept;

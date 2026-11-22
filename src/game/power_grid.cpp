@@ -46,7 +46,7 @@ std::optional<power_loss_warning> unauthorised_power_loss(city_map const &cells,
     if(std::ranges::any_of(station.transformers, [&](auto const &position){
       return cells[city_cell_index(position.column, position.row)].state & city_cell::permitted_target;
     })) return std::nullopt;
-    auto const lost{std::ranges::count_if(delphi_power_stations, [&](auto const &candidate){ return disabled(candidate, cells); })};
+    auto const lost{std::ranges::count_if(delphi_power_stations, [&](auto const &candidate){return disabled(candidate, cells);})};
     return static_cast<power_loss_warning>(lost - 1);
   }
   return std::nullopt;

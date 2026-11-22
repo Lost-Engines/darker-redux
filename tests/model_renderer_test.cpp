@@ -53,8 +53,11 @@ TEST_CASE("Flat model bytecode reproduces complete native indexed frames", "[gra
     darker::graphics::draw_model(workspace, frame, std::span{bytes}.first(sample.size), 0, parameters, colours);
     uint64_t fingerprint{0xcbf29ce484222325};
     for(auto const pixel : frame.pixels) fingerprint = (fingerprint ^ pixel) * 0x100000001b3;
-    if(wide_near_comparison) REQUIRE(std::ranges::all_of(frame.pixels, [](auto pixel){ return pixel == 0; }));
-    else REQUIRE(fingerprint == sample.fingerprint);
+    if(wide_near_comparison) {
+      REQUIRE(std::ranges::all_of(frame.pixels, [](auto pixel){return pixel == 0;}));
+    } else {
+      REQUIRE(fingerprint == sample.fingerprint);
+    }
     ++case_index;
   }
 }
@@ -222,11 +225,11 @@ TEST_CASE("Light-spill models blend only upward ground faces", "[graphics][model
       for(auto const path : {model_path::direct, model_path::near_clipped}) {
         CAPTURE(ground, upward, path);
         std::vector<std::byte> model(11);
-        auto byte = [&](unsigned int value){ model.push_back(static_cast<std::byte>(value)); };
-        auto word = [&](int value){
+        auto byte{[&](unsigned int value){model.push_back(static_cast<std::byte>(value));}};
+        auto word{[&](int value){
           byte(static_cast<uint16_t>(value) & 255);
           byte(static_cast<uint16_t>(value) >> 8);
-        };
+        }};
         for(auto const &point : std::array{vec2<int>{-40, -40}, vec2<int>{40, -40}, vec2<int>{40, 40}, vec2<int>{-40, 40}}) {
           byte(0x8e);                                                          // set C, A, B and emit
           word(ground ? 0 : -100);
@@ -243,8 +246,11 @@ TEST_CASE("Light-spill models blend only upward ground faces", "[graphics][model
         facing_projection.axes[0].horizontal = upward ? 16384 : -16384;
         draw_model(workspace, frame, model, 0, facing_projection, colours, {}, path);
         auto const changed{std::ranges::count(frame.pixels, 2)};
-        if(ground && upward) REQUIRE(changed == 0);
-        else REQUIRE(changed > 0);
+        if(ground && upward) {
+          REQUIRE(changed == 0);
+        } else {
+          REQUIRE(changed > 0);
+        }
       }
     }
   }

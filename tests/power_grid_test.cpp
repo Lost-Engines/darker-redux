@@ -181,7 +181,8 @@ TEST_CASE("Script fades and restoration remain independent of temporary supply l
     }
   }
   auto expected{cells};
-  game::beacon_changes script, reference_script;
+  game::beacon_changes script;
+  game::beacon_changes reference_script;
   game::delphi_power_grid grid;
   grid.advance(cells, script, 0, 0);
   if(restoring) {

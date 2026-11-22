@@ -113,13 +113,16 @@ TEST_CASE("Tall adjacent polygons cover their shared edges without cracks", "[gr
               std::ranges::fill(storage, padding);
               for(int y{0}; y < height; ++y) std::ranges::fill(target.row(y), 0);
               auto const draw{[&](std::span<screen_vertex const> points, bool shaded){
-                if(!shaded) darker::graphics::draw_flat_polygon(target, points, 37, viewport);
-                else {
+                if(!shaded) {
+                  darker::graphics::draw_flat_polygon(target, points, 37, viewport);
+                } else {
                   std::array<darker::graphics::shaded_vertex, 4> vertices{};
-                  for(unsigned int i{0}; i < vertices.size(); ++i) vertices[i] = {
-                    .position{points[i].x, points[i].y},
-                    .shade{0x2a80},
-                  };
+                  for(unsigned int i{0}; i < vertices.size(); ++i) {
+                    vertices[i] = {
+                      .position{points[i].x, points[i].y},
+                      .shade{0x2a80},
+                    };
+                  }
                   darker::graphics::draw_gouraud_polygon(target, vertices, viewport);
                 }
               }};
@@ -133,7 +136,7 @@ TEST_CASE("Tall adjacent polygons cover their shared edges without cracks", "[gr
               REQUIRE(std::ranges::count(storage, 0) == 0);
               for(int y{0}; y < height; ++y) {
                 auto const row_padding{std::span{storage}.subspan(y * stride + width, stride - width)};
-                if(!std::ranges::all_of(row_padding, [](auto pixel){ return pixel == padding; })) FAIL("Polygon fill overwrote row padding");
+                if(!std::ranges::all_of(row_padding, [](auto pixel){return pixel == padding;})) FAIL("Polygon fill overwrote row padding");
               }
             }
           }

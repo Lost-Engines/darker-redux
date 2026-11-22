@@ -8,9 +8,24 @@
 
 namespace darker::game {
 
-enum class camera_mode { cockpit, behind, level, fullscreen, tracking, fixed, object };
+enum class camera_mode {
+  cockpit,
+  behind,
+  level,
+  fullscreen,
+  tracking,
+  fixed,
+  object
+};
 
-enum class camera_subject { player, missile, missile_effect, object, object_effect, absent_object };
+enum class camera_subject {
+  player,
+  missile,
+  missile_effect,
+  object,
+  object_effect,
+  absent_object
+};
 
 struct flight_camera {
   maths::angle_precision precision{maths::angle_precision::full};              // original mode supports native reference verification

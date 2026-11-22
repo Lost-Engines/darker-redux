@@ -42,10 +42,15 @@ TEST_CASE("Delphi collateral preserves weapon and protected-surface rules", "[ga
   auto const flags{static_cast<uint8_t>(marked ? game::city_cell::permitted_target : 0)};
   bool const native{game::projectile_damages_building(slot, category, flags, linked)};
   bool const redux{game::projectile_damages_building(slot, category, flags, linked, true)};
-  if(!linked || category == game::collision_category::protected_surface || (slot < 10 && category == game::collision_category::diffuser)) CHECK_FALSE(redux);
-  else if(category == game::collision_category::fragile) CHECK(redux);
-  else if(slot == 5) CHECK(redux);                                             // Brent Ground no longer needs authorisation
-  else CHECK(redux == native);
+  if(!linked || category == game::collision_category::protected_surface || (slot < 10 && category == game::collision_category::diffuser)) {
+    CHECK_FALSE(redux);
+  } else if(category == game::collision_category::fragile) {
+    CHECK(redux);
+  } else if(slot == 5) {
+    CHECK(redux);                                                              // Brent Ground no longer needs authorisation
+  } else {
+    CHECK(redux == native);
+  }
 }
 
 TEST_CASE("Delphi ground weapons can fire unguided without inventing a target", "[game][weapons][collateral]") {
@@ -71,7 +76,9 @@ TEST_CASE("Delphi ground weapons can fire unguided without inventing a target", 
     CHECK(result.shot->target_token == target);
     CHECK(result.shot->parameters.update_entry == (target == 0xffff ? game::object_update::direct_projectile : game::object_update::homing_projectile));
     CHECK(energy.reserve < 0xffff);
-  } else CHECK(energy.reserve == 0xffff);
+  } else {
+    CHECK(energy.reserve == 0xffff);
+  }
 }
 
 TEST_CASE("Service repairs retain other destruction and never repair authored damage", "[game][collateral]") {
@@ -101,7 +108,7 @@ TEST_CASE("Service repairs retain other destruction and never repair authored da
   CHECK_FALSE(damage.headquarters_lost());
   cells[0].state |= game::delphi_damage_bit;
   damage.repair_services(cells);
-  CHECK(cells[0].state == 0xe7);                                                // old repair tracking cannot undo a later authored event
+  CHECK(cells[0].state == 0xe7);                                               // old repair tracking cannot undo a later authored event
 }
 
 TEST_CASE("Hemmersan destruction fails only when the player newly destroys its entrance", "[game][collateral]") {

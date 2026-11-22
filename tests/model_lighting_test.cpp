@@ -132,8 +132,11 @@ TEST_CASE("Logarithmic fog thickens nearby shading without moving either endpoin
     auto const current{sample(curved, cells)};
     for(unsigned int shade{0}; shade < current.size(); ++shade) {
       // Palette shade zero rises towards one; the remaining shades fall towards it.
-      if(shade == 0) CHECK(current[shade] >= previous[shade]);
-      else CHECK(current[shade] <= previous[shade]);
+      if(shade == 0) {
+        CHECK(current[shade] >= previous[shade]);
+      } else {
+        CHECK(current[shade] <= previous[shade]);
+      }
     }
     previous = current;
   }

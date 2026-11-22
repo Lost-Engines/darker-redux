@@ -68,7 +68,11 @@ inline std::array<delphi_power_station, 3> constexpr delphi_power_stations{{
   },
 }};
 
-enum class power_loss_warning { local, spreading, blackout };
+enum class power_loss_warning {
+  local,
+  spreading,
+  blackout
+};
 
 std::optional<power_loss_warning> unauthorised_power_loss(city_map const &cells, unsigned int destroyed_cell);
 

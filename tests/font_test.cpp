@@ -35,7 +35,9 @@ std::vector<std::byte> font_bytes() {
 
 TEST_CASE("Aircraft warning glyphs use native brightness and strongest-left ordering", "[graphics][font]") {
   auto bytes{font_bytes()};
-  unsigned int constexpr base{0x226a}, count{97}, index{0x81 - 33};
+  unsigned int constexpr base{0x226a};
+  unsigned int constexpr count{97};
+  unsigned int constexpr index{0x81 - 33};
   bytes[base + count + index * 2] = std::byte{2};
   bytes[base + count + index * 2 + 1] = std::byte{1};
   auto const table{base + count * 3};

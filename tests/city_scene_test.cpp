@@ -84,12 +84,14 @@ TEST_CASE("Draw traversal supplies the native record byte after a farther subtre
   std::array<uint16_t, 6> constexpr records{0x8060, 0x8018, 0x8048, 0x8000, 0x8078, 0x8030};
   std::array<uint8_t, 6> constexpr residues{0, 0x18, 0, 0, 0, 0x30};
   std::vector<darker::graphics::city_draw_item> items;
-  for(size_t i{0}; i < distances.size(); ++i) items.push_back({
-    .placement{
-      .sorting_distance{distances[i]}
-    },
-    .draw_record{static_cast<uint16_t>(0x8000 + i * 24)},
-  });
+  for(size_t i{0}; i < distances.size(); ++i) {
+    items.push_back({
+      .placement{
+        .sorting_distance{distances[i]}
+      },
+      .draw_record{static_cast<uint16_t>(0x8000 + i * 24)},
+    });
+  }
   darker::graphics::order_city_models(items);
   for(size_t i{0}; i < items.size(); ++i) {
     CHECK(items[i].draw_record == records[i]);
@@ -151,7 +153,7 @@ TEST_CASE("Wide views include farther world copies within the visible circle", "
   using darker::graphics::visit_world_images;
   using darker::graphics::world_image;
   std::vector<world_image> images;
-  auto const collect{[&](world_image const image){ images.push_back(image); }};
+  auto const collect{[&](world_image const image){images.push_back(image);}};
   visit_world_images(100, 0, 0, 0, 182, collect);
   REQUIRE(images.size() == 2);
   CHECK(images[0] == world_image{});

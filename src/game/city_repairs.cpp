@@ -33,8 +33,9 @@ void add_objectives(city_cell_set &targets, std::span<resources::scenario_cell_l
 void delphi_collateral_damage::record_player_destruction(unsigned int const index, city_cell const &before) {
   /// Record only a new player-caused destruction, preserving damage already supplied by enemies or the scenario
   if(before.state & delphi_damage_bit) return;
-  if(index == headquarters_cell && before.type == 17) headquarters_destroyed = true;
-  else if(repairable_service(before.type)) service_repairs.set(index);
+  if(index == headquarters_cell && before.type == 17) {
+    headquarters_destroyed = true;
+  } else if(repairable_service(before.type)) service_repairs.set(index);
 }
 
 void delphi_collateral_damage::record_power_loss(city_map const &cells, unsigned int const destroyed_cell) {

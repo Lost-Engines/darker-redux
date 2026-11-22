@@ -39,7 +39,8 @@ TEST_CASE("Fog translates finished Gouraud pixels rather than interpolating tran
         .shade{static_cast<uint16_t>((sample.base + source[2]) * 256 + source[2] + 128)}
       };
     }
-    framework::render::indexed_cockpit_framebuffer original{}, fogged{};
+    framework::render::indexed_cockpit_framebuffer original{};
+    framework::render::indexed_cockpit_framebuffer fogged{};
     darker::graphics::draw_gouraud_polygon(original, std::span{vertices}.first(sample.count));
     darker::graphics::draw_gouraud_polygon(fogged, std::span{vertices}.first(sample.count), {}, &translation);
     for(unsigned int i{0}; i < original.pixels.size(); ++i) REQUIRE(fogged.pixels[i] == translation[original.pixels[i]]);
@@ -64,7 +65,8 @@ TEST_CASE("Ground light spill compares displayed brightness after fog", "[graphi
         .shade{static_cast<uint16_t>((sample.base + source[2]) * 256 + source[2] + 128)},
       };
     }
-    framework::render::indexed_cockpit_framebuffer opaque{}, lit{};
+    framework::render::indexed_cockpit_framebuffer opaque{};
+    framework::render::indexed_cockpit_framebuffer lit{};
     uint8_t constexpr background{2};
     opaque.pixels.fill(background);
     lit.pixels.fill(background);
