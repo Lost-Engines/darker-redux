@@ -11,8 +11,8 @@ namespace darker::graphics {
 struct fog_range {
   double start_cells{2};
   double end_cells{scene_limits::surface_radius_cells};
-  double curve{10}; // zero is linear; positive values use log(1 + curve * distance) / log(1 + curve)
-  std::optional<double> background_end_cells{}; // optional second stage, after the original fog reaches end_cells
+  double curve{10};                                                            // zero is linear; positive values use log(1 + curve * distance) / log(1 + curve)
+  std::optional<double> background_end_cells{};                                // optional second stage, after the original fog reaches end_cells
 };
 
 class distance_shading {

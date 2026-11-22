@@ -14,24 +14,38 @@
 namespace darker::presentation {
 namespace {
 enum class option_row : unsigned int {
-  resolution, field_of_view, draw_distance, fog_start, fade_distance, fog_curve,
-  minimum_light_size, background_fade, gouraud, controls, audio, defaults, apply, cancel, back, count
+  resolution,
+  field_of_view,
+  draw_distance,
+  fog_start,
+  fade_distance,
+  fog_curve,
+  minimum_light_size,
+  background_fade,
+  gouraud,
+  controls,
+  audio,
+  defaults,
+  apply,
+  cancel,
+  back,
+  count
 };
-constexpr unsigned int setting_count{std::to_underlying(option_row::controls)};
-constexpr unsigned int row_count{std::to_underlying(option_row::count)};
-constexpr int first_row{35};
-constexpr int row_height{11};
-constexpr unsigned int visible_rows{15};
-constexpr int scrollbar_left{305};
-constexpr int scrollbar_right{310};
-constexpr unsigned int control_visible_rows{12};
-constexpr int list_bottom{first_row + row_height * static_cast<int>(control_visible_rows)};
-constexpr int footer_top{176};
-constexpr unsigned int mouse_setting_count{5};
-constexpr unsigned int controls_defaults{mouse_setting_count + std::to_underlying(input::control_action::count)};
-constexpr unsigned int joystick_setting_count{7};
-constexpr unsigned int joystick_defaults{joystick_setting_count + std::to_underlying(input::control_action::count)};
-constexpr std::array<std::array<int, 2>, 9> resolutions{{
+unsigned int constexpr setting_count{std::to_underlying(option_row::controls)};
+unsigned int constexpr row_count{std::to_underlying(option_row::count)};
+int constexpr first_row{35};
+int constexpr row_height{11};
+unsigned int constexpr visible_rows{15};
+int constexpr scrollbar_left{305};
+int constexpr scrollbar_right{310};
+unsigned int constexpr control_visible_rows{12};
+int constexpr list_bottom{first_row + row_height * static_cast<int>(control_visible_rows)};
+int constexpr footer_top{176};
+unsigned int constexpr mouse_setting_count{5};
+unsigned int constexpr controls_defaults{mouse_setting_count + std::to_underlying(input::control_action::count)};
+unsigned int constexpr joystick_setting_count{7};
+unsigned int constexpr joystick_defaults{joystick_setting_count + std::to_underlying(input::control_action::count)};
+std::array<std::array<int, 2>, 9> constexpr resolutions{{
   {320, 240}, {640, 480}, {960, 540}, {1280, 720}, {1280, 960},
   {1600, 900}, {1920, 1080}, {2560, 1440}, {3840, 2160}
 }};
@@ -43,7 +57,7 @@ std::string number(double value) {
   if(result.find('.') != std::string::npos && result.back() == '0') result.pop_back();
   return result;
 }
-} // namespace
+} // anonymous namespace
 
 bool preferences::valid() const noexcept {
   return width >= minimum_dimension && width <= maximum_dimension && height >= minimum_dimension && height <= maximum_dimension
@@ -58,7 +72,7 @@ bool preferences::valid() const noexcept {
 std::filesystem::path preferences_path() {
 #ifdef _WIN32
   if(auto const *root{std::getenv("APPDATA")}; root && *root) return std::filesystem::path{root} / "darker-redux/options.cfg";
-#endif
+#endif // _WIN32
   if(auto const *root{std::getenv("XDG_CONFIG_HOME")}; root && *root && std::filesystem::path{root}.is_absolute()) return std::filesystem::path{root} / "darker-redux/options.cfg";
   if(auto const *home{std::getenv("HOME")}; home && *home) return std::filesystem::path{home} / ".config/darker-redux/options.cfg";
   return "darker-redux-options.cfg";
@@ -84,41 +98,63 @@ preferences read_preferences(std::filesystem::path const &path) {
     } else if(name == "automatic-resolution") {
       value >> result.automatic_resolution;
       saved_resolution_mode = true;
-    } else if(name == "fov") value >> result.field_of_view;
-    else if(name == "draw-distance") value >> result.draw_distance;
-    else if(name == "fog-start") value >> result.fog_start;
-    else if(name == "fade-distance") value >> result.fade_distance;
-    else if(name == "fog-curve") value >> result.fog_curve;
-    else if(name == "minimum-light-size") value >> result.minimum_light_size;
-    else if(name == "background-fade") value >> result.background_fade;
-    else if(name == "gouraud") value >> result.gouraud;
-    else if(name == "music-volume") value >> result.music_volume;
-    else if(name == "effects-volume") value >> result.effects_volume;
-    else if(name == "mouse-primary") value >> result.controls.primary_mouse_button;
-    else if(name == "mouse-secondary") value >> result.controls.secondary_mouse_button;
-    else if(name == "mouse-sensitivity") value >> result.controls.mouse_sensitivity;
-    else if(name == "invert-mouse") value >> result.controls.invert_mouse;
-    else if(name == "joystick-device") value >> result.joystick.device;
-    else if(name == "joystick-bank-axis") value >> result.joystick.bank_axis;
-    else if(name == "joystick-pitch-axis") value >> result.joystick.pitch_axis;
-    else if(name == "joystick-invert-bank") value >> result.joystick.invert_bank;
-    else if(name == "joystick-invert-pitch") value >> result.joystick.invert_pitch;
+    } else if(name == "fov") {
+      value >> result.field_of_view;
+    } else if(name == "draw-distance") {
+      value >> result.draw_distance;
+    } else if(name == "fog-start") {
+      value >> result.fog_start;
+    } else if(name == "fade-distance") {
+      value >> result.fade_distance;
+    } else if(name == "fog-curve") {
+      value >> result.fog_curve;
+    } else if(name == "minimum-light-size") {
+      value >> result.minimum_light_size;
+    } else if(name == "background-fade") {
+      value >> result.background_fade;
+    } else if(name == "gouraud") {
+      value >> result.gouraud;
+    } else if(name == "music-volume") {
+      value >> result.music_volume;
+    } else if(name == "effects-volume") {
+      value >> result.effects_volume;
+    } else if(name == "mouse-primary") {
+      value >> result.controls.primary_mouse_button;
+    } else if(name == "mouse-secondary") {
+      value >> result.controls.secondary_mouse_button;
+    } else if(name == "mouse-sensitivity") {
+      value >> result.controls.mouse_sensitivity;
+    } else if(name == "invert-mouse") {
+      value >> result.controls.invert_mouse;
+    } else if(name == "joystick-device") {
+      value >> result.joystick.device;
+    } else if(name == "joystick-bank-axis") {
+      value >> result.joystick.bank_axis;
+    } else if(name == "joystick-pitch-axis") {
+      value >> result.joystick.pitch_axis;
+    } else if(name == "joystick-invert-bank") {
+      value >> result.joystick.invert_bank;
+    } else if(name == "joystick-invert-pitch") {
+      value >> result.joystick.invert_pitch;
+    }
     // The former joystick-deadzone key added a second threshold; do not reinterpret it.
-    else if(name == "joystick-deadzone-percent") value >> result.joystick.deadzone_percent;
-    else if(name == "joystick-sensitivity") value >> result.joystick.sensitivity_percent;
-    else if(name.starts_with("joystick-button.")) {
+    else if(name == "joystick-deadzone-percent") {
+      value >> result.joystick.deadzone_percent;
+    } else if(name == "joystick-sensitivity") {
+      value >> result.joystick.sensitivity_percent;
+    } else if(name.starts_with("joystick-button.")) {
       auto const descriptions{input::control_descriptions()};
       auto const found{std::ranges::find(descriptions, std::string_view{name}.substr(16), &input::control_description::name)};
       if(found == descriptions.end()) continue;
       value >> result.joystick.buttons[static_cast<unsigned int>(found - descriptions.begin())];
-    }
-    else if(name.starts_with("bind.")) {
+    } else if(name.starts_with("bind.")) {
       auto const descriptions{input::control_descriptions()};
       auto const found{std::ranges::find(descriptions, std::string_view{name}.substr(5), &input::control_description::name)};
       if(found == descriptions.end()) continue;
       value >> result.controls.keys[static_cast<unsigned int>(found - descriptions.begin())];
+    } else {
+      continue;                                                                // Allow newer versions to add preferences.
     }
-    else continue; // Allow newer versions to add preferences.
     if(value.fail() || (value >> std::ws, !value.eof())) throw std::runtime_error{"Invalid preference: " + name};
   }
   // Older preference files only stored fixed dimensions; preserve that choice.
@@ -169,9 +205,15 @@ void options_menu::open() {
   notice.clear();
 }
 
-bool options_menu::binding_list() const noexcept { return controls_page || joystick_page; }
-unsigned int options_menu::binding_defaults() const noexcept { return joystick_page ? joystick_defaults : controls_defaults; }
-bool options_menu::capturing_button() const noexcept { return joystick_page && binding_pending; }
+bool options_menu::binding_list() const noexcept {
+  return controls_page || joystick_page;
+}
+unsigned int options_menu::binding_defaults() const noexcept {
+  return joystick_page ? joystick_defaults : controls_defaults;
+}
+bool options_menu::capturing_button() const noexcept {
+  return joystick_page && binding_pending;
+}
 
 void options_menu::capture_button(int const button) {
   if(!capturing_button() || button < -1 || button >= static_cast<int>(input::joystick_button_limit)) return;
@@ -206,7 +248,7 @@ int options_menu::selection_y() const noexcept {
 }
 
 void options_menu::keep_visible() noexcept {
-  if(selected >= list_rows()) return; // Footer actions never move the list.
+  if(selected >= list_rows()) return;                                          // Footer actions never move the list.
   if(selected < scroll) scroll = selected;
   if(selected >= scroll + page_size()) scroll = selected - page_size() + 1;
 }
@@ -284,13 +326,16 @@ void options_menu::adjust(int const direction) {
       auto &other{selected == 2 ? values.controls.secondary_mouse_button : values.controls.primary_mouse_button};
       int const previous{button};
       button = std::clamp(button + direction, -1, 7);
-      if(button >= 0 && button == other) other = previous; // Swap occupied buttons, retaining both actions.
+      if(button >= 0 && button == other) other = previous;                     // Swap occupied buttons, retaining both actions.
     }
     return;
   }
   switch(static_cast<option_row>(selected)) {
-  case option_row::resolution: {
-    auto const position{std::ranges::find_if(resolutions, [&](auto const &size){ return size[0] == values.width && size[1] == values.height; })};
+  case option_row::resolution:
+    {
+    auto const position{std::ranges::find_if(resolutions, [&](auto const &size){
+      return size[0] == values.width && size[1] == values.height;
+    })};
     // The first entry follows the window; subsequent entries select a fixed resolution.
     int const index{values.automatic_resolution ? 0 : position == resolutions.end() ? 1 : static_cast<int>(position - resolutions.begin()) + 1};
     int const next{std::clamp(index + direction, 0, static_cast<int>(resolutions.size()))};
@@ -310,19 +355,29 @@ void options_menu::adjust(int const direction) {
     values.fade_distance = std::min(values.fade_distance, static_cast<double>(values.draw_distance));
     values.fog_start = std::min(values.fog_start, values.fade_distance);
     break;
-  case option_row::fog_start: values.fog_start = std::clamp(values.fog_start + direction, 0.0, values.fade_distance); break;
+  case option_row::fog_start:
+    values.fog_start = std::clamp(values.fog_start + direction, 0.0, values.fade_distance);
+    break;
   case option_row::fade_distance:
     values.fade_distance = std::clamp(values.fade_distance + direction, values.fog_start, static_cast<double>(values.draw_distance));
     break;
-  case option_row::fog_curve: {
+  case option_row::fog_curve:
+    {
     double const step{values.fog_curve < 20 || (direction < 0 && values.fog_curve <= 20) ? 1.0 : 10.0};
     values.fog_curve = std::clamp(step * (direction > 0 ? std::floor(values.fog_curve / step) + 1 : std::ceil(values.fog_curve / step) - 1), 0.0, 1000.0);
     break;
   }
-  case option_row::minimum_light_size: values.minimum_light_size = std::clamp(values.minimum_light_size + direction * 0.25, 0.0, 8.0); break;
-  case option_row::background_fade: values.background_fade = !values.background_fade; break;
-  case option_row::gouraud: values.gouraud = !values.gouraud; break;
-  default: break;
+  case option_row::minimum_light_size:
+    values.minimum_light_size = std::clamp(values.minimum_light_size + direction * 0.25, 0.0, 8.0);
+    break;
+  case option_row::background_fade:
+    values.background_fade = !values.background_fade;
+    break;
+  case option_row::gouraud:
+    values.gouraud = !values.gouraud;
+    break;
+  default:
+    break;
   }
 }
 
@@ -330,12 +385,24 @@ void options_menu::key(options_key const key) {
   if(!active || binding_pending) return;
   notice.clear();
   switch(key) {
-  case options_key::up: selected = (selected + rows() - 1) % rows(); break;
-  case options_key::down: selected = (selected + 1) % rows(); break;
-  case options_key::left: if(selected < (joystick_page ? joystick_setting_count : controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(-1); break;
-  case options_key::right: if(selected < (joystick_page ? joystick_setting_count : controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(1); break;
-  case options_key::page_up: selected = selected > page_size() ? selected - page_size() : 0; break;
-  case options_key::page_down: selected = std::min(selected + page_size(), list_rows() - 1); break;
+  case options_key::up:
+    selected = (selected + rows() - 1) % rows();
+    break;
+  case options_key::down:
+    selected = (selected + 1) % rows();
+    break;
+  case options_key::left:
+    if(selected < (joystick_page ? joystick_setting_count : controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(-1);
+    break;
+  case options_key::right:
+    if(selected < (joystick_page ? joystick_setting_count : controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(1);
+    break;
+  case options_key::page_up:
+    selected = selected > page_size() ? selected - page_size() : 0;
+    break;
+  case options_key::page_down:
+    selected = std::min(selected + page_size(), list_rows() - 1);
+    break;
   case options_key::cancel:
     if(joystick_page) {
       joystick_page = false;
@@ -362,32 +429,55 @@ void options_menu::key(options_key const key) {
     break;
   case options_key::accept:
     if(joystick_page) {
-      if(selected < joystick_setting_count) adjust(1);
-      else if(selected < joystick_defaults) binding_pending = true;
-      else if(selected == joystick_defaults) values.joystick = input::joystick_preferences{};
-      else { joystick_page = false; controls_page = true; selected = 4; scroll = 0; }
+      if(selected < joystick_setting_count) {
+        adjust(1);
+      } else if(selected < joystick_defaults) {
+        binding_pending = true;
+      } else if(selected == joystick_defaults) {
+        values.joystick = input::joystick_preferences{};
+      } else {
+        joystick_page = false;
+        controls_page = true;
+        selected = 4;
+        scroll = 0;
+      }
       break;
     }
     if(audio_page) {
-      if(selected < 2) adjust(1);
-      else if(selected == 2) { values.music_volume = 100; values.effects_volume = 100; }
-      else { audio_page = false; selected = std::to_underlying(option_row::audio); scroll = 0; }
+      if(selected < 2) {
+        adjust(1);
+      } else if(selected == 2) {
+        values.music_volume = 100;
+        values.effects_volume = 100;
+      } else {
+        audio_page = false;
+        selected = std::to_underlying(option_row::audio);
+        scroll = 0;
+      }
       break;
     }
     if(controls_page) {
-      if(selected == 4) { controls_page = false; joystick_page = true; selected = 0; scroll = 0; }
-      else if(selected < mouse_setting_count) adjust(1);
-      else if(selected < controls_defaults) binding_pending = true;
-      else if(selected == controls_defaults) values.controls = input::control_preferences{};
-      else {
+      if(selected == 4) {
+        controls_page = false;
+        joystick_page = true;
+        selected = 0;
+        scroll = 0;
+      } else if(selected < mouse_setting_count) {
+        adjust(1);
+      } else if(selected < controls_defaults) {
+        binding_pending = true;
+      } else if(selected == controls_defaults) {
+        values.controls = input::control_preferences{};
+      } else {
         controls_page = false;
         selected = std::to_underlying(option_row::controls);
         scroll = 0;
       }
       break;
     }
-    if(selected < (joystick_page ? joystick_setting_count : controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) adjust(1);
-    else if(selected == std::to_underlying(option_row::controls)) {
+    if(selected < (joystick_page ? joystick_setting_count : controls_page ? mouse_setting_count : audio_page ? 2 : setting_count)) {
+      adjust(1);
+    } else if(selected == std::to_underlying(option_row::controls)) {
       controls_page = true;
       selected = 0;
       scroll = 0;
@@ -395,10 +485,16 @@ void options_menu::key(options_key const key) {
       audio_page = true;
       selected = 0;
       scroll = 0;
-    } else if(selected == std::to_underlying(option_row::defaults)) values = preferences{};
-    else if(selected == std::to_underlying(option_row::apply)) save_requested = true;
-    else if(selected == std::to_underlying(option_row::cancel)) { values = original; active = false; }
-    else active = false; // Keep the preview for this session, without writing preferences.
+    } else if(selected == std::to_underlying(option_row::defaults)) {
+      values = preferences{};
+    } else if(selected == std::to_underlying(option_row::apply)) {
+      save_requested = true;
+    } else if(selected == std::to_underlying(option_row::cancel)) {
+      values = original;
+      active = false;
+    } else {
+      active = false;                                                          // Keep the preview for this session, without writing preferences.
+    }
     break;
   }
   keep_visible();
@@ -457,18 +553,33 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
     int const y{first_row + static_cast<int>(row - scroll) * row_height};
     if(joystick_page) {
       auto const &settings{values.joystick};
-      std::string label, value;
+      std::string label;
+      std::string value;
       if(row < joystick_setting_count) {
         std::array<std::string_view, joystick_setting_count> constexpr labels{"Device", "Bank axis", "Pitch axis", "Invert bank", "Invert pitch", "Dead zone", "Sensitivity"};
         label = labels[row];
         switch(row) {
-        case 0: value = settings.device == input::joystick_disabled ? "Off" : settings.device == input::joystick_automatic ? "Auto" : "Device " + std::to_string(settings.device + 1); break;
-        case 1: value = std::to_string(settings.bank_axis + 1); break;
-        case 2: value = std::to_string(settings.pitch_axis + 1); break;
-        case 3: value = settings.invert_bank ? "On" : "Off"; break;
-        case 4: value = settings.invert_pitch ? "On" : "Off"; break;
-        case 5: value = number(settings.deadzone_percent) + "%"; break;
-        case 6: value = std::to_string(settings.sensitivity_percent) + "%"; break;
+        case 0:
+          value = settings.device == input::joystick_disabled ? "Off" : settings.device == input::joystick_automatic ? "Auto" : "Device " + std::to_string(settings.device + 1);
+          break;
+        case 1:
+          value = std::to_string(settings.bank_axis + 1);
+          break;
+        case 2:
+          value = std::to_string(settings.pitch_axis + 1);
+          break;
+        case 3:
+          value = settings.invert_bank ? "On" : "Off";
+          break;
+        case 4:
+          value = settings.invert_pitch ? "On" : "Off";
+          break;
+        case 5:
+          value = number(settings.deadzone_percent) + "%";
+          break;
+        case 6:
+          value = std::to_string(settings.sensitivity_percent) + "%";
+          break;
         }
       } else {
         auto const action{row - joystick_setting_count};
@@ -493,19 +604,25 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
     if(controls_page) {
       std::string label;
       std::string value;
-      if(row == 0) { label = "Mouse sensitivity"; value = number(values.controls.mouse_sensitivity) + "x"; }
-      else if(row == 1) { label = "Invert vertical mouse"; value = values.controls.invert_mouse ? "On" : "Off"; }
-      else if(row == 2 || row == 3) {
+      if(row == 0) {
+        label = "Mouse sensitivity";
+        value = number(values.controls.mouse_sensitivity) + "x";
+      } else if(row == 1) {
+        label = "Invert vertical mouse";
+        value = values.controls.invert_mouse ? "On" : "Off";
+      } else if(row == 2 || row == 3) {
         label = row == 2 ? "Mouse primary fire" : "Mouse secondary fire";
         int const button{row == 2 ? values.controls.primary_mouse_button : values.controls.secondary_mouse_button};
         value = button < 0 ? "Off" : button == 0 ? "Left" : button == 1 ? "Right" : button == 2 ? "Middle" : "Button " + std::to_string(button + 1);
-      }
-      else if(row == 4) label = "Joystick / gamepad...";
-      else if(row < controls_defaults) {
+      } else if(row == 4) {
+        label = "Joystick / gamepad...";
+      } else if(row < controls_defaults) {
         auto const action{row - mouse_setting_count};
         label = input::control_descriptions()[action].label;
         value = binding_pending && row == selected ? "Press a key" : input::key_label(values.controls.keys[action]);
-      } else label = row == controls_defaults ? "Restore control defaults" : "Back to options";
+      } else {
+        label = row == controls_defaults ? "Restore control defaults" : "Back to options";
+      }
       text(label, 20, y, row == selected ? 2 : 1);
       text(value, 220, y, row == selected ? 2 : 1);
       continue;
@@ -532,14 +649,18 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
   };
   std::string joystick_hint;
   if(joystick_page) {
-    if(binding_pending) joystick_hint = "Press button; Delete clears; Esc cancels.";
-    else if(joystick_status.device < 0) joystick_hint = "No device connected (or input is off).";
-    else if(selected == 1 || selected == 2) {
+    if(binding_pending) {
+      joystick_hint = "Press button; Delete clears; Esc cancels.";
+    } else if(joystick_status.device < 0) {
+      joystick_hint = "No device connected (or input is off).";
+    } else if(selected == 1 || selected == 2) {
       auto const axis{selected == 1 ? values.joystick.bank_axis : values.joystick.pitch_axis};
       joystick_hint = static_cast<unsigned int>(axis) < joystick_status.axes.size()
         ? "Axis " + std::to_string(axis + 1) + ": " + std::to_string(static_cast<int>(joystick_status.axes[axis] * 100)) + "%"
         : "This device does not have that axis.";
-    } else joystick_hint = std::to_string(joystick_status.device + 1) + ": " + joystick_status.name.substr(0, 37);
+    } else {
+      joystick_hint = std::to_string(joystick_status.device + 1) + ": " + joystick_status.name.substr(0, 37);
+    }
   }
   std::string_view const hint{joystick_page ? std::string_view{joystick_hint} : controls_page
     ? (binding_pending ? "Press a key; Delete clears; Esc cancels."
@@ -564,14 +685,18 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
       auto const code{ink.pixels[static_cast<unsigned int>(source_y * 320 + source_x)]};
       bool const highlight{(!binding_list() || source_x < scrollbar_left)
         && source_y >= selection_y() - 1 && source_y < selection_y() + row_height - 1};
-      if(code) pixel = code == 2 ? framework::render::rgba_pixel{238, 220, 184} : framework::render::rgba_pixel{174, 170, 186};
-      else if(binding_list() && source_x >= scrollbar_left && source_x <= scrollbar_right && source_y >= first_row && source_y < list_bottom) {
+      if(code) {
+        pixel = code == 2 ? framework::render::rgba_pixel{238, 220, 184} : framework::render::rgba_pixel{174, 170, 186};
+      } else if(binding_list() && source_x >= scrollbar_left && source_x <= scrollbar_right && source_y >= first_row && source_y < list_bottom) {
         pixel = source_y >= thumb_top && source_y < thumb_top + thumb_height
           ? framework::render::rgba_pixel{174, 170, 186} : framework::render::rgba_pixel{55, 48, 64};
+      } else if(binding_list() && source_y == footer_top - 5 && source_x >= 12 && source_x < 308) {
+        pixel = {108, 100, 120};
+      } else if(source_x == 7 || source_x == 312 || source_y == 7 || source_y == 233) {
+        pixel = {108, 100, 120};
+      } else {
+        pixel = {static_cast<uint8_t>(pixel.r / background_divisor + (highlight ? 44 : 15)), static_cast<uint8_t>(pixel.g / background_divisor + (highlight ? 38 : 14)), static_cast<uint8_t>(pixel.b / background_divisor + (highlight ? 52 : 22))};
       }
-      else if(binding_list() && source_y == footer_top - 5 && source_x >= 12 && source_x < 308) pixel = {108, 100, 120};
-      else if(source_x == 7 || source_x == 312 || source_y == 7 || source_y == 233) pixel = {108, 100, 120};
-      else pixel = {static_cast<uint8_t>(pixel.r / background_divisor + (highlight ? 44 : 15)), static_cast<uint8_t>(pixel.g / background_divisor + (highlight ? 38 : 14)), static_cast<uint8_t>(pixel.b / background_divisor + (highlight ? 52 : 22))};
     }
   }
 }

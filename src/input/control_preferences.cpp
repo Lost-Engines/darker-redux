@@ -6,7 +6,7 @@
 
 namespace darker::input {
 namespace {
-constexpr std::array descriptions{
+std::array constexpr descriptions{
   control_description{
     .name{"left"},
     .label{"Bank left"},
@@ -202,17 +202,23 @@ std::span<control_description const> control_descriptions() noexcept {
 
 int normalise_key(int const key) noexcept {
   switch(key) {
-  case GLFW_KEY_RIGHT_CONTROL: return GLFW_KEY_LEFT_CONTROL;
-  case GLFW_KEY_RIGHT_ALT: return GLFW_KEY_LEFT_ALT;
-  case GLFW_KEY_KP_ENTER: return GLFW_KEY_ENTER;
-  case GLFW_KEY_KP_0: return GLFW_KEY_INSERT;
-  case GLFW_KEY_GRAVE_ACCENT: return GLFW_KEY_F7;
-  default: return key;
+  case GLFW_KEY_RIGHT_CONTROL:
+    return GLFW_KEY_LEFT_CONTROL;
+  case GLFW_KEY_RIGHT_ALT:
+    return GLFW_KEY_LEFT_ALT;
+  case GLFW_KEY_KP_ENTER:
+    return GLFW_KEY_ENTER;
+  case GLFW_KEY_KP_0:
+    return GLFW_KEY_INSERT;
+  case GLFW_KEY_GRAVE_ACCENT:
+    return GLFW_KEY_F7;
+  default:
+    return key;
   }
 }
 
 bool bindable_key(int const key) noexcept {
-  if(key == GLFW_KEY_UNKNOWN) return true; // Explicitly unbound.
+  if(key == GLFW_KEY_UNKNOWN) return true;                                     // Explicitly unbound.
   if(key == GLFW_KEY_ESCAPE || key == GLFW_KEY_F10 || key == GLFW_KEY_PAUSE
     || key == GLFW_KEY_NUM_LOCK || key == GLFW_KEY_DELETE
     || key == GLFW_KEY_LEFT_SUPER || key == GLFW_KEY_RIGHT_SUPER
@@ -235,34 +241,62 @@ std::string key_label(int const key) {
   if(key >= GLFW_KEY_F1 && key <= GLFW_KEY_F25) return "F" + std::to_string(key - GLFW_KEY_F1 + 1);
   if(key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9) return "Keypad " + std::to_string(key - GLFW_KEY_KP_0);
   switch(key) {
-  case GLFW_KEY_SPACE: return "Space";
-  case GLFW_KEY_ENTER: return "Enter";
-  case GLFW_KEY_TAB: return "Tab";
-  case GLFW_KEY_BACKSPACE: return "Backspace";
-  case GLFW_KEY_INSERT: return "Insert";
-  case GLFW_KEY_LEFT: return "Left";
-  case GLFW_KEY_RIGHT: return "Right";
-  case GLFW_KEY_UP: return "Up";
-  case GLFW_KEY_DOWN: return "Down";
-  case GLFW_KEY_PAGE_UP: return "Page Up";
-  case GLFW_KEY_PAGE_DOWN: return "Page Down";
-  case GLFW_KEY_HOME: return "Home";
-  case GLFW_KEY_END: return "End";
-  case GLFW_KEY_CAPS_LOCK: return "Caps Lock";
-  case GLFW_KEY_SCROLL_LOCK: return "Scroll Lock";
-  case GLFW_KEY_PRINT_SCREEN: return "Print Screen";
-  case GLFW_KEY_LEFT_CONTROL: return "Ctrl";
-  case GLFW_KEY_LEFT_ALT: return "Alt";
-  case GLFW_KEY_LEFT_SHIFT: return "Left Shift";
-  case GLFW_KEY_RIGHT_SHIFT: return "Right Shift";
-  case GLFW_KEY_MENU: return "Menu";
-  case GLFW_KEY_KP_DECIMAL: return "Keypad .";
-  case GLFW_KEY_KP_DIVIDE: return "Keypad /";
-  case GLFW_KEY_KP_MULTIPLY: return "Keypad *";
-  case GLFW_KEY_KP_SUBTRACT: return "Keypad -";
-  case GLFW_KEY_KP_ADD: return "Keypad +";
-  case GLFW_KEY_KP_EQUAL: return "Keypad =";
-  default: return std::string(1, static_cast<char>(key));
+  case GLFW_KEY_SPACE:
+    return "Space";
+  case GLFW_KEY_ENTER:
+    return "Enter";
+  case GLFW_KEY_TAB:
+    return "Tab";
+  case GLFW_KEY_BACKSPACE:
+    return "Backspace";
+  case GLFW_KEY_INSERT:
+    return "Insert";
+  case GLFW_KEY_LEFT:
+    return "Left";
+  case GLFW_KEY_RIGHT:
+    return "Right";
+  case GLFW_KEY_UP:
+    return "Up";
+  case GLFW_KEY_DOWN:
+    return "Down";
+  case GLFW_KEY_PAGE_UP:
+    return "Page Up";
+  case GLFW_KEY_PAGE_DOWN:
+    return "Page Down";
+  case GLFW_KEY_HOME:
+    return "Home";
+  case GLFW_KEY_END:
+    return "End";
+  case GLFW_KEY_CAPS_LOCK:
+    return "Caps Lock";
+  case GLFW_KEY_SCROLL_LOCK:
+    return "Scroll Lock";
+  case GLFW_KEY_PRINT_SCREEN:
+    return "Print Screen";
+  case GLFW_KEY_LEFT_CONTROL:
+    return "Ctrl";
+  case GLFW_KEY_LEFT_ALT:
+    return "Alt";
+  case GLFW_KEY_LEFT_SHIFT:
+    return "Left Shift";
+  case GLFW_KEY_RIGHT_SHIFT:
+    return "Right Shift";
+  case GLFW_KEY_MENU:
+    return "Menu";
+  case GLFW_KEY_KP_DECIMAL:
+    return "Keypad .";
+  case GLFW_KEY_KP_DIVIDE:
+    return "Keypad /";
+  case GLFW_KEY_KP_MULTIPLY:
+    return "Keypad *";
+  case GLFW_KEY_KP_SUBTRACT:
+    return "Keypad -";
+  case GLFW_KEY_KP_ADD:
+    return "Keypad +";
+  case GLFW_KEY_KP_EQUAL:
+    return "Keypad =";
+  default:
+    return std::string(1, static_cast<char>(key));
   }
 }
 
@@ -277,7 +311,9 @@ bool control_preferences::valid() const noexcept {
   for(unsigned int i{0}; i < keys.size(); ++i) {
     if(!bindable_key(keys[i]) || normalise_key(keys[i]) != keys[i]) return false;
     if(keys[i] == GLFW_KEY_UNKNOWN) continue;
-    for(unsigned int j{0}; j < i; ++j) if(keys[j] == keys[i]) return false;
+    for(unsigned int j{0}; j < i; ++j) {
+      if(keys[j] == keys[i]) return false;
+    }
   }
   return true;
 }

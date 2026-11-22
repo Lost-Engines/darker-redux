@@ -64,38 +64,38 @@ void check_nightmare(darker::resources::archive_set const &archives) {
   }
 #ifndef NDEBUG
   {
-    auto clear{darker::game::mission_combat{combat.actors}};
-    clear.reserves = combat.reserves;
-    auto const objectives{clear.remaining_objectives()};
-    auto const reserves{clear.reserves.size()};
-    auto escort{clear.actors.front()};
-    escort.category = darker::game::actor_category::ground;
-    escort.attributes = 0;
-    escort.index = 250;
-    escort.parameters.update_entry = darker::game::object_update::inactive;
-    clear.actors.push_back(escort);
-    auto pursuer{clear.actors.front()};
-    pursuer.attributes = 0;
-    pursuer.index = 251;
-    clear.actors.push_back(pursuer);
-    // Include a falling wreck: developer kills must not wait for terrain impact.
-    clear.actors.front().parameters.update_entry = darker::game::object_update::falling_aircraft;
-    if(clear.eliminate_active_enemies(0) != clear.actors.size() - 1) throw std::runtime_error{"Developer kill missed active Nightmare enemies"};
-    clear.advance(player, cells, bank, {
+  auto clear{darker::game::mission_combat{combat.actors}};
+  clear.reserves = combat.reserves;
+  auto const objectives{clear.remaining_objectives()};
+  auto const reserves{clear.reserves.size()};
+  auto escort{clear.actors.front()};
+  escort.category = darker::game::actor_category::ground;
+  escort.attributes = 0;
+  escort.index = 250;
+  escort.parameters.update_entry = darker::game::object_update::inactive;
+  clear.actors.push_back(escort);
+  auto pursuer{clear.actors.front()};
+  pursuer.attributes = 0;
+  pursuer.index = 251;
+  clear.actors.push_back(pursuer);
+  // Include a falling wreck: developer kills must not wait for terrain impact.
+  clear.actors.front().parameters.update_entry = darker::game::object_update::falling_aircraft;
+  if(clear.eliminate_active_enemies(0) != clear.actors.size() - 1) throw std::runtime_error{"Developer kill missed active Nightmare enemies"};
+  clear.advance(player, cells, bank, {
       .elapsed_ticks{8},
       .frame_step{8},
     });
-    if(clear.actors.size() != 1 || clear.actors.front().index != escort.index || clear.remaining_objectives()
+  if(clear.actors.size() != 1 || clear.actors.front().index != escort.index || clear.remaining_objectives()
       || clear.completed_objectives != objectives || clear.reserves.size() != reserves) {
-      throw std::runtime_error{"Developer kill lost objective credit or changed queued waves"};
-    }
-    clear.eliminate_active_enemies(8);
-    clear.advance(player, cells, bank, {
+    throw std::runtime_error{"Developer kill lost objective credit or changed queued waves"};
+  }
+  clear.eliminate_active_enemies(8);
+  clear.advance(player, cells, bank, {
       .elapsed_ticks{16},
       .frame_step{8},
     });
-    if(clear.completed_objectives != objectives) throw std::runtime_error{"Developer kill counted a victim twice"};
-  }
+  if(clear.completed_objectives != objectives) throw std::runtime_error{"Developer kill counted a victim twice"};
+}
 #endif // NDEBUG
   darker::game::beacon_changes beacons;
   darker::game::mission_script script{
@@ -108,7 +108,10 @@ void check_nightmare(darker::resources::archive_set const &archives) {
     .time_multiplier{record.time_multiplier},
     .text_cursor{briefing.consumed_text()}
   };
-  unsigned int removed{0}, waves{0}, checkpoints{0}, altitude_changes{0};
+  unsigned int removed{0};
+  unsigned int waves{0};
+  unsigned int checkpoints{0};
+  unsigned int altitude_changes{0};
   uint8_t score{0};
   uint16_t weapons{briefing.weapon_toggles};
   context.activate_reserves = [&](uint8_t const opcode, uint8_t const count){
@@ -120,8 +123,11 @@ void check_nightmare(darker::resources::archive_set const &archives) {
     beacons.command(opcode, origin, count, static_cast<uint16_t>(context.clock), scenario.bytes(record.beacon_sequence));
   };
   context.select_weapon = [&](uint8_t const selection){
-    if(selection < 4) combat.primary_weapon = selection;
-    else combat.secondary_weapon = selection;
+    if(selection < 4) {
+      combat.primary_weapon = selection;
+    } else {
+      combat.secondary_weapon = selection;
+    }
   };
   context.toggle_weapons = [&](uint16_t const mask){
     weapons ^= mask;

@@ -8,7 +8,7 @@
 namespace darker::input {
 namespace {
 int numbered(std::string_view const value, int const limit, std::string_view const option) {
-  int result{};
+  int result{0};
   auto const parsed{std::from_chars(value.data(), value.data() + value.size(), result)};
   if(parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || result < 1 || result > limit) {
     throw std::invalid_argument{std::string{option} + " requires a number from 1 to " + std::to_string(limit)};

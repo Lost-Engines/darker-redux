@@ -20,9 +20,15 @@ public:
   object_list(object_list const &) = delete;
   object_list &operator=(object_list const &) = delete;
 
-  Record *head() const noexcept { return roots.head; }
-  Record *tail() const noexcept { return roots.tail; }
-  Record *free_head() const noexcept { return roots.free; }
+  Record *head() const noexcept {
+    return roots.head;
+  }
+  Record *tail() const noexcept {
+    return roots.tail;
+  }
+  Record *free_head() const noexcept {
+    return roots.free;
+  }
 
   void add_free_record(Record &record) noexcept {
     /// Attach an unused record from the owning pool without clearing its retained payload
@@ -37,8 +43,11 @@ public:
     roots.free = record->next;
     record->next = roots.head;
     record->previous = nullptr;
-    if(roots.head) roots.head->previous = record;
-    else roots.tail = record;
+    if(roots.head) {
+      roots.head->previous = record;
+    } else {
+      roots.tail = record;
+    }
     roots.head = record;
     return record;
   }
@@ -46,10 +55,16 @@ public:
   Record *unlink(Record &record) {
     /// 7AB4 repairs active neighbours and returns the next record without recycling
     auto *next{record.next};
-    if(record.previous) record.previous->next = next;
-    else roots.head = next;
-    if(next) next->previous = record.previous;
-    else roots.tail = record.previous;
+    if(record.previous) {
+      record.previous->next = next;
+    } else {
+      roots.head = next;
+    }
+    if(next) {
+      next->previous = record.previous;
+    } else {
+      roots.tail = record.previous;
+    }
     return next;
   }
 

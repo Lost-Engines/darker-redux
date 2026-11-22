@@ -42,11 +42,16 @@ camera_basis orient_model(camera_basis const &camera, camera_angles const angles
   auto const sine{precision == maths::angle_precision::full ? maths::render_sine : maths::angle_sine};
   auto const cosine{precision == maths::angle_precision::full ? maths::render_cosine : maths::angle_cosine};
   auto const heading{static_cast<uint16_t>(maths::angle_format::half_turn - angles.heading)};
-  auto const hs{sine(heading)}, hc{cosine(heading)};
-  auto const ps{sine(angles.pitch)}, pc{cosine(angles.pitch)};
-  auto const rs{sine(angles.roll)}, rc{cosine(angles.roll)};
-  auto const hsrs{multiply(hs, rs)}, hcrs{multiply(hc, rs)};
-  auto const hsrc{multiply(hs, rc)}, hcrc{multiply(hc, rc)};
+  auto const hs{sine(heading)};
+  auto const hc{cosine(heading)};
+  auto const ps{sine(angles.pitch)};
+  auto const pc{cosine(angles.pitch)};
+  auto const rs{sine(angles.roll)};
+  auto const rc{cosine(angles.roll)};
+  auto const hsrs{multiply(hs, rs)};
+  auto const hcrs{multiply(hc, rs)};
+  auto const hsrc{multiply(hs, rc)};
+  auto const hcrc{multiply(hc, rc)};
   mat3<int16_t> const axes{
     multiply(hc, pc), multiply(hs, pc), ps,
     word(multiply(ps, hcrs) - hsrc), word(hcrc + multiply(ps, hsrs)), word(-multiply(rs, pc)),
@@ -70,13 +75,13 @@ camera_basis orient_model(camera_basis const &camera, camera_angles const angles
 
 model_placement place_model(camera_basis const &basis, camera_position const camera, model_origin const origin, std::optional<world_image> const image) noexcept {
   /// Transform an explicit world image, or the nearest copy for native callers
-  auto const displacement{[](maths::world_format::position_component position, render_geometry::coordinate_bits camera_position) {
+  auto const displacement{[](maths::world_format::position_component position, render_geometry::coordinate_bits camera_position){
     unsigned int constexpr period{scene_limits::world_period_cells * render_geometry::camera_units_per_cell};
     unsigned int constexpr half_period{period / 2};
     auto const wrapped{(position * render_geometry::world_to_camera_scale - camera_position + half_period) % period};
     return static_cast<render_geometry::coordinate>(wrapped) - static_cast<render_geometry::coordinate>(half_period);
   }};
-  auto const component{[&](maths::world_format::position_component const position, render_geometry::coordinate_bits const camera_component, int const copy) {
+  auto const component{[&](maths::world_format::position_component const position, render_geometry::coordinate_bits const camera_component, int const copy){
     if(!image) return displacement(position, camera_component);
     return static_cast<render_geometry::coordinate>(position * render_geometry::world_to_camera_scale)
       - static_cast<render_geometry::coordinate>(camera_component)

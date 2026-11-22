@@ -2,11 +2,11 @@
 #include <algorithm>
 #include <bit>
 #include <stdexcept>
+#include "maths/direction.h"
+#include "maths/world_coordinates.h"
 #include "game/actor_motion.h"
 #include "game/flight_motion.h"
 #include "game/object_definitions.h"
-#include "maths/direction.h"
-#include "maths/world_coordinates.h"
 #include "game/player_flags.h"
 
 namespace darker::game {
@@ -175,8 +175,9 @@ void advance_hangar_return(player_flight &player, hangar_state &hangar, game_dur
     auto outer{target};
     outer[1] -= 256;
     bool arrived{false};
-    if(player.tunnel) arrived = approach(target);
-    else if(approach(outer)) {
+    if(player.tunnel) {
+      arrived = approach(target);
+    } else if(approach(outer)) {
       target.height = static_cast<uint16_t>(std::min<int>(static_cast<int>(distance >> 2) - 40, 41));
       arrived = approach(target);
     }

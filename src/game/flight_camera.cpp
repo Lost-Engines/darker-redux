@@ -3,10 +3,10 @@
 #include <array>
 #include <bit>
 #include <stdexcept>
-#include "game/angular_motion.h"
-#include "maths/direction.h"
 #include "maths/angle.h"
+#include "maths/direction.h"
 #include "maths/render_sine.h"
+#include "game/angular_motion.h"
 
 namespace darker::game {
 namespace {
@@ -64,7 +64,8 @@ void flight_camera::update_look(flight_steering const drive, bool const held, ga
       look_pitch = static_cast<uint16_t>((magnitude >> 3) - 0x1500);
     }
   } else if(frame_step != 0 && mode != camera_mode::fixed) {
-    int const heading{word(look_heading)}, pitch{word(look_pitch)};
+    int const heading{word(look_heading)};
+    int const pitch{word(look_pitch)};
     auto const x{static_cast<unsigned int>(heading < 0 ? -heading : heading)};
     auto const y{static_cast<unsigned int>(pitch < 0 ? -pitch : pitch)};
     auto const major{std::max(x, y)};
@@ -72,7 +73,8 @@ void flight_camera::update_look(flight_steering const drive, bool const held, ga
     auto const remaining{major > step ? major - step : 0};
     auto const divisor{std::max(major, step)};
     if(divisor != 0) {
-      auto const hx{static_cast<int>(x * remaining / divisor)}, py{static_cast<int>(y * remaining / divisor)};
+      auto const hx{static_cast<int>(x * remaining / divisor)};
+      auto const py{static_cast<int>(y * remaining / divisor)};
       look_heading = static_cast<uint16_t>(heading < 0 ? -hx : hx);
       look_pitch = static_cast<uint16_t>(pitch < 0 ? -py : py);
     }
@@ -117,17 +119,21 @@ object_pose flight_camera::view(object_pose const &player, game_duration const f
   if(following && missile) result.angles.pitch = static_cast<uint16_t>(result.angles.pitch - 0x800);
   if(following && landed && !missile) result.angles.pitch = static_cast<uint16_t>(result.angles.pitch - 1024);
   normalise_attitude(result.angles);
-  if(precision == maths::angle_precision::original) for(auto *angle : {&result.angles.heading, &result.angles.pitch, &result.angles.roll}) {
-    *angle = static_cast<uint16_t>(static_cast<uint16_t>(*angle + 15) & 0xffc0);
+  if(precision == maths::angle_precision::original) {
+    for(auto *angle : {&result.angles.heading, &result.angles.pitch, &result.angles.roll}) {
+      *angle = static_cast<uint16_t>(static_cast<uint16_t>(*angle + 15) & 0xffc0);
+    }
   }
   if(!following) return result;
   std::array<int, 6> constexpr steps{6, 9, 13, 18, 26, 34};
   std::array<int, 6> constexpr object_effect_steps{10, 11, 13, 18, 29, 34};
-  std::array<int, 6> constexpr missile_steps{3, 5, 7, 10, 14, 18}, effect_steps{10, 11, 12, 14, 16, 18};
-  auto const &distances{subject == camera_subject::object_effect ? object_effect_steps : subject == camera_subject::missile      ? missile_steps : subject == camera_subject::missile_effect ? effect_steps : steps};
+  std::array<int, 6> constexpr missile_steps{3, 5, 7, 10, 14, 18};
+  std::array<int, 6> constexpr effect_steps{10, 11, 12, 14, 16, 18};
+  auto const &distances{subject == camera_subject::object_effect ? object_effect_steps : subject == camera_subject::missile ? missile_steps : subject == camera_subject::missile_effect ? effect_steps : steps};
   int const target{landed && !missile && !object ? 0x440 : distances[distance_step] * 256};
-  if(distance & 0x8000) distance = static_cast<uint16_t>(target);
-  else {
+  if(distance & 0x8000) {
+    distance = static_cast<uint16_t>(target);
+  } else {
     int const old{word(distance)};
     int const next{word(old + (old < target ? frame_step * 8 : -frame_step * 8))};
     distance = static_cast<uint16_t>(old < target ? std::min(next, target) : std::max(next, target));

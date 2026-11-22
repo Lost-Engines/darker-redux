@@ -2,9 +2,9 @@
 #include <algorithm>
 #include <bit>
 #include <stdexcept>
+#include "maths/direction.h"
 #include "game/city_map.h"
 #include "game/projectile_motion.h"
-#include "maths/direction.h"
 
 namespace darker::game {
 namespace {
@@ -18,7 +18,8 @@ int16_t signed_word(int const value) {
 
 map_guidance_target resolve_map_guidance(uint16_t const cell, city_map const &cells, resources::geometry_bank const &bank, uint8_t const damage_mask) {
   /// D089 resolves a building's variant origin and vertical aim bounds through the native linked model lookup
-  auto const column{cell & 255}, row{cell >> 8};
+  auto const column{cell & 255};
+  auto const row{cell >> 8};
   if(column >= city_map_size.column || row >= city_map_size.row) throw std::out_of_range{"Guided projectile target is outside the city"};
   auto const &object{cells[city_cell_index(column, row)]};
   if(object.type == 0) throw std::invalid_argument{"Guided projectile building target is empty"};
@@ -87,7 +88,7 @@ void advance_chargeable_projectile(projectile &record, object_pose const &target
   auto const step{steer_homing_projectile(record, angles.heading, angles.pitch, frame_step)};
   record.inherited_roll = record.placement.angles.roll;
   auto const triple{static_cast<uint16_t>(remaining * 3)};
-  record.placement.angles.roll = static_cast<uint16_t>((uint32_t{triple}* triple) >> 8);
+  record.placement.angles.roll = static_cast<uint16_t>((uint32_t{triple} * triple) >> 8);
   advance_direct_projectile(record.placement, *record.parameters.definition, step, remaining);
 }
 

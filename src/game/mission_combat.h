@@ -4,8 +4,9 @@
 #include <cstdint>
 #include <optional>
 #include <vector>
-#include "game/aircraft_combat.h"
+#include "maths/world_coordinates.h"
 #include "game/actor_activation.h"
+#include "game/aircraft_combat.h"
 #include "game/aircraft_spawning.h"
 #include "game/caero_weapons.h"
 #include "game/city_repairs.h"
@@ -15,21 +16,20 @@
 #include "game/skimma_weapons.h"
 #include "game/time.h"
 #include "game/weapon_target.h"
-#include "maths/world_coordinates.h"
 
 namespace darker::game {
 
 struct combat_timing {
   campaign_clock elapsed_ticks{};
   game_duration frame_step{};
-  uint16_t changes{};
+  uint16_t changes{0};
 };
 
 struct combat_input {
-  bool primary_pressed{};
-  bool secondary_pressed{};
-  bool secondary_held{};
-  bool primary_released{};
+  bool primary_pressed{false};
+  bool secondary_pressed{false};
+  bool secondary_held{false};
+  bool primary_released{false};
 };
 
 struct combat_scenario {

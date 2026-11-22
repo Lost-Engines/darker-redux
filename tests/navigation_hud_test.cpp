@@ -3,8 +3,8 @@
 #include <cstdint>
 #include "graphics/bitmap_hud.h"
 #include "graphics/navigation_hud.h"
-#include "reference/navigation_samples.h"
 #include "reference/missile_warning_samples.h"
+#include "reference/navigation_samples.h"
 
 TEST_CASE("Every compass phase matches original-code pixel captures") {
   for(uint8_t phase{0}; phase < 136; ++phase) {
@@ -73,8 +73,11 @@ TEST_CASE("Skimma masked callbacks match independently extracted sprite coverage
   for(auto const &sample : darker::test_reference::skimma) {
     auto target{cache};
     darker::graphics::skimma_bitmap_state state;
-    if(sample.bearing) state.bearing = sample.state;
-    else state.weapons[sample.index] = sample.state;
+    if(sample.bearing) {
+      state.bearing = sample.state;
+    } else {
+      state.weapons[sample.index] = sample.state;
+    }
     darker::graphics::update_skimma_bitmaps(cache, target, darker::graphics::craft::upgraded_skimma, {}, state);
     if(sample.bearing && sample.state == 7) {
       // Redux omits only the retail mask's stray blue pixel. Restore it for

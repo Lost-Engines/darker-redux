@@ -1,8 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
-#include "game/object_definitions.h"
 #include "game/caero_weapons.h"
-#include "game/projectile_update.h"
+#include "game/object_definitions.h"
 #include "game/projectile_steering.h"
+#include "game/projectile_update.h"
 #include "reference/chargeable_motion_samples.h"
 
 TEST_CASE("Chargeable steering, spin and displacement match native updates", "[weapons]") {
@@ -52,7 +52,7 @@ TEST_CASE("An unlocked Chargeable release retains charge-dependent flight and da
     .position{10000, 10000, 4000},
     .speed{496},
   };
-  auto const fire{[&](bool const pressed, bool const held, game::clock_tick const clock) {
+  auto const fire{[&](bool const pressed, bool const held, game::clock_tick const clock){
     return game::fire_caero_weapon(pool, energy, charge, {
       .emitter{emitter},
       .selection{9},

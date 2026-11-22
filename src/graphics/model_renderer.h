@@ -9,9 +9,15 @@
 
 namespace darker::graphics {
 
-enum class model_shading { flat, gouraud };
+enum class model_shading {
+  flat,
+  gouraud
+};
 
-enum class model_path { direct, near_clipped };
+enum class model_path {
+  direct,
+  near_clipped
+};
 
 struct model_animation {
   std::array<int16_t, 256> parameters{};
@@ -26,12 +32,12 @@ struct model_colours {
   static unsigned int constexpr shade_mask{0x1f};
   std::array<uint8_t, shade_count> shades{};
   uint8_t dynamic{0};
-  lighten_blend const *ground_light_blend{nullptr}; // only upward ground-plane faces in identified light-spill models
+  lighten_blend const *ground_light_blend{nullptr};                            // only upward ground-plane faces in identified light-spill models
   // 2D71 uses all five shade bits without the polygon dynamic-colour branch.
   // Its last four indices spill into the following contiguous shade row.
   std::array<uint8_t, shade_mask + 1 - shade_count> point_shade_tail{};
 
-  framework::render::colour_translation const *fog{nullptr}; // borrowed from the active distance_shading tables
+  framework::render::colour_translation const *fog{nullptr};                   // borrowed from the active distance_shading tables
 
   uint8_t apply_fog(uint8_t const colour) const noexcept {
     return fog ? (*fog)[colour] : colour;

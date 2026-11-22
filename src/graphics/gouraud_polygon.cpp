@@ -26,12 +26,15 @@ size_t clip(std::span<shaded_vertex const> const input, polygon_buffer &output, 
     return maximum ? coordinate(point) <= boundary : coordinate(point) >= boundary;
   }};
   for(size_t i{0}; i < input.size(); ++i) {
-    auto const &a{input[i]}, &b{input[i + 1 == input.size() ? 0 : i + 1]};
-    bool const a_inside{inside(a)}, b_inside{inside(b)};
+    auto const &a{input[i]};
+    auto const &b{input[i + 1 == input.size() ? 0 : i + 1]};
+    bool const a_inside{inside(a)};
+    bool const b_inside{inside(b)};
     if(a_inside) output.at(count++) = a;
     if(a_inside == b_inside) continue;
     bool const anchor_a{a_inside && (horizontal || !maximum)};
-    auto const &anchor{anchor_a ? a : b}, &outside{anchor_a ? b : a};
+    auto const &anchor{anchor_a ? a : b};
+    auto const &outside{anchor_a ? b : a};
     int const distance{word(boundary - coordinate(anchor))};
     int const divisor{word(coordinate(outside) - coordinate(anchor))};
     auto const interpolate{[&](int const start, int const end, auto const wrap){
@@ -66,8 +69,11 @@ void start_edge(edge_walker &edge, std::span<shaded_vertex const> const points, 
   auto a{points[edge.index]};
   shaded_vertex b{};
   do {
-    if(edge.direction > 0) edge.index = edge.index + 1 == points.size() ? 0 : edge.index + 1;
-    else edge.index = edge.index == 0 ? points.size() - 1 : edge.index - 1;
+    if(edge.direction > 0) {
+      edge.index = edge.index + 1 == points.size() ? 0 : edge.index + 1;
+    } else {
+      edge.index = edge.index == 0 ? points.size() - 1 : edge.index - 1;
+    }
     b = points[edge.index];
     if(b.position.y > y) break;
     a = b;
@@ -93,7 +99,7 @@ void step_edge(edge_walker &edge) noexcept {
 
 void draw_span(framework::render::indexed_surface target, int const y, int const left, int const right, int const first, int const last, framework::render::colour_translation const *const colours, lighten_blend const *const blend) {
   /// AE93 chooses per-pixel steps or repeated colour bands using integer quotient/remainder distribution
-  auto const translate{[colours](int const index) {
+  auto const translate{[colours](int const index){
     auto const colour{static_cast<uint8_t>(index)};
     return colours ? (*colours)[colour] : colour;
   }};
@@ -105,8 +111,11 @@ void draw_span(framework::render::indexed_surface target, int const y, int const
   if(difference == 0) {
     fill_polygon_span({output, static_cast<size_t>(width)}, translate(first), blend);
   } else if(difference >= width) {
-    int const divisor{width + 1}, step{difference / divisor}, remainder{difference % divisor};
-    int error{divisor / 2}, colour{first};
+    int const divisor{width + 1};
+    int const step{difference / divisor};
+    int const remainder{difference % divisor};
+    int error{divisor / 2};
+    int colour{first};
     for(int i{0}; i < width; ++i) {
       *output = blend ? (*blend)(translate(colour), *output) : translate(colour);
       ++output;
@@ -116,7 +125,9 @@ void draw_span(framework::render::indexed_surface target, int const y, int const
       colour += direction * (step + (borrow ? 1 : 0));
     }
   } else {
-    int const bands{difference + 1}, step{width / bands}, remainder{width % bands};
+    int const bands{difference + 1};
+    int const step{width / bands};
+    int const remainder{width % bands};
     int error{bands / 2};
     for(int band{0}; band < bands; ++band) {
       error -= remainder;
@@ -176,9 +187,10 @@ void draw_gouraud_polygon(framework::render::indexed_surface target,
     return a.position.y < b.position.y;
   })};
   if(rightmost->position.x < 0 || lowest->position.y < 0 || leftmost->position.x > right || top->position.y >= bottom) return;
-  if(top->position.y == lowest->position.y) return; // no scanlines, including subpixel distant faces
+  if(top->position.y == lowest->position.y) return;                            // no scanlines, including subpixel distant faces
   auto const index{static_cast<size_t>(top - vertices.begin())};
-  auto const &next{vertices[index + 1 == vertices.size() ? 0 : index + 1]}, &previous{vertices[index == 0 ? vertices.size() - 1 : index - 1]};
+  auto const &next{vertices[index + 1 == vertices.size() ? 0 : index + 1]};
+  auto const &previous{vertices[index == 0 ? vertices.size() - 1 : index - 1]};
   if(back_facing(top->position, next.position, previous.position)) return;
   // Share the flat filler's precision so mixed flat/shaded faces still meet.
   auto const fill{bottom <= display_layout::height ? rasterise<raster_arithmetic::native_edge_precision>
@@ -190,7 +202,8 @@ void draw_gouraud_polygon(framework::render::indexed_surface target,
     fill(target, vertices, right, colours, blend);
     return;
   }
-  polygon_buffer first{}, second{};
+  polygon_buffer first{};
+  polygon_buffer second{};
   auto points{vertices};
   auto *output{&first};
   for(auto const plane : viewport_clip_planes(viewport)) {

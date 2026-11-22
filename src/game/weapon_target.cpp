@@ -1,13 +1,13 @@
 #include "game/weapon_target.h"
 #include <bit>
-#include "game/aircraft_combat.h"
-#include "game/city_sweep.h"
-#include "game/object_definitions.h"
+#include "vectorstorm/vector/vector2.h"
 #include "maths/angle.h"
 #include "maths/world_coordinates.h"
-#include "vectorstorm/vector/vector2.h"
+#include "game/aircraft_combat.h"
+#include "game/city_sweep.h"
 #include "game/native_object_layout.h"
 #include "game/object_catalogue.h"
+#include "game/object_definitions.h"
 #include "game/target_reference.h"
 
 namespace darker::game {
@@ -20,8 +20,10 @@ void weapon_target::clear() noexcept {
 
 maths::world_position target_ray_end(object_pose const &player) noexcept {
   /// 1E77/6D08 construct the unrolled forward targeting ray with the original truncation points
-  auto const heading{maths::angle_phase(player.angles.heading)}, pitch{maths::angle_phase(player.angles.pitch)};
-  auto const sine{maths::original_sine[heading]}, cosine{maths::phase_cosine(heading)};
+  auto const heading{maths::angle_phase(player.angles.heading)};
+  auto const pitch{maths::angle_phase(player.angles.pitch)};
+  auto const sine{maths::original_sine[heading]};
+  auto const cosine{maths::phase_cosine(heading)};
   auto const pitch_cosine{maths::phase_cosine(pitch)};
   auto const x{(-(sine * pitch_cosine >> 16)) >> 2};
   auto const y{-((cosine * pitch_cosine >> 16) >> 2)};
@@ -115,7 +117,9 @@ void weapon_target::project(maths::world_position const &player,
       if(candidate * candidate <= radial * 4) root = candidate;
     }
     spread = static_cast<uint16_t>(root * 4);
-  } else spread = height;
+  } else {
+    spread = height;
+  }
 }
 
 void weapon_target::project_caero(maths::world_position const &player,

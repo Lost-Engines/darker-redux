@@ -103,7 +103,9 @@ TEST_CASE("Wide projection and near crossings retain distant coordinate signs", 
 }
 
 TEST_CASE("Runtime focal length scales projection and near crossings around the view centre", "[graphics][near_clip]") {
-  using namespace darker::graphics;
+  using darker::graphics::camera_vertex;
+  using darker::graphics::near_intersection;
+  using darker::graphics::project_vertex;
   camera_vertex const vertex{
     .horizontal{64 * 256},
     .vertical{-32 * 256},

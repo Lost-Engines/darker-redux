@@ -36,10 +36,13 @@ TEST_CASE("Missile camera marker matches native timer boundaries and remains lit
         framework::render::indexed_cockpit_framebuffer frame{};
         frame.pixels.fill(42);
         darker::graphics::draw_missile_camera_indicator(frame, ticks[i], enabled, following);
-        if(following || (enabled && native_blink[i])) REQUIRE(frame.pixels == expected.pixels);
-        else REQUIRE(std::ranges::all_of(frame.pixels, [](auto const pixel){
-          return pixel == 42;
-        }));
+        if(following || (enabled && native_blink[i])) {
+          REQUIRE(frame.pixels == expected.pixels);
+        } else {
+          REQUIRE(std::ranges::all_of(frame.pixels, [](auto const pixel){
+            return pixel == 42;
+          }));
+        }
       }
     }
   }
@@ -159,10 +162,10 @@ TEST_CASE("Target marker outlines clip safely when a narrow FOV moves them beyon
   framework::render::indexed_cockpit_framebuffer frame;
   frame.pixels.fill(42);
   darker::graphics::draw_target_marker(frame, darker::graphics::target_marker::large, {-1, 92}, 243, 233);
-  CHECK(std::ranges::any_of(frame.pixels, [](auto const pixel){ return pixel != 42; }));
+  CHECK(std::ranges::any_of(frame.pixels, [](auto const pixel){return pixel != 42;}));
   frame.pixels.fill(42);
   auto const offscreen{darker::graphics::project_target_marker({-54, 0}, 912.0, 240)};
   REQUIRE(offscreen.x < -20);
   darker::graphics::draw_target_marker(frame, darker::graphics::target_marker::large, offscreen, 243, 233);
-  CHECK(std::ranges::all_of(frame.pixels, [](auto const pixel){ return pixel == 42; }));
+  CHECK(std::ranges::all_of(frame.pixels, [](auto const pixel){return pixel == 42;}));
 }

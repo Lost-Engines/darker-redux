@@ -3,14 +3,14 @@
 #include <bit>
 #include <ranges>
 #include <stdexcept>
+#include "maths/angle.h"
+#include "maths/world_coordinates.h"
 #include "game/beacon_light.h"
 #include "graphics/near_clip.h"
-#include "graphics/world_images.h"
 #include "graphics/particles.h"
 #include "graphics/screen_layout.h"
 #include "graphics/tunnel_visibility.h"
-#include "maths/angle.h"
-#include "maths/world_coordinates.h"
+#include "graphics/world_images.h"
 
 namespace darker::graphics {
 
@@ -128,7 +128,8 @@ void order_city_models(std::vector<city_draw_item> &items) {
   // or the current record's low byte when returning from its farther subtree
   auto const absent{items.size()};
   struct branches {
-    size_t farther, nearer;
+    size_t farther;
+    size_t nearer;
   };
   std::vector<branches> tree(items.size(), {absent, absent});
   size_t root{absent};
@@ -198,7 +199,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
       }
       visit_world_images(camera_column, camera_row,
         index % game::city_map_size.column, index / game::city_map_size.column, view.radius,
-        [&](world_image const image) {
+        [&](world_image const image){
           if(auto item{place_city_cell(bank, cells[index], index, damage_mask, basis, camera, image, cull_scale)}) items.push_back(*item);
         });
     }
@@ -210,7 +211,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
         if(!phase) continue;
         // 2F35 admits effects through the same wrapping coordinate window as moving objects
         if(!within_object_window(view, emitter.position)) continue;
-        auto const place_emitter{[&](std::optional<world_image> const image) {
+        auto const place_emitter{[&](std::optional<world_image> const image){
           auto const placement{place_model(basis, camera, {
             .column{emitter.position.column},
             .row{emitter.position.row},
@@ -222,10 +223,13 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
             .phase{*phase}
           });
         }};
-        if(view.radius <= scene_limits::native_surface_radius_cells || (view.underground && !view.unrestricted_visibility)) place_emitter(std::nullopt);
-        else visit_world_images(camera_column, camera_row,
-          emitter.position.column >> maths::world_format::cell_fraction_bits,
-          emitter.position.row >> maths::world_format::cell_fraction_bits, view.radius, place_emitter);
+        if(view.radius <= scene_limits::native_surface_radius_cells || (view.underground && !view.unrestricted_visibility)) {
+          place_emitter(std::nullopt);
+        } else {
+          visit_world_images(camera_column, camera_row,
+            emitter.position.column >> maths::world_format::cell_fraction_bits,
+            emitter.position.row >> maths::world_format::cell_fraction_bits, view.radius, place_emitter);
+        }
       }
     }};
     append(particles->effects.trails);
@@ -234,13 +238,16 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   // 2BC1 scans the city, 6BF3 adds particles, then 2BD0/2BEA adds craft and projectiles
   for(auto const &object : objects) {
     if(!within_object_window(view, object.pose.position)) continue;
-    auto const place_object{[&](std::optional<world_image> const image) {
+    auto const place_object{[&](std::optional<world_image> const image){
       if(auto item{place_scene_object(bank, object, basis, camera, view.underground, image, cull_scale, view.focal_length)}) items.push_back(*item);
     }};
-    if(view.radius <= scene_limits::native_surface_radius_cells || (view.underground && !view.unrestricted_visibility)) place_object(std::nullopt);
-    else visit_world_images(camera_column, camera_row,
-      object.pose.position.column >> maths::world_format::cell_fraction_bits,
-      object.pose.position.row >> maths::world_format::cell_fraction_bits, view.radius, place_object);
+    if(view.radius <= scene_limits::native_surface_radius_cells || (view.underground && !view.unrestricted_visibility)) {
+      place_object(std::nullopt);
+    } else {
+      visit_world_images(camera_column, camera_row,
+        object.pose.position.column >> maths::world_format::cell_fraction_bits,
+        object.pose.position.row >> maths::world_format::cell_fraction_bits, view.radius, place_object);
+    }
   }
   order_city_models(items);
   for(auto const &item : items) {
@@ -278,10 +285,16 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
       // Delphi streetlights, satellite doorway, and four approach-light orientations.
       // The interpreter further restricts this to upward faces exactly on local Z=0.
       switch(cells[item.cell].type) {
-      case 11: case 13: case 18: case 20: case 22: case 24:
+      case 11:
+      case 13:
+      case 18:
+      case 20:
+      case 22:
+      case 24:
         colours.ground_light_blend = view.ground_light_blend;
         break;
-      default: break;
+      default:
+        break;
       }
     }
     animation.cell_state = item.orientation ? 0 : cells[item.cell].state;

@@ -87,7 +87,7 @@ ptree pose_json(game::object_pose const &pose) {
 }
 
 void validate_times(ptree const &items) {
-  unsigned int constexpr maximum_ticks{500 * 3600}; // nominal PIT clock: one hour
+  unsigned int constexpr maximum_ticks{500 * 3600};                            // nominal PIT clock: one hour
   unsigned int previous{0};
   for(auto const &[key, item] : items) {
     unsigned int const tick{item.get<unsigned int>("tick")};
@@ -152,8 +152,11 @@ void capture_session::before_frame(unsigned int tick, game::player_flight &playe
         if(*value > 3 || !combat.skimma.select(player.upgraded, static_cast<uint8_t>(*value), available_weapons, static_cast<uint16_t>(tick))) {
           throw std::invalid_argument{"Capture Skimma weapon unavailable"};
         }
-      } else if(*value < 4) combat.primary_weapon = static_cast<uint8_t>(*value);
-      else combat.secondary_weapon = static_cast<uint8_t>(*value);
+      } else if(*value < 4) {
+        combat.primary_weapon = static_cast<uint8_t>(*value);
+      } else {
+        combat.secondary_weapon = static_cast<uint8_t>(*value);
+      }
       combat.target = {};
     }
   }

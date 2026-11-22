@@ -24,7 +24,9 @@ bool joystick_preferences::valid() const noexcept {
   for(unsigned int i{0}; i < buttons.size(); ++i) {
     if(buttons[i] < -1 || buttons[i] >= static_cast<int>(joystick_button_limit)) return false;
     if(buttons[i] < 0) continue;
-    for(unsigned int j{0}; j < i; ++j) if(buttons[i] == buttons[j]) return false;
+    for(unsigned int j{0}; j < i; ++j) {
+      if(buttons[i] == buttons[j]) return false;
+    }
   }
   return true;
 }
@@ -34,7 +36,10 @@ joystick_sample poll_joystick(int device) {
   if(device == joystick_disabled) return result;
   if(device == joystick_automatic) {
     for(int candidate{GLFW_JOYSTICK_1}; candidate <= GLFW_JOYSTICK_LAST; ++candidate) {
-      if(glfwJoystickPresent(candidate)) { device = candidate; break; }
+      if(glfwJoystickPresent(candidate)) {
+        device = candidate;
+        break;
+      }
     }
   }
   if(device < GLFW_JOYSTICK_1 || device > GLFW_JOYSTICK_LAST || !glfwJoystickPresent(device)) return result;
@@ -44,7 +49,9 @@ joystick_sample poll_joystick(int device) {
   auto const *name{result.gamepad ? glfwGetGamepadName(device) : glfwGetJoystickName(device)};
   result.name = name ? name : "Joystick";
   // Device names are UTF-8, while the original menu font accepts ASCII here.
-  for(char &character : result.name) if(static_cast<unsigned char>(character) < 32 || static_cast<unsigned char>(character) > 126) character = '?';
+  for(char &character : result.name) {
+    if(static_cast<unsigned char>(character) < 32 || static_cast<unsigned char>(character) > 126) character = '?';
+  }
   if(result.gamepad) {
     result.axes.assign(std::begin(gamepad.axes), std::end(gamepad.axes));
     result.buttons.assign(std::begin(gamepad.buttons), std::end(gamepad.buttons));

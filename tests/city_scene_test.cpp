@@ -1,8 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <bit>
+#include "maths/world_coordinates.h"
 #include "graphics/city_scene.h"
 #include "graphics/world_images.h"
-#include "maths/world_coordinates.h"
 #include "reference/city_scan_samples.h"
 #include "reference/distant_points_samples.h"
 #include "reference/object_window_samples.h"
@@ -84,12 +84,14 @@ TEST_CASE("Draw traversal supplies the native record byte after a farther subtre
   std::array<uint16_t, 6> constexpr records{0x8060, 0x8018, 0x8048, 0x8000, 0x8078, 0x8030};
   std::array<uint8_t, 6> constexpr residues{0, 0x18, 0, 0, 0, 0x30};
   std::vector<darker::graphics::city_draw_item> items;
-  for(size_t i{0}; i < distances.size(); ++i) items.push_back({
-    .placement{
-      .sorting_distance{distances[i]}
-    },
-    .draw_record{static_cast<uint16_t>(0x8000 + i * 24)},
-  });
+  for(size_t i{0}; i < distances.size(); ++i) {
+    items.push_back({
+      .placement{
+        .sorting_distance{distances[i]}
+      },
+      .draw_record{static_cast<uint16_t>(0x8000 + i * 24)},
+    });
+  }
   darker::graphics::order_city_models(items);
   for(size_t i{0}; i < items.size(); ++i) {
     CHECK(items[i].draw_record == records[i]);
@@ -118,9 +120,9 @@ TEST_CASE("Distant objects with shade code 31 render without a preceding mesh", 
   // A zero-extent special model selects the point path without drawing bytecode.
   // Its colour must come from its own lighting, even without a preceding mesh.
   std::vector<std::byte> bytes(17);
-  bytes[1] = std::byte{1};                                                      // one special model at pool offset zero
-  bytes[4] = std::byte{11};                                                     // pool size
-  bytes[11] = std::byte{255};                                                   // header +5: ramp 7, shade code 31
+  bytes[1] = std::byte{1};                                                     // one special model at pool offset zero
+  bytes[4] = std::byte{11};                                                    // pool size
+  bytes[11] = std::byte{255};                                                  // header +5: ramp 7, shade code 31
   darker::resources::geometry_bank const bank{std::move(bytes)};
   darker::game::city_map cells{};
   darker::graphics::city_renderer renderer;
@@ -148,9 +150,10 @@ TEST_CASE("Distant objects with shade code 31 render without a preceding mesh", 
 }
 
 TEST_CASE("Wide views include farther world copies within the visible circle", "[graphics][city]") {
-  using namespace darker::graphics;
+  using darker::graphics::visit_world_images;
+  using darker::graphics::world_image;
   std::vector<world_image> images;
-  auto const collect{[&](world_image const image) { images.push_back(image); }};
+  auto const collect{[&](world_image const image){images.push_back(image);}};
   visit_world_images(100, 0, 0, 0, 182, collect);
   REQUIRE(images.size() == 2);
   CHECK(images[0] == world_image{});
@@ -174,7 +177,11 @@ TEST_CASE("Wide views include farther world copies within the visible circle", "
 }
 
 TEST_CASE("Buildings and moving objects remain visible in the farther forward world copy", "[graphics][city]") {
-  using namespace darker::graphics;
+  using darker::graphics::city_renderer;
+  using darker::graphics::city_view;
+  using darker::graphics::distance_shading;
+  using darker::graphics::particle_scene;
+  using darker::graphics::scene_object;
   // One city model, also used by the moving object. The mesh is empty but has
   // a complete header and return opcode; at distance the object becomes a dot.
   std::vector<std::byte> bytes(24);
@@ -216,18 +223,20 @@ TEST_CASE("Buildings and moving objects remain visible in the farther forward wo
 }
 
 TEST_CASE("Moving models become dots only when their projected bounds are subpixel", "[graphics][city]") {
-  using namespace darker::graphics;
+  using darker::graphics::make_camera_basis;
+  using darker::graphics::place_scene_object;
+  using darker::graphics::scene_object;
   std::vector<std::byte> bytes(17);
   bytes[1] = std::byte{1};
   bytes[4] = std::byte{11};
-  bytes[15] = std::byte{32};                                                    // model extent; deliberately zero original LOD cutoffs
+  bytes[15] = std::byte{32};                                                   // model extent; deliberately zero original LOD cutoffs
   darker::resources::geometry_bank const bank{std::move(bytes)};
   scene_object const object{
     .model_offset{0},
     .pose{},
   };
   auto const basis{make_camera_basis({})};
-  auto const place{[&](unsigned int const depth, double const focal_length) {
+  auto const place{[&](unsigned int const depth, double const focal_length){
     return place_scene_object(bank, object, basis, {
       .row{depth},
     }, false, std::nullopt, 1, focal_length);

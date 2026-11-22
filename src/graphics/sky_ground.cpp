@@ -1,12 +1,12 @@
 #include "graphics/sky_ground.h"
 #include <algorithm>
 #include <array>
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <stdexcept>
-#include "graphics/screen_layout.h"
 #include "maths/angle.h"
 #include "maths/render_sine.h"
+#include "graphics/screen_layout.h"
 
 namespace darker::graphics {
 
@@ -47,7 +47,8 @@ void draw_sky_ground(framework::render::indexed_surface target, camera_angles co
       std::sort(cuts.begin(), cuts.begin() + count);
       auto pixels{target.row(y)};
       for(unsigned int i{1}; i < count; ++i) {
-        int const left{cuts[i - 1]}, right{cuts[i]};
+        int const left{cuts[i - 1]};
+        int const right{cuts[i]};
         double const coordinate{start + (left + (right - left - 1) / 2.0) * horizontal};
         auto const band{std::upper_bound(boundaries.begin(), boundaries.end(), coordinate) - boundaries.begin()};
         std::fill(pixels.begin() + left, pixels.begin() + right, colours[band]);

@@ -64,8 +64,11 @@ void start_edge(edge_walker &edge, std::span<screen_vertex const> const points, 
   auto a{points[edge.index]};
   screen_vertex b{};
   do {
-    if(edge.direction > 0) edge.index = edge.index + 1 == points.size() ? 0 : edge.index + 1;
-    else edge.index = edge.index == 0 ? points.size() - 1 : edge.index - 1;
+    if(edge.direction > 0) {
+      edge.index = edge.index + 1 == points.size() ? 0 : edge.index + 1;
+    } else {
+      edge.index = edge.index == 0 ? points.size() - 1 : edge.index - 1;
+    }
     b = points[edge.index];
     if(b.y > y) break;
     a = b;
@@ -140,7 +143,7 @@ void draw_flat_polygon(framework::render::indexed_surface target, std::span<scre
     return a.y < b.y;
   })};
   if(rightmost->x < 0 || lowest->y < 0 || leftmost->x > right || top->y >= bottom) return;
-  if(top->y == lowest->y) return; // no scanlines, including subpixel distant faces
+  if(top->y == lowest->y) return;                                              // no scanlines, including subpixel distant faces
   auto const index{static_cast<size_t>(top - vertices.begin())};
   auto const next{vertices[index + 1 == vertices.size() ? 0 : index + 1]};
   auto const previous{vertices[index == 0 ? vertices.size() - 1 : index - 1]};
@@ -157,7 +160,8 @@ void draw_flat_polygon(framework::render::indexed_surface target, std::span<scre
     fill(target, vertices, colour, right, blend);
     return;
   }
-  polygon_buffer first{}, second{};
+  polygon_buffer first{};
+  polygon_buffer second{};
   auto points{vertices};
   auto *output{&first};
   for(auto const plane : viewport_clip_planes(viewport)) {

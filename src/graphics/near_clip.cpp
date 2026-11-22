@@ -1,6 +1,6 @@
 #include "graphics/near_clip.h"
-#include <bit>
 #include <algorithm>
+#include <bit>
 #include <limits>
 #include <stdexcept>
 
@@ -41,7 +41,7 @@ screen_vertex project_vertex(camera_vertex const vertex, screen_vertex const &or
   auto const depth{render_geometry::wrap_coordinate(vertex.depth >> render_geometry::fraction_bits)};
   if(focal_length == render_geometry::focal_length) return {divide(vertex.horizontal, depth, origin.x), divide(vertex.vertical, depth, origin.y)};
   if(depth == 0) throw std::domain_error{"Model projection has zero depth"};
-  auto const project{[&](render_geometry::accumulator value, int centre) {
+  auto const project{[&](render_geometry::accumulator value, int centre){
     double const offset{static_cast<double>(value) * focal_length / (render_geometry::fraction_scale * static_cast<double>(depth))};
     return static_cast<render_geometry::screen_coordinate>(std::clamp(offset + centre, static_cast<double>(render_geometry::intersection_min), static_cast<double>(render_geometry::intersection_max)));
   }};
@@ -109,10 +109,12 @@ size_t clip_near_shaded_polygon(std::span<camera_vertex const> const vertices, s
   }};
   for(size_t i{0}; i < vertices.size(); ++i) {
     auto const j{(i + 1) % vertices.size()};
-    bool const current_inside{vertices[i].depth >= render_geometry::near_depth_fixed}, next_inside{vertices[j].depth >= render_geometry::near_depth_fixed};
+    bool const current_inside{vertices[i].depth >= render_geometry::near_depth_fixed};
+    bool const next_inside{vertices[j].depth >= render_geometry::near_depth_fixed};
     if(current_inside) emit(project_vertex(vertices[i], origin, focal_length), shades[i]);
     if(current_inside == next_inside) continue;
-    auto const inside{current_inside ? i : j}, outside{current_inside ? j : i};
+    auto const inside{current_inside ? i : j};
+    auto const outside{current_inside ? j : i};
     auto const depth{vertices[inside].depth >> render_geometry::fraction_bits};
     auto const divisor{static_cast<uint16_t>(2 * (depth - (vertices[outside].depth >> render_geometry::fraction_bits)))};
     auto const numerator{static_cast<uint32_t>(depth - render_geometry::near_depth) * 65536};

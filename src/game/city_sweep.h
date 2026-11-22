@@ -3,14 +3,18 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include "maths/world_coordinates.h"
 #include "game/city_map.h"
 #include "game/collision_box.h"
-#include "maths/world_coordinates.h"
 #include "resources/geometry_bank.h"
 
 namespace darker::game {
 
-enum class city_contact { none, terrain, building };
+enum class city_contact {
+  none,
+  terrain,
+  building
+};
 
 struct city_collision_result {
   city_contact contact{city_contact::none};

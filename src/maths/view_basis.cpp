@@ -22,10 +22,12 @@ struct angle_components {
 };
 
 angle_components components(uint16_t const angle, angle_precision const precision) noexcept {
-  if(precision == angle_precision::full) return {
-    .sine{render_sine(angle)},
-    .cosine{render_cosine(angle)},
-  };
+  if(precision == angle_precision::full) {
+    return {
+      .sine{render_sine(angle)},
+      .cosine{render_cosine(angle)},
+    };
+  }
   /// The camera caller rounds by fifteen before selecting a 1024-entry phase
   auto const phase{view_angle_phase(angle)};
   return {

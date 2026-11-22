@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <algorithm>
 #include <cmath>
+#include "maths/world_coordinates.h"
 #include "audio/ambient_sounds.h"
 #include "audio/world_sounds.h"
-#include "maths/world_coordinates.h"
 #include "reference/ambient_sound_samples.h"
 
 TEST_CASE("Ambient callbacks and retained-voice timing match original fixed records", "[audio][ambient]") {
@@ -106,9 +106,11 @@ TEST_CASE("Overlapping ambient sources render finite PCM through the live sound 
       return std::isfinite(sample);
     }));
     for(auto const sample : pcm) peak = std::max(peak, std::abs(sample));
-    if(clock >= 3500) CHECK(std::ranges::none_of(voices, [](auto const &note){
-      return note.active;
-    }));
+    if(clock >= 3500) {
+      CHECK(std::ranges::none_of(voices, [](auto const &note){
+        return note.active;
+      }));
+    }
   }
   CHECK(peak > 0.01f);
   CHECK(peak < 1.0f);

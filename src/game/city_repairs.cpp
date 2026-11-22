@@ -33,8 +33,9 @@ void add_objectives(city_cell_set &targets, std::span<resources::scenario_cell_l
 void delphi_collateral_damage::record_player_destruction(unsigned int const index, city_cell const &before) {
   /// Record only a new player-caused destruction, preserving damage already supplied by enemies or the scenario
   if(before.state & delphi_damage_bit) return;
-  if(index == headquarters_cell && before.type == 17) headquarters_destroyed = true;
-  else if(repairable_service(before.type)) service_repairs.set(index);
+  if(index == headquarters_cell && before.type == 17) {
+    headquarters_destroyed = true;
+  } else if(repairable_service(before.type)) service_repairs.set(index);
 }
 
 void delphi_collateral_damage::record_power_loss(city_map const &cells, unsigned int const destroyed_cell) {
@@ -93,11 +94,11 @@ city_cell_set scripted_destruction_targets(resources::scenario_record const &rec
     if(root < record.shared.offset || root - record.shared.offset >= program.size()) throw std::invalid_argument{"Building repair script starts outside its shared section"};
     auto cursor{root - record.shared.offset};
     bool altitude_hold{false};
-    auto const byte{[&] {
+    auto const byte{[&]{
       if(cursor >= program.size()) throw std::invalid_argument{"Building repair script is truncated"};
       return std::to_integer<uint8_t>(program[cursor++]);
     }};
-    auto const cell_list{[&] {
+    auto const cell_list{[&]{
       resources::scenario_cell_list list;
       for(;;) {
         auto const column{byte()};
@@ -117,24 +118,24 @@ city_cell_set scripted_destruction_targets(resources::scenario_record const &rec
       visited[cursor][altitude_hold] = true;
       auto const opcode{byte()};
       if(opcode >= 128) continue;                                              // one-byte animation parameter
-      if(opcode == 0x08 || opcode == 0x23 || opcode == 0x24) break;              // retirement, stop, or retained actor owner
+      if(opcode == 0x08 || opcode == 0x23 || opcode == 0x24) break;            // retirement, stop, or retained actor owner
       if(opcode == 0x25) {
         auto const displacement{std::bit_cast<int8_t>(byte())};
         auto const destination{static_cast<ptrdiff_t>(cursor) + displacement};
         if(destination < 0 || static_cast<size_t>(destination) >= program.size()) throw std::invalid_argument{"Building repair branch leaves its shared section"};
         cursor = static_cast<size_t>(destination);
-      } else if(opcode == 0x1d) {                                             // wait for a cell's type/state flags
+      } else if(opcode == 0x1d) {                                              // wait for a cell's type/state flags
         auto const column{byte()};
         auto const row{byte()};
         auto const mask{byte()};
         auto const tested_bits{mask & 128 ? static_cast<uint8_t>(~mask) : mask};
         if(row >= city_map_size.row) throw std::invalid_argument{"Building repair wait lies outside the city"};
         if((column & 1) && (tested_bits & delphi_damage_bit)) targets.set(city_cell_index(column >> 1, row));
-      } else if(opcode == 0x34) {                                             // replace marked and unmarked building objective lists
+      } else if(opcode == 0x34) {                                              // replace marked and unmarked building objective lists
         std::array const lists{cell_list(), cell_list()};
         add_objectives(targets, lists, lists[0].terminator == 254 ? 0 : 1);
       } else if(opcode == 0x35) {
-        cell_list();                                                         // aircraft spawning sites are not destruction objectives
+        cell_list();                                                           // aircraft spawning sites are not destruction objectives
       } else if(opcode == 0x38) {
         altitude_hold = !altitude_hold;
         if(altitude_hold) {

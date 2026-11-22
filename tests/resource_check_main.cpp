@@ -10,6 +10,7 @@
 #include <string>
 #include <utility>
 #include <boost/program_options.hpp>
+#include "maths/world_coordinates.h"
 #include "actor_flight_check.h"
 #include "building_combat_check.h"
 #include "camera_target_check.h"
@@ -21,7 +22,6 @@
 #include "graphics/city_scene.h"
 #include "graphics/model_renderer.h"
 #include "hangar_flight_check.h"
-#include "maths/world_coordinates.h"
 #include "mission_combat_check.h"
 #include "music_check.h"
 #include "nightmare_check.h"
@@ -173,18 +173,21 @@ auto main(int const argc, char const *const argv[])->int try {
           },
           .speed{1500}
         };
-        if(input[0] == 25) player.craft = darker::game::caero_flight_state{
-          .pose{pose},
-          .horizontal_velocity{1500},
-          .flying{true}
-        };
-        else player.craft = darker::game::skimma_flight_state{
-          .pose{pose},
-          .damage{
-            .shield_charge{0xbf00}
-          },
-          .horizontal_velocity{1500}
-        };
+        if(input[0] == 25) {
+          player.craft = darker::game::caero_flight_state{
+            .pose{pose},
+            .horizontal_velocity{1500},
+            .flying{true}
+          };
+        } else {
+          player.craft = darker::game::skimma_flight_state{
+            .pose{pose},
+            .damage{
+              .shield_charge{0xbf00}
+            },
+            .horizontal_velocity{1500}
+          };
+        }
         player.upgraded = input[0] == 27;
         player.engine_flags = static_cast<uint8_t>(input[3]);
         player.forward_setting = 256;
@@ -376,8 +379,10 @@ auto main(int const argc, char const *const argv[])->int try {
       sample.near ? darker::graphics::model_path::near_clipped : darker::graphics::model_path::direct, animation);
     uint64_t fingerprint{0xcbf29ce484222325};
     for(auto const pixel : frame.pixels) fingerprint = (fingerprint ^ pixel) * 0x100000001b3;
-    if(fingerprint != sample.fingerprint) throw std::runtime_error{std::format("Model effect differs from native reference: bank {}, type {}, heading {}, gate {}, clock {}, near {} (got {:016x}, expected {:016x})",
-      sample.slot, sample.type, sample.heading, sample.gate, sample.clock, sample.near, fingerprint, sample.fingerprint)};
+    if(fingerprint != sample.fingerprint) {
+      throw std::runtime_error{std::format("Model effect differs from native reference: bank {}, type {}, heading {}, gate {}, clock {}, near {} (got {:016x}, expected {:016x})",
+        sample.slot, sample.type, sample.heading, sample.gate, sample.clock, sample.near, fingerprint, sample.fingerprint)};
+    }
   }
   for(auto const &sample : darker::test_reference::city_frame_samples) {
     darker::resources::geometry_bank const bank{archives.load({
@@ -428,9 +433,11 @@ auto main(int const argc, char const *const argv[])->int try {
     auto const count{scene.draw(frame, bank, cells, view, sample.slot == 30 ? 0x20 : 0x60, lighting, animation)};
     uint64_t fingerprint{0xcbf29ce484222325};
     for(auto const pixel : frame.pixels) fingerprint = (fingerprint ^ pixel) * 0x100000001b3;
-    if(count != sample.count || fingerprint != sample.frame) throw std::runtime_error{std::format(
-      "City frame differs from native reference: bank {}, column {}, row {} (count {}/{}, frame {:016x}/{:016x})",
-      sample.slot, sample.column, sample.row, count, sample.count, fingerprint, sample.frame)};
+    if(count != sample.count || fingerprint != sample.frame) {
+      throw std::runtime_error{std::format(
+        "City frame differs from native reference: bank {}, column {}, row {} (count {}/{}, frame {:016x}/{:016x})",
+        sample.slot, sample.column, sample.row, count, sample.count, fingerprint, sample.frame)};
+    }
   }
   std::cout << std::format("{} complete city frames and initial maps match native execution.", darker::test_reference::city_frame_samples.size()) << std::endl;
   std::cout << std::format("{} complete model effect frames match native drawing.", darker::test_reference::model_effect_samples.size()) << std::endl;

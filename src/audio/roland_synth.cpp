@@ -85,7 +85,7 @@ void roland_synth::send(midi_message const message) noexcept {
     auto const command{message.status & 0xf0};
     if((command == 0x80 || command == 0x90) && message.first < state->unmapped.size() && state->unmapped[message.first]) {
       state->percussion->send(message);
-      return; // This note belongs to the supplementary bank, not an unmapped main-device key.
+      return;                                                                  // This note belongs to the supplementary bank, not an unmapped main-device key.
     }
     if(command == 0xb0 || command == 0xe0) state->percussion->send(message);
   }

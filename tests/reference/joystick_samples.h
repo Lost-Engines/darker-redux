@@ -5,7 +5,7 @@
 #include <array>
 
 namespace darker::test_reference {
-inline constexpr std::array<std::array<int, 8>, 256> joystick_samples{{
+inline std::array<std::array<int, 8>, 256> constexpr joystick_samples{{
   {0, 0, 0, 100, 0, 0, 0, 0},
   {0, 2047, -2047, 16, 0, 0, 0, 0},
   {0, 2048, -2048, 32, 0, 0, 0, 0},

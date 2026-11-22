@@ -53,8 +53,11 @@ TEST_CASE("Flat model bytecode reproduces complete native indexed frames", "[gra
     darker::graphics::draw_model(workspace, frame, std::span{bytes}.first(sample.size), 0, parameters, colours);
     uint64_t fingerprint{0xcbf29ce484222325};
     for(auto const pixel : frame.pixels) fingerprint = (fingerprint ^ pixel) * 0x100000001b3;
-    if(wide_near_comparison) REQUIRE(std::ranges::all_of(frame.pixels, [](auto pixel){ return pixel == 0; }));
-    else REQUIRE(fingerprint == sample.fingerprint);
+    if(wide_near_comparison) {
+      REQUIRE(std::ranges::all_of(frame.pixels, [](auto pixel){return pixel == 0;}));
+    } else {
+      REQUIRE(fingerprint == sample.fingerprint);
+    }
     ++case_index;
   }
 }
@@ -74,22 +77,26 @@ TEST_CASE("Reused model storage does not make previous vertices valid", "[graphi
 
   // A second model tries to reuse three vertices without emitting any of its own.
   std::array<std::byte, 17> invalid{};
-  invalid[11] = std::byte{0x02};                                                // flat triangle
-  invalid[12] = std::byte{1};                                                   // colour
+  invalid[11] = std::byte{0x02};                                               // flat triangle
+  invalid[12] = std::byte{1};                                                  // colour
   invalid[13] = std::byte{0};
   invalid[14] = std::byte{1};
   invalid[15] = std::byte{2};
-  invalid[16] = std::byte{0x0d};                                                // return
+  invalid[16] = std::byte{0x0d};                                               // return
   REQUIRE_THROWS_AS(darker::graphics::draw_model(workspace, frame, invalid, 0, projection, {}), std::invalid_argument);
 }
 
 TEST_CASE("City light minimum enlarges distant discs without shrinking nearby discs", "[graphics][models]") {
-  using namespace darker::graphics;
+  using darker::graphics::draw_model;
+  using darker::graphics::model_colours;
+  using darker::graphics::model_path;
+  using darker::graphics::model_shading;
+  using darker::graphics::projection_parameters;
   std::array<std::byte, 17> model{};
-  model[11] = std::byte{0x97};                                                  // emit the origin
-  model[12] = std::byte{0x22};                                                  // disc consuming that vertex
+  model[11] = std::byte{0x97};                                                 // emit the origin
+  model[12] = std::byte{0x22};                                                 // disc consuming that vertex
   model[13] = std::byte{1};
-  model[14] = std::byte{1};                                                     // radius numerator 1: projects to a single pixel
+  model[14] = std::byte{1};                                                    // radius numerator 1: projects to a single pixel
   model[16] = std::byte{0x0d};
   model_colours colours{};
   colours.shades[1] = 7;
@@ -99,7 +106,7 @@ TEST_CASE("City light minimum enlarges distant discs without shrinking nearby di
     },
     .origin{160, 100},
   };
-  auto const render{[&](unsigned int const minimum, model_path const path) {
+  auto const render{[&](unsigned int const minimum, model_path const path){
     framework::render::indexed_cockpit_framebuffer frame{};
     draw_model(frame, model, 0, projection, colours, {}, path, {}, model_shading::flat, minimum);
     return frame;
@@ -109,7 +116,7 @@ TEST_CASE("City light minimum enlarges distant discs without shrinking nearby di
     CHECK(std::ranges::count(native.pixels, 7) == 1);
     auto const enlarged{render(3, path)};
     CHECK(std::ranges::count(enlarged.pixels, 7) > 1);
-    model[15] = std::byte{8};                                                   // radius numerator 2049: larger than the minimum
+    model[15] = std::byte{8};                                                  // radius numerator 2049: larger than the minimum
     auto const large{render(0, path)};
     auto const large_with_minimum{render(3, path)};
     CHECK(large.pixels == large_with_minimum.pixels);
@@ -118,11 +125,15 @@ TEST_CASE("City light minimum enlarges distant discs without shrinking nearby di
 }
 
 TEST_CASE("Streetlight discs retain the DOS colour ramp at zero beacon power", "[graphics][models]") {
-  using namespace darker::graphics;
+  using darker::graphics::draw_model;
+  using darker::graphics::model_colours;
+  using darker::graphics::model_path;
+  using darker::graphics::model_shading;
+  using darker::graphics::projection_parameters;
   std::array<std::byte, 17> model{};
   model[11] = std::byte{0x97};
   model[12] = std::byte{0x22};
-  model[13] = std::byte{28};                                                    // streetlight's authored dynamic colour
+  model[13] = std::byte{28};                                                   // streetlight's authored dynamic colour
   model[14] = std::byte{1};
   model[16] = std::byte{0x0d};
   projection_parameters const projection{
@@ -139,7 +150,7 @@ TEST_CASE("Streetlight discs retain the DOS colour ramp at zero beacon power", "
         framework::render::indexed_cockpit_framebuffer frame{};
         frame.pixels.fill(99);
         model_colours colours{};
-        colours.shades.back() = 1;                                              // distant, fully fog-darkened ramp
+        colours.shades.back() = 1;                                             // distant, fully fog-darkened ramp
         colours.dynamic = static_cast<uint8_t>(0xf0 | strength);
         draw_model(frame, model, 0, projection, colours, {}, path, {}, model_shading::flat, minimum);
         CHECK(frame.pixels[100 * 320 + 160] == expected[strength]);
@@ -149,7 +160,10 @@ TEST_CASE("Streetlight discs retain the DOS colour ramp at zero beacon power", "
 }
 
 TEST_CASE("Fountain lamps retain luminous shading while reflections stay dim", "[graphics][models]") {
-  using namespace darker::graphics;
+  using darker::graphics::draw_model;
+  using darker::graphics::model_colours;
+  using darker::graphics::model_path;
+  using darker::graphics::projection_parameters;
   std::array<std::byte, 17> model{};
   model[11] = std::byte{0x97};
   model[12] = std::byte{0x22};
@@ -166,21 +180,26 @@ TEST_CASE("Fountain lamps retain luminous shading while reflections stay dim", "
       model_colours colours{};
       colours.shades.fill(1);
       colours.dynamic = static_cast<uint8_t>(0xf0 | power);
-      auto const pixel{[&](uint8_t const source) {
+      auto const pixel{[&](uint8_t const source){
         model[13] = std::byte{source};
         framework::render::indexed_cockpit_framebuffer frame{};
         draw_model(frame, model, 0, projection, colours, {}, path);
         return frame.pixels[100 * 320 + 160];
       }};
-      CHECK(pixel(27) == 17);                                                   // full-strength luminous colour at maximum natural darkening
-      CHECK(pixel(147) == 129);                                                 // original purple reflection ramp, ordinarily shaded
+      CHECK(pixel(27) == 17);                                                  // full-strength luminous colour at maximum natural darkening
+      CHECK(pixel(147) == 129);                                                // original purple reflection ramp, ordinarily shaded
       if(power == 15) CHECK(pixel(27) == pixel(28));
     }
   }
 }
 
 TEST_CASE("Light-spill models blend only upward ground faces", "[graphics][models][light-spill]") {
-  using namespace darker::graphics;
+  using darker::graphics::draw_model;
+  using darker::graphics::lighten_blend;
+  using darker::graphics::model_colours;
+  using darker::graphics::model_path;
+  using darker::graphics::model_workspace;
+  using darker::graphics::projection_parameters;
   framework::render::colour_palette palette{};
   palette[1] = framework::render::rgba_pixel{200, 200, 200, 255};
   palette[2] = framework::render::rgba_pixel{50, 50, 50, 255};
@@ -206,18 +225,18 @@ TEST_CASE("Light-spill models blend only upward ground faces", "[graphics][model
       for(auto const path : {model_path::direct, model_path::near_clipped}) {
         CAPTURE(ground, upward, path);
         std::vector<std::byte> model(11);
-        auto byte = [&](unsigned int value) { model.push_back(static_cast<std::byte>(value)); };
-        auto word = [&](int value) {
+        auto byte{[&](unsigned int value){model.push_back(static_cast<std::byte>(value));}};
+        auto word{[&](int value){
           byte(static_cast<uint16_t>(value) & 255);
           byte(static_cast<uint16_t>(value) >> 8);
-        };
+        }};
         for(auto const &point : std::array{vec2<int>{-40, -40}, vec2<int>{40, -40}, vec2<int>{40, 40}, vec2<int>{-40, 40}}) {
-          byte(0x8e);                                                           // set C, A, B and emit
+          byte(0x8e);                                                          // set C, A, B and emit
           word(ground ? 0 : -100);
           word(point.x);
           word(point.y);
         }
-        byte(0x03);                                                             // flat quad
+        byte(0x03);                                                            // flat quad
         byte(2);
         for(unsigned int i{0}; i < 4; ++i) byte(upward ? i : 3 - i);
         byte(0x0d);
@@ -227,8 +246,11 @@ TEST_CASE("Light-spill models blend only upward ground faces", "[graphics][model
         facing_projection.axes[0].horizontal = upward ? 16384 : -16384;
         draw_model(workspace, frame, model, 0, facing_projection, colours, {}, path);
         auto const changed{std::ranges::count(frame.pixels, 2)};
-        if(ground && upward) REQUIRE(changed == 0);
-        else REQUIRE(changed > 0);
+        if(ground && upward) {
+          REQUIRE(changed == 0);
+        } else {
+          REQUIRE(changed > 0);
+        }
       }
     }
   }

@@ -25,8 +25,11 @@ public:
 };
 
 inline void fill_polygon_span(std::span<uint8_t> pixels, uint8_t colour, lighten_blend const *blend) {
-  if(!blend) std::ranges::fill(pixels, colour);
-  else for(auto &pixel : pixels) pixel = (*blend)(colour, pixel);
+  if(!blend) {
+    std::ranges::fill(pixels, colour);
+  } else {
+    for(auto &pixel : pixels) pixel = (*blend)(colour, pixel);
+  }
 }
 
 } // namespace darker::graphics

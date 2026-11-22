@@ -2,14 +2,14 @@
 #include <algorithm>
 #include <bit>
 #include <stdexcept>
+#include "vectorstorm/vector/vector2.h"
+#include "maths/angle.h"
+#include "maths/direction.h"
 #include "game/actor_motion.h"
 #include "game/city_map.h"
 #include "game/object_definitions.h"
-#include "game/player_flight.h"
-#include "maths/direction.h"
-#include "maths/angle.h"
-#include "vectorstorm/vector/vector2.h"
 #include "game/player_flags.h"
+#include "game/player_flight.h"
 
 namespace darker::game {
 namespace {
@@ -18,7 +18,8 @@ int constexpr pad_surface_height{264};
 
 uint16_t approach_word(uint16_t const value, uint16_t const target, uint16_t const step) noexcept {
   /// 7CDB compares signed words before and after a wrapping add or subtract
-  auto const current{std::bit_cast<int16_t>(value)}, desired{std::bit_cast<int16_t>(target)};
+  auto const current{std::bit_cast<int16_t>(value)};
+  auto const desired{std::bit_cast<int16_t>(target)};
   bool const below{current < desired};
   auto const next{std::bit_cast<int16_t>(static_cast<uint16_t>(below ? value + step : value - step))};
   return static_cast<uint16_t>(below ? std::min(next, desired) : std::max(next, desired));

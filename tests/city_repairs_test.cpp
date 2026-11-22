@@ -42,10 +42,15 @@ TEST_CASE("Delphi collateral preserves weapon and protected-surface rules", "[ga
   auto const flags{static_cast<uint8_t>(marked ? game::city_cell::permitted_target : 0)};
   bool const native{game::projectile_damages_building(slot, category, flags, linked)};
   bool const redux{game::projectile_damages_building(slot, category, flags, linked, true)};
-  if(!linked || category == game::collision_category::protected_surface || (slot < 10 && category == game::collision_category::diffuser)) CHECK_FALSE(redux);
-  else if(category == game::collision_category::fragile) CHECK(redux);
-  else if(slot == 5) CHECK(redux);                                              // Brent Ground no longer needs authorisation
-  else CHECK(redux == native);
+  if(!linked || category == game::collision_category::protected_surface || (slot < 10 && category == game::collision_category::diffuser)) {
+    CHECK_FALSE(redux);
+  } else if(category == game::collision_category::fragile) {
+    CHECK(redux);
+  } else if(slot == 5) {
+    CHECK(redux);                                                              // Brent Ground no longer needs authorisation
+  } else {
+    CHECK(redux == native);
+  }
 }
 
 TEST_CASE("Delphi ground weapons can fire unguided without inventing a target", "[game][weapons][collateral]") {
@@ -71,13 +76,15 @@ TEST_CASE("Delphi ground weapons can fire unguided without inventing a target", 
     CHECK(result.shot->target_token == target);
     CHECK(result.shot->parameters.update_entry == (target == 0xffff ? game::object_update::direct_projectile : game::object_update::homing_projectile));
     CHECK(energy.reserve < 0xffff);
-  } else CHECK(energy.reserve == 0xffff);
+  } else {
+    CHECK(energy.reserve == 0xffff);
+  }
 }
 
 TEST_CASE("Service repairs retain other destruction and never repair authored damage", "[game][collateral]") {
   game::city_map cells{};
   game::delphi_collateral_damage damage;
-  auto const destroy{[&](unsigned int const index, uint8_t const type, uint8_t const state, bool const by_player) {
+  auto const destroy{[&](unsigned int const index, uint8_t const type, uint8_t const state, bool const by_player){
     cells[index] = {
       .type{type},
       .state{state},
@@ -85,10 +92,10 @@ TEST_CASE("Service repairs retain other destruction and never repair authored da
     if(by_player) damage.record_player_destruction(index, cells[index]);
     cells[index].state |= game::delphi_damage_bit;
   }};
-  destroy(0, 12, 0xc7, true);                                                   // player-damaged radar: preserve variant/open/authorisation bits
-  destroy(1, 12, 0x45, false);                                                  // enemy-damaged radar: keep the wreck
-  destroy(2, 12, 0x65, true);                                                   // already destroyed before the player's hit
-  destroy(3, 48, 0, true);                                                      // optional tank: permanent damage, no target marker
+  destroy(0, 12, 0xc7, true);                                                  // player-damaged radar: preserve variant/open/authorisation bits
+  destroy(1, 12, 0x45, false);                                                 // enemy-damaged radar: keep the wreck
+  destroy(2, 12, 0x65, true);                                                  // already destroyed before the player's hit
+  destroy(3, 48, 0, true);                                                     // optional tank: permanent damage, no target marker
   destroy(4, 17, 0, true);
   destroy(5, 21, 0x40, true);
   damage.repair_services(cells);
@@ -101,7 +108,7 @@ TEST_CASE("Service repairs retain other destruction and never repair authored da
   CHECK_FALSE(damage.headquarters_lost());
   cells[0].state |= game::delphi_damage_bit;
   damage.repair_services(cells);
-  CHECK(cells[0].state == 0xe7);                                                // old repair tracking cannot undo a later authored event
+  CHECK(cells[0].state == 0xe7);                                               // old repair tracking cannot undo a later authored event
 }
 
 TEST_CASE("Hemmersan destruction fails only when the player newly destroys its entrance", "[game][collateral]") {
@@ -111,7 +118,7 @@ TEST_CASE("Hemmersan destruction fails only when the player newly destroys its e
     .type{17},
     .state{0x20},
   });
-  CHECK_FALSE(damage.headquarters_lost());                                      // mission 115's authored ruins are not player sabotage
+  CHECK_FALSE(damage.headquarters_lost());                                     // mission 115's authored ruins are not player sabotage
   damage.record_player_destruction(home, {
     .type{86},
   });
@@ -146,21 +153,21 @@ TEST_CASE("A player-damaged destination hangar is repaired on capture", "[game][
   player.pose().angles.heading = 0x8000;
   REQUIRE(game::begin_hangar_return(player, cells, hangar, true));
   damage.repair_return_hangar(cells, hangar.return_site);
-  CHECK(cells[index].state == 0x80);                                            // landing opened the gate; repair removes only damage
+  CHECK(cells[index].state == 0x80);                                           // landing opened the gate; repair removes only damage
   CHECK(hangar.returning == game::hangar_return_phase::approaching);
 }
 
 TEST_CASE("Script dependencies distinguish required destruction from mere permission", "[game][scenario][collateral]") {
   auto const program{bytes({
-    0x38, 0, 2, 0x38,                                                           // two altitude toggles with asymmetric operands
-    0x1d, 3, 2, 0x20,                                                           // wait for (1,2) state damage
-    0x1d, 5, 2, 0xdf,                                                           // wait for (2,2) state undamaged
-    0x1d, 7, 2, 0x40,                                                           // permission-only wait
-    0x1d, 8, 2, 0x20,                                                           // type test, not damage
-    0x34, 5, 2, 255, 6, 2, 255,                                                 // marked optional (5,2), required unmarked (6,2)
-    0x34, 7, 2, 254, 8, 2, 255,                                                 // both lists required
-    0x35, 9, 2, 255,                                                            // spawning-site list
-    0x25, 0xfe,                                                                 // branch to itself, never read the dead bytes below
+    0x38, 0, 2, 0x38,                                                          // two altitude toggles with asymmetric operands
+    0x1d, 3, 2, 0x20,                                                          // wait for (1,2) state damage
+    0x1d, 5, 2, 0xdf,                                                          // wait for (2,2) state undamaged
+    0x1d, 7, 2, 0x40,                                                          // permission-only wait
+    0x1d, 8, 2, 0x20,                                                          // type test, not damage
+    0x34, 5, 2, 255, 6, 2, 255,                                                // marked optional (5,2), required unmarked (6,2)
+    0x34, 7, 2, 254, 8, 2, 255,                                                // both lists required
+    0x35, 9, 2, 255,                                                           // spawning-site list
+    0x25, 0xfe,                                                                // branch to itself, never read the dead bytes below
     0x1d, 21, 2, 0x20, 0x23,
   })};
   resources::scenario_record record{
@@ -223,7 +230,7 @@ TEST_CASE("Repairs follow actor programs and preserve beacon power and explicit 
   CHECK(cells[game::city_cell_index(2, 2)].state == 0xc3);
   game::apply_scenario_cells(cells, record);
   CHECK(cells[game::city_cell_index(2, 2)].state == 0xe3);
-  record.configuration = 2;                                                     // Halon remains unchanged
+  record.configuration = 2;                                                    // Halon remains unchanged
   game::repair_scenario_buildings(cells, record, program);
   CHECK(cells[game::city_cell_index(2, 2)].state == 0xe3);
   record.groups[1].objects[0].form = resources::placement_form::compact_special;
@@ -295,7 +302,7 @@ TEST_CASE("Actual Delphi projectile hits preserve targeting and track repairable
     for(unsigned int const x : {2, 4, 6, 7}) {
       for(unsigned int const y : {2, 4, 6, 7}) {
         for(unsigned int const z : {2, 4, 6, 7}) {
-          auto const point{[&](unsigned int const axis, unsigned int const fraction) {
+          auto const point{[&](unsigned int const axis, unsigned int const fraction){
             return static_cast<uint16_t>(box.bounds.min[axis] + (box.bounds.max[axis] - box.bounds.min[axis]) * fraction / 8);
           }};
           darker::maths::world_position const start{
@@ -328,7 +335,7 @@ TEST_CASE("Actual Delphi projectile hits preserve targeting and track repairable
     .lifetime{1000},
   })};
   REQUIRE(shot);
-  shot->placement.position = *impact;                                           // test a known surface contact independently of muzzle offsets
+  shot->placement.position = *impact;                                          // test a known surface contact independently of muzzle offsets
   shot->parameters.update_entry = game::object_update::direct_projectile;
   combat.advance(player, cells, bank, {
     .elapsed_ticks{8},

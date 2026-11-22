@@ -1,11 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <array>
 #include <bit>
-#include "game/object_deadline.h"
+#include "maths/world_coordinates.h"
 #include "game/aircraft_combat.h"
 #include "game/mission_combat.h"
+#include "game/object_deadline.h"
 #include "game/object_definitions.h"
-#include "maths/world_coordinates.h"
 #include "reference/aircraft_bomb_samples.h"
 #include "reference/aircraft_combat_samples.h"
 #include "reference/aircraft_fire_samples.h"
@@ -169,7 +169,11 @@ TEST_CASE("Aircraft bomb drops match native target, cooldown and exhausted-pool 
 }
 
 TEST_CASE("Falling wrecks survive their original deadline until impact, including clock wrap", "[combat][wrecks]") {
-  using namespace darker::game;
+  using darker::game::advance_actor_deadline;
+  using darker::game::advance_falling_aircraft;
+  using darker::game::clock_tick;
+  using darker::game::object_update;
+  using darker::game::scenario_actor;
   scenario_actor wreck;
   wreck.parameters.update_entry = object_update::falling_aircraft;
   wreck.flags = 0x20;
@@ -199,7 +203,10 @@ TEST_CASE("Falling wrecks survive their original deadline until impact, includin
 }
 
 TEST_CASE("Scripted departures and already impacted wrecks retain timed removal", "[combat][wrecks]") {
-  using namespace darker::game;
+  using darker::game::actor_category;
+  using darker::game::advance_actor_deadline;
+  using darker::game::object_update;
+  using darker::game::scenario_actor;
   for(auto const callback : {object_update::departing_aircraft, object_update::effect_only, object_update::falling_aircraft}) {
     scenario_actor actor;
     actor.parameters.update_entry = callback;

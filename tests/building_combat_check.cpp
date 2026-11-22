@@ -4,15 +4,15 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include "maths/direction.h"
+#include "maths/sine_table.h"
+#include "maths/world_coordinates.h"
 #include "game/beacon_changes.h"
 #include "game/city_collision.h"
 #include "game/hangar.h"
 #include "game/mission_combat.h"
 #include "game/projectile_steering.h"
 #include "game/scenario_world.h"
-#include "maths/direction.h"
-#include "maths/sine_table.h"
-#include "maths/world_coordinates.h"
 #include "presentation/player.h"
 #include "resources/archive_set.h"
 #include "resources/campaign.h"
@@ -161,7 +161,8 @@ void check_building_combat(darker::resources::archive_set const &archives) {
           .row{aim.position.row},
           .height{static_cast<uint16_t>(aim.height - aim.height_extent / 2)}
         };
-        std::array<int, 4> constexpr columns{0, 200, 0, -200}, rows{200, 0, -200, 0};
+        std::array<int, 4> constexpr columns{0, 200, 0, -200};
+        std::array<int, 4> constexpr rows{200, 0, -200, 0};
         auto const approach{test.stage >= 54 ? (clock / 2048) % 4 : 0};
         player.pose().position = {
           .column{static_cast<uint16_t>(centre[0] + columns[approach])},
@@ -189,7 +190,7 @@ void check_building_combat(darker::resources::archive_set const &archives) {
           point[along] = static_cast<uint16_t>((point[along] + nearer) / 2);
           point[2] *= 8;
           player.pose().position = point;
-          for(size_t axis{0}; axis < 2; ++axis) player.pose().position[axis] = static_cast<uint16_t>(centre[axis] + static_cast<int>(2 + (clock / 2048) % 5) * (int{point[axis]}- centre[axis]));
+          for(size_t axis{0}; axis < 2; ++axis) player.pose().position[axis] = static_cast<uint16_t>(centre[axis] + static_cast<int>(2 + (clock / 2048) % 5) * (int{point[axis]} - centre[axis]));
           player.pose().position.height += 92;
           direction = darker::maths::object_target_direction(player.pose().position, centre);
         }
@@ -240,7 +241,7 @@ void check_building_combat(darker::resources::archive_set const &archives) {
       context.messages.clear();
       darker::game::advance_mission_script(script, context);
       for(auto const &event : context.messages) {
-        std::string const text{reinterpret_cast<char const*>(event.text.data() + event.offset), event.length};
+        std::string const text{reinterpret_cast<char const *>(event.text.data() + event.offset), event.length};
         message |= text == test.message;
       }
       if(script.stopped && message && context.objectives_complete) break;

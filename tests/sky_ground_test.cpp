@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
-#include <cstdint>
 #include <algorithm>
+#include <cstdint>
 #include <vector>
 #include "graphics/sky_ground.h"
 #include "reference/sky_ground_samples.h"
@@ -24,7 +24,9 @@ TEST_CASE("Sky and ground bands match native horizon projection", "[graphics][ba
 }
 
 TEST_CASE("Sky rendering respects runtime dimensions and padded row stride", "[graphics][background]") {
-  int constexpr width{853}, height{479}, stride{864};
+  int constexpr width{853};
+  int constexpr height{479};
+  int constexpr stride{864};
   uint8_t constexpr untouched{255};
   std::vector<uint8_t> pixels(stride * (height + 1), untouched);
   framework::render::indexed_surface const surface{pixels, width, height, stride};
@@ -43,8 +45,9 @@ TEST_CASE("Sky rendering respects runtime dimensions and padded row stride", "[g
 }
 
 TEST_CASE("Wide views retain the horizon beyond the native pitch cutoffs", "[graphics][background]") {
-  int constexpr width{960}, height{540};
-  std::vector<uint8_t> pixels(width * height);
+  int constexpr width{960};
+  int constexpr height{540};
+  std::vector<uint8_t> pixels(width *height);
   framework::render::indexed_surface const surface{pixels, width, height, width};
   for(auto const pitch : {8192u, 12288u, 53248u, 57344u}) {
     for(auto const roll : {0u, 16384u, 32768u, 49152u}) {
@@ -62,13 +65,15 @@ TEST_CASE("Wide views retain the horizon beyond the native pitch cutoffs", "[gra
       .pitch{static_cast<uint16_t>(pitch)},
     }, {width / 2, height / 2}, height, 80);
     uint8_t const expected{pitch == 16384 ? uint8_t{28} : uint8_t{127}};
-    CHECK(std::ranges::all_of(pixels, [expected](uint8_t value) { return value == expected; }));
+    CHECK(std::ranges::all_of(pixels, [expected](uint8_t value){return value == expected;}));
   }
 }
 
 TEST_CASE("High resolution horizon moves within a single original angle phase", "[graphics][background]") {
-  int constexpr width{960}, height{1080};
-  std::vector<uint8_t> first(width * height), second(width * height);
+  int constexpr width{960};
+  int constexpr height{1080};
+  std::vector<uint8_t> first(width *height);
+  std::vector<uint8_t> second(width *height);
   darker::graphics::draw_sky_ground({first, width, height, width}, {}, {width / 2, height / 2}, height, 1152);
   darker::graphics::draw_sky_ground({second, width, height, width}, {.pitch{16}}, {width / 2, height / 2}, height, 1152);
   CHECK(first != second);

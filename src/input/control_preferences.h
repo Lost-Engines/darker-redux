@@ -74,7 +74,7 @@ struct control_preferences {
   std::optional<control_action> action_for_key(int key) const noexcept;
   int command_key(int physical_key) const noexcept;
   int binding_for_command(int command_key) const noexcept;
-  bool operator==(control_preferences const&) const = default;
+  bool operator==(control_preferences const &) const = default;
 };
 
 class mouse_motion {

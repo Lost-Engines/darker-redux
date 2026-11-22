@@ -2,16 +2,16 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <algorithm>
 #include <cmath>
+#include "maths/world_coordinates.h"
 #include "audio/flight_sounds.h"
-#include "resources/archive_set.h"
 #include "audio/world_sounds.h"
 #include "game/object_definitions.h"
-#include "maths/world_coordinates.h"
 #include "reference/object_sound_samples.h"
 #include "reference/sound_pool_samples.h"
 #include "reference/stereo_samples.h"
 #include "reference/voice_allocation_samples.h"
 #include "reference/world_sound_samples.h"
+#include "resources/archive_set.h"
 
 TEST_CASE("World sound admission and Doppler match native arithmetic", "[audio]") {
   /// Check wrapping positions, rejected distances and the original directional speed factors
@@ -209,12 +209,14 @@ TEST_CASE("Physical sound channels match consecutive native allocation frames", 
   darker::audio::voice_allocation allocator;
   for(auto const &sample : darker::test_reference::voice_allocation) {
     std::vector<darker::audio::sound_candidate> candidates;
-    for(size_t i{0}; i < sample[0]; ++i) candidates.push_back({sample[1 + i * 2],
-      {
-        .pitch{400},
-        .level{static_cast<uint16_t>(sample[2 + i * 2])},
-        .active{true}
-      }});
+    for(size_t i{0}; i < sample[0]; ++i) {
+      candidates.push_back({sample[1 + i * 2],
+        {
+          .pitch{400},
+          .level{static_cast<uint16_t>(sample[2 + i * 2])},
+          .active{true}
+        }});
+    }
     auto const frame{allocator.allocate(candidates)};
     for(size_t i{0}; i < frame.size(); ++i) {
       CHECK(allocator.identities()[i] == sample[49 + i]);
@@ -229,16 +231,18 @@ TEST_CASE("Rejected transient sounds retire instead of restarting later", "[audi
   combat.effects.spawn(0x7319, {0, 0, 0}, 0);
   darker::audio::world_sounds mixer;
   std::array<darker::game::effect_sound, 9> louder{};
-  for(size_t i{0}; i < louder.size(); ++i) louder[i] = {
-    .definition{
-      .duration{0},
-      .pitch{400},
-      .level{65535},
-      .patch{0},
-      .flags{2}
-    },
-    .identity{static_cast<uint32_t>(i * 65536 + 1)}
-  };
+  for(size_t i{0}; i < louder.size(); ++i) {
+    louder[i] = {
+      .definition{
+        .duration{0},
+        .pitch{400},
+        .level{65535},
+        .patch{0},
+        .flags{2}
+      },
+      .identity{static_cast<uint32_t>(i * 65536 + 1)}
+    };
+  }
   mixer.mix({}, combat, {}, 0, louder);
   REQUIRE_FALSE(combat.effects.sounds().empty());
   auto const frame{mixer.mix({}, combat, {})};
@@ -319,7 +323,9 @@ TEST_CASE("Stereo carrier levels produce independent PCM without altering centre
     }
     return result;
   }};
-  auto const left{energy({0, 63})}, right{energy({63, 0})}, centre{energy({255, 255})};
+  auto const left{energy({0, 63})};
+  auto const right{energy({63, 0})};
+  auto const centre{energy({255, 255})};
   CHECK(left[0] > left[1] * 100);
   CHECK(right[1] > right[0] * 100);
   // Nuked OPL retains the chip's inter-channel sample timing; compare accumulated energy within that skew
@@ -377,10 +383,13 @@ TEST_CASE("Mission notification reaches PCM through the fixed voice allocator", 
 TEST_CASE("Transient sound slots follow native oldest eviction and free-list reuse", "[audio]") {
   darker::game::effect_system effects;
   for(auto const &sample : darker::test_reference::sound_pool_samples) {
-    if(sample[0]) effects.spark({}, 3, 40000, 0);
-    else effects.retire_sounds([&](auto const &sound){
-      return (sample[1] & (1u << (sound.identity - 17))) != 0;
-    });
+    if(sample[0]) {
+      effects.spark({}, 3, 40000, 0);
+    } else {
+      effects.retire_sounds([&](auto const &sound){
+        return (sample[1] & (1u << (sound.identity - 17))) != 0;
+      });
+    }
     REQUIRE(effects.gun_sounds().size() == sample[2]);
     for(size_t i{0}; i < effects.gun_sounds().size(); ++i) CHECK(effects.gun_sounds()[i].identity == sample[3 + i]);
   }
@@ -408,7 +417,8 @@ TEST_CASE("Recycled transient records retrigger a retained physical voice", "[au
 }
 
 TEST_CASE("Playback volume scales effects without restarting synthesis", "[audio][volume]") {
-  darker::audio::fm_stream reference{48000}, adjusted{48000};
+  darker::audio::fm_stream reference{48000};
+  darker::audio::fm_stream adjusted{48000};
   darker::audio::fm_frame frame{};
   frame[0] = {
     .pitch{686},
@@ -419,26 +429,27 @@ TEST_CASE("Playback volume scales effects without restarting synthesis", "[audio
   };
   REQUIRE(reference.publish(frame));
   REQUIRE(adjusted.publish(frame));
-  std::array<float, 2048> original{}, quieter{};
-  adjusted.set_volumes(0, 50);                                                  // Music mute must not mute flight effects.
+  std::array<float, 2048> original{};
+  std::array<float, 2048> quieter{};
+  adjusted.set_volumes(0, 50);                                                 // Music mute must not mute flight effects.
   reference.render(original);
-  adjusted.render(quieter);                                                     // Allow the short gain ramp to finish.
+  adjusted.render(quieter);                                                    // Allow the short gain ramp to finish.
   reference.render(original);
   adjusted.render(quieter);
-  CHECK(std::ranges::any_of(original, [](float sample){ return sample != 0; }));
+  CHECK(std::ranges::any_of(original, [](float sample){return sample != 0;}));
   for(size_t i{0}; i < original.size(); ++i) CHECK(quieter[i] == original[i] * 0.5f);
   adjusted.set_volumes(100, 0);
   reference.render(original);
   adjusted.render(quieter);
   adjusted.render(quieter);
   reference.render(original);
-  CHECK(std::ranges::all_of(quieter, [](float sample){ return sample == 0; }));
+  CHECK(std::ranges::all_of(quieter, [](float sample){return sample == 0;}));
   adjusted.set_volumes(100, 100);
   reference.render(original);
   adjusted.render(quieter);
   reference.render(original);
   adjusted.render(quieter);
-  CHECK(original == quieter);                                                   // Muting did not pause or reset the chip.
+  CHECK(original == quieter);                                                  // Muting did not pause or reset the chip.
 }
 
 TEST_CASE("Music volume is independent of effects and keeps the song advancing", "[audio][volume]") {
@@ -448,7 +459,8 @@ TEST_CASE("Music volume is independent of effects and keeps the song advancing",
     return darker::resources::read_binary_file(std::filesystem::path{DARKER_TEST_RESOURCE_DIR}
       / ("00_" + std::string(3 - digits.size(), '0') + digits + ".bin"), 65536);
   }};
-  darker::audio::fm_stream reference{48000}, adjusted{48000};
+  darker::audio::fm_stream reference{48000};
+  darker::audio::fm_stream adjusted{48000};
   std::array<std::vector<std::byte>, 6> songs;
   for(unsigned int group{0}; group < songs.size(); ++group) songs[group] = load(38 + group * 5);
   reference.configure_music(load(33), songs);
@@ -456,12 +468,13 @@ TEST_CASE("Music volume is independent of effects and keeps the song advancing",
   reference.select_music(0);
   adjusted.select_music(0);
   adjusted.set_volumes(25, 0);
-  std::vector<float> original(96000), quieter(96000);
+  std::vector<float> original(96000);
+  std::vector<float> quieter(96000);
   reference.render(original);
   adjusted.render(quieter);
   reference.render(original);
   adjusted.render(quieter);
-  CHECK(std::ranges::any_of(original, [](float sample){ return sample != 0; }));
+  CHECK(std::ranges::any_of(original, [](float sample){return sample != 0;}));
   bool matches{true};
   for(size_t i{0}; i < original.size(); ++i) matches &= quieter[i] == original[i] * 0.25f;
   CHECK(matches);

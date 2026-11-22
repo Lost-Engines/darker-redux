@@ -1,10 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <bit>
 #include <stdexcept>
-#include <algorithm>
+#include "maths/world_coordinates.h"
 #include "game/effects.h"
 #include "graphics/particles.h"
-#include "maths/world_coordinates.h"
 #include "reference/effect_samples.h"
 
 TEST_CASE("Effect ring projection retains native sprite order", "[effects]") {
@@ -16,10 +16,12 @@ TEST_CASE("Effect ring projection retains native sprite order", "[effects]") {
       .angle{static_cast<uint16_t>(v[1])},
       .sampling{static_cast<uint16_t>(v[2])}
     };
-    auto const term{[](int64_t const value){ return darker::graphics::projection_term{
+    auto const term{[](int64_t const value){
+      return darker::graphics::projection_term{
       .whole{static_cast<darker::graphics::render_geometry::coordinate_bits>(std::bit_cast<int16_t>(static_cast<uint16_t>(value >> 8)))},
       .fraction{static_cast<uint8_t>(value)}
-    }; }};
+    };
+    }};
     darker::graphics::model_placement const centre{
       .horizontal{term(v[3])},
       .vertical{term(v[4])},
@@ -111,14 +113,14 @@ TEST_CASE("Effect phases and stationary trails match original records", "[effect
 TEST_CASE("Distant particles become dots according to projected pixel size", "[effects]") {
   framework::render::indexed_cockpit_framebuffer sheet;
   sheet.pixels.fill(99);
-  auto const count_pixels{[&](int const depth, double const focal_length) {
+  auto const count_pixels{[&](int const depth, double const focal_length){
     framework::render::indexed_cockpit_framebuffer frame{};
     darker::graphics::draw_particle(frame, sheet, {
       .x{160},
       .y{80},
       .depth{depth},
     }, 0, {}, focal_length);
-    return std::ranges::count_if(frame.pixels, [](auto const pixel) { return pixel != 0; });
+    return std::ranges::count_if(frame.pixels, [](auto const pixel){return pixel != 0;});
   }};
   CHECK(count_pixels(8190, 256) > 1);
   CHECK(count_pixels(20000, 256) == 1);
@@ -134,11 +136,13 @@ TEST_CASE("The particle pool is larger by default and honours a configured limit
   CHECK_THROWS_AS(effect_system{0}, std::invalid_argument);
   for(unsigned int const limit : {1u, 25u, 50u, 100u}) {
     effect_system effects{limit};
-    for(unsigned int cloud{0}; cloud < 6; ++cloud) effects.spawn(0x75d4, {
-      .column{static_cast<uint16_t>(cloud * 256)},
-      .row{0},
-      .height{1000},
-    }, 0);
+    for(unsigned int cloud{0}; cloud < 6; ++cloud) {
+      effects.spawn(0x75d4, {
+        .column{static_cast<uint16_t>(cloud * 256)},
+        .row{0},
+        .height{1000},
+      }, 0);
+    }
     REQUIRE(effects.emitters.size() == limit);
     CHECK(effects.emitters.back().position.column == 5 * 256);
   }
