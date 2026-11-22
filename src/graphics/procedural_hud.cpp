@@ -5,10 +5,10 @@
 #include <cstddef>
 #include <span>
 #include <stdexcept>
+#include "maths/angle.h"
 #include "graphics/cockpit_tables.h"
 #include "graphics/render_geometry.h"
 #include "graphics/screen_layout.h"
-#include "maths/angle.h"
 
 namespace darker::graphics {
 namespace {

@@ -1,9 +1,7 @@
-#include "input/joystick_options.h"
-#include <charconv>
-#include <numbers>
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <charconv>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -12,6 +10,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -21,6 +20,11 @@
 #include <boost/program_options.hpp>
 #include <boost/scope/scope_exit.hpp>
 #include <GLFW/glfw3.h>
+#include "maths/direction.h"
+#include "maths/sine_table.h"
+#include "maths/world_coordinates.h"
+#include "platform/audio_output.h"
+#include "platform/framebuffer_presenter.h"
 #include "audio/ambient_sounds.h"
 #include "audio/flight_sounds.h"
 #include "audio/fm_stream.h"
@@ -54,16 +58,12 @@
 #include "graphics/procedural_hud.h"
 #include "graphics/radar_beacons.h"
 #include "graphics/sky_ground.h"
-#include "maths/direction.h"
-#include "maths/sine_table.h"
-#include "maths/world_coordinates.h"
-#include "platform/audio_output.h"
-#include "platform/framebuffer_presenter.h"
+#include "input/joystick_options.h"
 #include "presentation/front_end.h"
-#include "presentation/options_menu.h"
 #include "presentation/menu_text.h"
-#include "presentation/quit_confirmation.h"
+#include "presentation/options_menu.h"
 #include "presentation/power_warnings.h"
+#include "presentation/quit_confirmation.h"
 #include "render/framebuffer.h"
 #include "resources/archive_set.h"
 #include "resources/geometry_bank.h"
@@ -362,7 +362,7 @@ auto main(int const argc, char const *const argv[])->int {
   bool const automatic_resolution{resolution == "auto"};
   auto const separator{resolution.find('x')};
   int display_width{320}, display_height{240};
-  auto const parse_dimension{[](std::string_view text, int &value) {
+  auto const parse_dimension{[](std::string_view text, int &value){
     auto const result{std::from_chars(text.data(), text.data() + text.size(), value)};
     return result.ec == std::errc{} && result.ptr == text.data() + text.size()
       && value >= darker::presentation::preferences::minimum_dimension && value <= darker::presentation::preferences::maximum_dimension;
@@ -436,7 +436,7 @@ auto main(int const argc, char const *const argv[])->int {
 #ifndef NDEBUG
   bool const noclip{arguments.contains("noclip")};
 #else
-  constexpr bool noclip{false};
+  bool constexpr noclip{false};
 #endif // NDEBUG
   bool const boost_cheat{arguments.contains("cheat-brooke")};
   bool const damage_cheat{arguments.contains("cheat-life")};
@@ -545,7 +545,7 @@ auto main(int const argc, char const *const argv[])->int {
   darker::graphics::city_renderer scene;
   darker::graphics::distance_shading surface_lighting;
   darker::graphics::lighten_blend ground_light_blend{game_palette.colours};
-  auto const update_fog_palette{[&] {
+  auto const update_fog_palette{[&]{
     ground_light_blend = darker::graphics::lighten_blend{game_palette.colours};
     surface_lighting = darker::graphics::distance_shading{darker::graphics::fog_range{
       .start_cells{fog_start},
@@ -665,7 +665,7 @@ auto main(int const argc, char const *const argv[])->int {
       .focal_length{focal_length},
       // The native disc uses radius zero for one pixel, otherwise roughly 2r pixels.
       // Clamp before converting: the disc rasteriser supports radii up to 256.
-      .minimum_light_radius{[&] {
+      .minimum_light_radius{[&]{
         double constexpr reference_height{200};
         auto const diameter{std::round(std::min(512.0, minimum_light_size * display_height / reference_height))};
         return diameter <= 1 ? 0u : static_cast<unsigned int>(std::ceil(diameter / 2));
@@ -845,7 +845,7 @@ auto main(int const argc, char const *const argv[])->int {
           });
       }
     }
-    if(power_notice && std::ranges::none_of(messages, [](auto const &message) { return message.has_value(); })) {
+    if(power_notice && std::ranges::none_of(messages, [](auto const &message){ return message.has_value(); })) {
       darker::graphics::draw_message(foreground, font, darker::resources::font_face::compact,
         std::as_bytes(std::span{power_notice->text}), {(321 - power_notice->width) / 2, 231}, power_notice->width, {
           .ink{24},
@@ -977,7 +977,7 @@ auto main(int const argc, char const *const argv[])->int {
   }
   framework::render::viewport windowed_bounds{};
   bool windowed_maximised{false};
-  auto const toggle_fullscreen{[&] {
+  auto const toggle_fullscreen{[&]{
     if(glfwGetWindowMonitor(window.get())) {
       glfwSetWindowMonitor(window.get(), nullptr, windowed_bounds.x, windowed_bounds.y,
         windowed_bounds.width, windowed_bounds.height, GLFW_DONT_CARE);
@@ -1356,19 +1356,16 @@ auto main(int const argc, char const *const argv[])->int {
       else if(music_variant == darker::audio::music_variant::gus && !arguments.contains("soundfont")) {
         auto const directory{arguments.contains("gus-dir") ? std::filesystem::path{arguments["gus-dir"].as<std::string>()} : data_directory / "ULTRASND"};
         audio.configure_gus_music(directory, std::move(songs), gus_ram);
-      }
-      else if(music_variant == darker::audio::music_variant::awe32 && !arguments.contains("soundfont")) {
+      } else if(music_variant == darker::audio::music_variant::awe32 && !arguments.contains("soundfont")) {
         auto const rom{arguments.contains("awe32-rom") ? std::filesystem::path{arguments["awe32-rom"].as<std::string>()} : data_directory / "awe32.raw"};
         audio.configure_awe32_music(rom, archives.load({0, 37}), std::move(songs));
-      }
-      else if(music_name == "roland-sc55" || music_name == "roland-scc1a") {
+      } else if(music_name == "roland-sc55" || music_name == "roland-scc1a") {
         bool const scc1a{music_name == "roland-scc1a"};
         auto const option{scc1a ? "scc1a-rom-dir" : "sc55-rom-dir"};
         auto const rom_directory{arguments.contains(option) ? std::filesystem::path{arguments[option].as<std::string>()} : data_directory};
         audio.configure_sc55_music(rom_directory, std::move(songs), scc1a ? darker::audio::sound_canvas_model::scc1a : darker::audio::sound_canvas_model::sc55);
         std::cout << "Music: " << (scc1a ? "SCC-1A v1.30" : "SC-55 v1.21") << " hardware emulation, original SCC-1/General MIDI arrangement" << std::endl;
-      }
-      else if(music_variant == darker::audio::music_variant::lapc1 && (!arguments.contains("soundfont") || percussion_fallback)) {
+      } else if(music_variant == darker::audio::music_variant::lapc1 && (!arguments.contains("soundfont") || percussion_fallback)) {
         auto const rom_directory{arguments.contains("mt32-rom-dir") ? std::filesystem::path{arguments["mt32-rom-dir"].as<std::string>()} : data_directory};
         auto const percussion_font{percussion_fallback ? find_soundfont() : std::filesystem::path{}};
         if(percussion_fallback && percussion_font.empty()) return startup_failure("Roland percussion fallback needs a SoundFont: supply --soundfont=path/to/bank.sf2");
@@ -1417,7 +1414,7 @@ auto main(int const argc, char const *const argv[])->int {
   std::optional<darker::presentation::preferences> preview_settings;
   std::vector<framework::render::rgba_pixel> options_output;
 #ifndef NDEBUG
-  unsigned int constexpr maximum_capture_startup_frames{60000}; // approximately sixteen minutes of simulated presentation time
+  unsigned int constexpr maximum_capture_startup_frames{60000};                // approximately sixteen minutes of simulated presentation time
   unsigned int capture_startup_frames{0};
 #endif // NDEBUG
   while(!glfwWindowShouldClose(window.get())) {
@@ -1900,7 +1897,7 @@ auto main(int const argc, char const *const argv[])->int {
     if(capture && !host.briefing) {
       unsigned int const tick{(static_cast<unsigned int>(game_clock.wraps) << 16) | game_clock.frame_ticks};
       capture->before_frame(tick, host.player, *combat, host.hangar, host.available_weapons);
-      capture->capture(tick, host.player, *combat, cells, bank, host.available_weapons, display_width, display_height, [&] {
+      capture->capture(tick, host.player, *combat, cells, bank, host.available_weapons, display_width, display_height, [&]{
         render(game_clock.frame_ticks, false);
         return std::span<framework::render::rgba_pixel const>{world_output};
       });
@@ -1995,7 +1992,7 @@ auto main(int const argc, char const *const argv[])->int {
           if(message && std::bit_cast<int16_t>(static_cast<uint16_t>(game_clock.frame_ticks - message->expiry)) >= 0) message.reset();
         }
         if(power_notice && std::bit_cast<int16_t>(static_cast<uint16_t>(game_clock.frame_ticks - power_notice->expiry)) >= 0) power_notice.reset();
-        if(!context.suppress_messages && std::ranges::none_of(messages, [](auto const &message) { return message.has_value(); })) {
+        if(!context.suppress_messages && std::ranges::none_of(messages, [](auto const &message){ return message.has_value(); })) {
           if(auto const warning{combat->collateral.take_power_warning()}) {
             power_notice = darker::presentation::make_power_warning(*warning, language, font, game_clock.frame_ticks);
             host.sounds.trigger(caero ? darker::audio::flight_sound::message : darker::audio::flight_sound::skimma_message, game_clock.frame_ticks);

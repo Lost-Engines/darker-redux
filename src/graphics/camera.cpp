@@ -70,13 +70,13 @@ camera_basis orient_model(camera_basis const &camera, camera_angles const angles
 
 model_placement place_model(camera_basis const &basis, camera_position const camera, model_origin const origin, std::optional<world_image> const image) noexcept {
   /// Transform an explicit world image, or the nearest copy for native callers
-  auto const displacement{[](maths::world_format::position_component position, render_geometry::coordinate_bits camera_position) {
+  auto const displacement{[](maths::world_format::position_component position, render_geometry::coordinate_bits camera_position){
     unsigned int constexpr period{scene_limits::world_period_cells * render_geometry::camera_units_per_cell};
     unsigned int constexpr half_period{period / 2};
     auto const wrapped{(position * render_geometry::world_to_camera_scale - camera_position + half_period) % period};
     return static_cast<render_geometry::coordinate>(wrapped) - static_cast<render_geometry::coordinate>(half_period);
   }};
-  auto const component{[&](maths::world_format::position_component const position, render_geometry::coordinate_bits const camera_component, int const copy) {
+  auto const component{[&](maths::world_format::position_component const position, render_geometry::coordinate_bits const camera_component, int const copy){
     if(!image) return displacement(position, camera_component);
     return static_cast<render_geometry::coordinate>(position * render_geometry::world_to_camera_scale)
       - static_cast<render_geometry::coordinate>(camera_component)

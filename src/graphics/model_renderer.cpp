@@ -4,10 +4,10 @@
 #include <format>
 #include <stdexcept>
 #include <utility>
+#include "vectorstorm/vector/vector3.h"
+#include "maths/sine_table.h"
 #include "graphics/screen_layout.h"
 #include "graphics/screen_primitives.h"
-#include "maths/sine_table.h"
-#include "vectorstorm/vector/vector3.h"
 
 namespace darker::graphics {
 namespace {
@@ -165,7 +165,7 @@ private:
       workspace.vertices[cursor] = project_vertex(result, screen_origin, focal_length);
     }
     workspace.camera_vertices[cursor] = result;
-    on_ground[cursor] = false; // animated/interpolated vertices are not static ground light spill
+    on_ground[cursor] = false;                                                 // animated/interpolated vertices are not static ground light spill
     defined[cursor++] = true;
   }
 

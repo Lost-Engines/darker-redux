@@ -1,6 +1,6 @@
 #include "graphics/near_clip.h"
-#include <bit>
 #include <algorithm>
+#include <bit>
 #include <limits>
 #include <stdexcept>
 
@@ -41,7 +41,7 @@ screen_vertex project_vertex(camera_vertex const vertex, screen_vertex const &or
   auto const depth{render_geometry::wrap_coordinate(vertex.depth >> render_geometry::fraction_bits)};
   if(focal_length == render_geometry::focal_length) return {divide(vertex.horizontal, depth, origin.x), divide(vertex.vertical, depth, origin.y)};
   if(depth == 0) throw std::domain_error{"Model projection has zero depth"};
-  auto const project{[&](render_geometry::accumulator value, int centre) {
+  auto const project{[&](render_geometry::accumulator value, int centre){
     double const offset{static_cast<double>(value) * focal_length / (render_geometry::fraction_scale * static_cast<double>(depth))};
     return static_cast<render_geometry::screen_coordinate>(std::clamp(offset + centre, static_cast<double>(render_geometry::intersection_min), static_cast<double>(render_geometry::intersection_max)));
   }};

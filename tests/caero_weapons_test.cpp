@@ -3,19 +3,19 @@
 #include <algorithm>
 #include <filesystem>
 #include <string_view>
+#include "maths/direction.h"
 #include "audio/flight_sounds.h"
 #include "game/caero_weapons.h"
 #include "game/mission_combat.h"
 #include "game/object_definitions.h"
 #include "game/projectile_steering.h"
 #include "game/weapon_selection.h"
-#include "maths/direction.h"
-#include "resources/archive_set.h"
-#include "resources/world_profile.h"
 #include "reference/caero_impact_samples.h"
 #include "reference/caero_weapon_samples.h"
 #include "reference/chargeable_samples.h"
 #include "reference/diffuser_samples.h"
+#include "resources/archive_set.h"
+#include "resources/world_profile.h"
 
 TEST_CASE("Caero Pinner and Brent firing matches original guards, targets and reserve accounting", "[game][weapons]") {
   /// Exercise native cost boundaries, blocked player states, trigger edges and an exhausted projectile pool
@@ -432,7 +432,7 @@ TEST_CASE("Diffuser controls follow actual building impacts and preserve manual 
     SECTION("Manual gas reselection never restarts the existing smoke") {
       REQUIRE(combat.effects.emitters.size() == gas_emitters);
       auto const first_smoke_start{combat.effects.emitters.front().start};
-      combat.secondary_weapon = 5;                                              // same assignment as pressing the weapon selection key
+      combat.secondary_weapon = 5;                                             // same assignment as pressing the weapon selection key
       step();
       REQUIRE(combat.secondary_weapon == std::to_underlying(caero_weapon::diffuser_gas));
       impact(fire(true));
@@ -473,7 +473,7 @@ TEST_CASE("Diffuser clouds keep independent deadlines and detonation windows", "
   namespace game = darker::game;
   auto const start{GENERATE(game::clock_tick{0}, game::clock_tick{60000})};
   game::diffuser_targets clouds;
-  auto const hit{[&](bool const gas, uint16_t const cell, game::clock_tick const clock) {
+  auto const hit{[&](bool const gas, uint16_t const cell, game::clock_tick const clock){
     return clouds.hit(gas, game::collision_category::diffuser, game::city_cell::permitted_target, true, cell, clock);
   }};
   REQUIRE(hit(true, 0x1717, start) == game::diffuser_impact::gas);
@@ -525,7 +525,7 @@ TEST_CASE("Real Diffuser hits prime two buildings and retain the detonator betwe
   player.pose().speed = 496;
   game::mission_combat combat{{}};
   game::campaign_clock clock{60000};
-  auto const step{[&](bool const fire = false) {
+  auto const step{[&](bool const fire = false){
     clock += 8;
     combat.advance(player, cells, bank, {
       .elapsed_ticks{clock},
@@ -535,7 +535,7 @@ TEST_CASE("Real Diffuser hits prime two buildings and retain the detonator betwe
       .secondary_pressed{fire},
     });
   }};
-  auto const impact{[&](uint16_t const token) {
+  auto const impact{[&](uint16_t const token){
     auto const aim{game::resolve_map_guidance(token, cells, bank, game::delphi_damage_bit)};
     darker::maths::world_position const centre{
       .column{aim.position.column},
@@ -579,7 +579,7 @@ TEST_CASE("Real Diffuser hits prime two buildings and retain the detonator betwe
     CHECK(cells[game::packed_cell_reference{target}.index()].state & game::delphi_damage_bit);
     CHECK_FALSE(combat.diffuser.find(target));
     CHECK(combat.secondary_weapon == std::to_underlying(target == targets.front() ? game::caero_weapon::diffuser_trigger : game::caero_weapon::diffuser_gas));
-    CHECK(combat.target.token == game::weapon_target::no_target);               // the destroyed roof loses its ring on the impact frame
+    CHECK(combat.target.token == game::weapon_target::no_target);              // the destroyed roof loses its ring on the impact frame
   }
 }
 
@@ -606,7 +606,7 @@ TEST_CASE("Destroyed authorised buildings no longer acquire or retain target rin
   };
   game::mission_combat combat{{}};
   combat.secondary_weapon = std::to_underlying(game::caero_weapon::brent_ground);
-  auto const step{[&](game::clock_tick const clock) {
+  auto const step{[&](game::clock_tick const clock){
     combat.advance(player, cells, bank, {
       .elapsed_ticks{clock},
       .frame_step{8},
@@ -621,7 +621,7 @@ TEST_CASE("Destroyed authorised buildings no longer acquire or retain target rin
     step(clock);
     CHECK(combat.target.token == game::weapon_target::no_target);
   }
-  CHECK(cell.state & game::city_cell::permitted_target);                        // historical authorisation remains saved
+  CHECK(cell.state & game::city_cell::permitted_target);                       // historical authorisation remains saved
 }
 
 TEST_CASE("Combat remembers Dual Launch pairing and clears it before projectile reuse", "[game][weapons][dual-launch][integration]") {
@@ -636,7 +636,7 @@ TEST_CASE("Combat remembers Dual Launch pairing and clears it before projectile 
   player.pose().position = {10000, 10000, 4000};
   game::mission_combat combat{{}};
   game::clock_tick clock{0};
-  auto const step{[&](bool const press = false, bool const release = false) {
+  auto const step{[&](bool const press = false, bool const release = false){
     clock += 8;
     craft.energy.reserve = 65535;
     combat.advance(player, cells, bank, {

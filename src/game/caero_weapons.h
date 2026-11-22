@@ -4,12 +4,12 @@
 #include <cstdint>
 #include <optional>
 #include <vector>
+#include "maths/world_coordinates.h"
 #include "game/caero_energy.h"
 #include "game/city_map.h"
 #include "game/collision_box.h"
 #include "game/projectile_pool.h"
 #include "game/time.h"
-#include "maths/world_coordinates.h"
 
 namespace darker::game {
 
@@ -54,7 +54,9 @@ private:
   std::vector<diffuser_state> clouds;
 
 public:
-  bool active() const noexcept { return !clouds.empty(); }
+  bool active() const noexcept {
+    return !clouds.empty();
+  }
   diffuser_state const *find(uint16_t cell) const noexcept;
   void advance(clock_tick clock) noexcept;
   diffuser_impact hit(bool gas, collision_category category, uint8_t state, bool linked, uint16_t target, clock_tick clock, bool unrestricted = false);

@@ -39,7 +39,7 @@ TEST_CASE("Camera coefficients and model origins match native fixed-point transf
     // The captured camera positions have already lost their upper world bits.
     // Only compare their unaliased neighbourhood; long-range placement has separate analytic tests.
     if(column < -16384 || column > 16383 || row < -16384 || row > 16383 || height < -32768 || height > 32767) continue;
-    auto const signed_whole{[](auto value) { return darker::graphics::render_geometry::wrap_coordinate(value); }};
+    auto const signed_whole{[](auto value){ return darker::graphics::render_geometry::wrap_coordinate(value); }};
     if(signed_whole(placement.horizontal.whole) < -32768 || signed_whole(placement.horizontal.whole) > 32767
       || signed_whole(placement.vertical.whole) < -32768 || signed_whole(placement.vertical.whole) > 32767
       || signed_whole(placement.depth.whole) < -32768 || signed_whole(placement.depth.whole) > 32767) continue;
@@ -106,7 +106,10 @@ TEST_CASE("Wide camera placement retains distant geometry and the actual world p
 }
 
 TEST_CASE("Full angle sine table is rounded mathematical sine with symmetric peaks", "[graphics][camera]") {
-  using namespace darker::maths;
+  using darker::maths::angle_format;
+  using darker::maths::original_sine;
+  using darker::maths::render_cosine;
+  using darker::maths::render_sine;
   CHECK(render_sine(0) == 0);
   CHECK(render_sine(16384) == 32767);
   CHECK(render_sine(32768) == 0);
@@ -118,11 +121,12 @@ TEST_CASE("Full angle sine table is rounded mathematical sine with symmetric pea
     CHECK(render_sine(static_cast<uint16_t>(angle + angle_format::half_turn)) == -value);
     CHECK(render_cosine(static_cast<uint16_t>(angle)) == render_sine(static_cast<uint16_t>(angle + angle_format::quarter_turn)));
   }
-  CHECK(original_sine[256] == 32766); // retain the source quirk for simulation
+  CHECK(original_sine[256] == 32766);                                          // retain the source quirk for simulation
 }
 
 TEST_CASE("Camera and model rotations resolve steps inside one original sine phase", "[graphics][camera]") {
-  using namespace darker::graphics;
+  using darker::graphics::make_camera_basis;
+  using darker::graphics::orient_model;
   auto const base{make_camera_basis({})};
   auto const turned{make_camera_basis({.heading{16}})};
   auto const pitched{make_camera_basis({.pitch{16}})};

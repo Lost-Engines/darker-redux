@@ -2,12 +2,12 @@
 #include <algorithm>
 #include <bit>
 #include <stdexcept>
+#include "maths/world_coordinates.h"
 #include "game/beacon_light.h"
 #include "game/object_definitions.h"
 #include "game/player_flags.h"
 #include "game/target_reference.h"
 #include "game/weapon_selection.h"
-#include "maths/world_coordinates.h"
 
 namespace darker::game {
 
@@ -51,7 +51,7 @@ diffuser_state const *diffuser_targets::find(uint16_t const cell) const noexcept
 void diffuser_targets::advance(clock_tick const clock) noexcept {
   /// Expire every cloud independently; removed records cannot revive on a later clock wrap
   for(auto &cloud : clouds) cloud.advance(clock);
-  std::erase_if(clouds, [](auto const &cloud) { return !cloud.active; });
+  std::erase_if(clouds, [](auto const &cloud){ return !cloud.active; });
 }
 
 diffuser_impact diffuser_targets::hit(bool const gas, collision_category const category, uint8_t const state, bool const linked,

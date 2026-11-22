@@ -1,8 +1,8 @@
 #pragma once
 
 #include <bitset>
-#include <span>
 #include <optional>
+#include <span>
 #include "game/city_map.h"
 #include "game/power_grid.h"
 #include "resources/scenario.h"

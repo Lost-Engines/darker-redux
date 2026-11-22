@@ -87,7 +87,7 @@ ptree pose_json(game::object_pose const &pose) {
 }
 
 void validate_times(ptree const &items) {
-  unsigned int constexpr maximum_ticks{500 * 3600}; // nominal PIT clock: one hour
+  unsigned int constexpr maximum_ticks{500 * 3600};                            // nominal PIT clock: one hour
   unsigned int previous{0};
   for(auto const &[key, item] : items) {
     unsigned int const tick{item.get<unsigned int>("tick")};

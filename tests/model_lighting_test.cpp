@@ -81,7 +81,9 @@ TEST_CASE("Fog rejects reversed and non-finite ranges", "[graphics][lighting]") 
 }
 
 TEST_CASE("Distant point colours retain the native cross-row shade lookup", "[graphics][lighting]") {
-  using namespace darker::graphics;
+  using darker::graphics::distance_shading;
+  using darker::graphics::model_colours;
+  using darker::graphics::model_path;
   for(unsigned int const count : {28u, 60u}) {
     distance_shading const lighting{count};
     for(unsigned int row{0}; row < count; ++row) {
@@ -100,7 +102,10 @@ TEST_CASE("Distant point colours retain the native cross-row shade lookup", "[gr
 }
 
 TEST_CASE("Logarithmic fog thickens nearby shading without moving either endpoint", "[graphics][lighting]") {
-  using namespace darker::graphics;
+  using darker::graphics::distance_shading;
+  using darker::graphics::fog_range;
+  using darker::graphics::model_path;
+  using darker::graphics::render_geometry;
   distance_shading const linear{fog_range{
     .start_cells{20},
     .end_cells{120},
@@ -111,7 +116,7 @@ TEST_CASE("Logarithmic fog thickens nearby shading without moving either endpoin
     .end_cells{120},
     .curve{100},
   }};
-  auto const sample{[](distance_shading const &fog, unsigned int cells, uint8_t light = 255) {
+  auto const sample{[](distance_shading const &fog, unsigned int cells, uint8_t light = 255){
     return fog.colours(cells * render_geometry::camera_units_per_cell, model_path::direct, static_cast<uint8_t>(light)).shades;
   }};
   CHECK(sample(curved, 0) == sample(linear, 0));
@@ -141,7 +146,10 @@ TEST_CASE("Logarithmic fog thickens nearby shading without moving either endpoin
 }
 
 TEST_CASE("Background fade starts only after the original palette fog is complete", "[graphics][lighting]") {
-  using namespace darker::graphics;
+  using darker::graphics::distance_shading;
+  using darker::graphics::fog_range;
+  using darker::graphics::model_path;
+  using darker::graphics::render_geometry;
   framework::render::colour_palette palette;
   for(unsigned int i{0}; i < palette.size(); ++i) {
     auto const value{static_cast<uint8_t>(i)};
@@ -177,7 +185,7 @@ TEST_CASE("Background fade starts only after the original palette fog is complet
   }
   auto const halfway{fog.colours(95 * render_geometry::camera_units_per_cell, model_path::direct, 255)};
   CHECK(halfway.apply_fog(0) >= 61);
-  CHECK(halfway.apply_fog(0) <= 64); // linear halfway blend, quantised to a shade-table row
+  CHECK(halfway.apply_fog(0) <= 64);                                           // linear halfway blend, quantised to a shade-table row
   for(auto const distance : {100, 110}) {
     auto const far{fog.colours(distance * render_geometry::camera_units_per_cell, model_path::direct, 255)};
     for(unsigned int i{0}; i < 256; ++i) CHECK(far.point_colour(static_cast<uint8_t>(i)) == 127);
@@ -188,7 +196,10 @@ TEST_CASE("Background fade starts only after the original palette fog is complet
 }
 
 TEST_CASE("Background fade validates its range and permits a disabled interval", "[graphics][lighting]") {
-  using namespace darker::graphics;
+  using darker::graphics::distance_shading;
+  using darker::graphics::fog_range;
+  using darker::graphics::model_path;
+  using darker::graphics::render_geometry;
   for(double const end : {-1.0, 89.0, 183.0, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
     fog_range const range{
       .start_cells{1},

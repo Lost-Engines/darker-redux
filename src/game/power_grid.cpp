@@ -10,7 +10,7 @@ namespace {
 
 bool disabled(delphi_power_station const &station, city_map const &cells) {
   /// One intact transformer can supply its station; missing models are not destroyed transformers
-  return std::ranges::all_of(station.transformers, [&](auto const &position) {
+  return std::ranges::all_of(station.transformers, [&](auto const &position){
     auto const &cell{cells[city_cell_index(position.column, position.row)]};
     return cell.type == delphi_power_rules::transformer_type && (cell.state & delphi_damage_bit);
   });
@@ -39,14 +39,14 @@ game_duration advance_fade(game_duration const previous, bool const lost, game_d
 std::optional<power_loss_warning> unauthorised_power_loss(city_map const &cells, unsigned int const destroyed_cell) {
   /// Warn only for a newly destroyed transformer completing an unauthorised station demolition
   for(auto const &station : delphi_power_stations) {
-    bool const hit{std::ranges::any_of(station.transformers, [&](auto const &position) {
+    bool const hit{std::ranges::any_of(station.transformers, [&](auto const &position){
       return city_cell_index(position.column, position.row) == destroyed_cell;
     })};
     if(!hit || !disabled(station, cells)) continue;
-    if(std::ranges::any_of(station.transformers, [&](auto const &position) {
+    if(std::ranges::any_of(station.transformers, [&](auto const &position){
       return cells[city_cell_index(position.column, position.row)].state & city_cell::permitted_target;
     })) return std::nullopt;
-    auto const lost{std::ranges::count_if(delphi_power_stations, [&](auto const &candidate) { return disabled(candidate, cells); })};
+    auto const lost{std::ranges::count_if(delphi_power_stations, [&](auto const &candidate){ return disabled(candidate, cells); })};
     return static_cast<power_loss_warning>(lost - 1);
   }
   return std::nullopt;

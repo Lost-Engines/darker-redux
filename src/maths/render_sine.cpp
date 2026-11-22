@@ -6,7 +6,7 @@
 namespace darker::maths {
 namespace {
 
-auto const sine_table{[] {
+auto const sine_table{[]{
   std::array<int16_t, angle_format::full_turn> result{};
   double constexpr amplitude{32767};
   // Mirror one quadrant exactly, guaranteeing symmetry and exact cardinal angles.

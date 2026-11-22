@@ -1,10 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <bit>
 #include <stdexcept>
-#include <algorithm>
+#include "maths/world_coordinates.h"
 #include "game/effects.h"
 #include "graphics/particles.h"
-#include "maths/world_coordinates.h"
 #include "reference/effect_samples.h"
 
 TEST_CASE("Effect ring projection retains native sprite order", "[effects]") {
@@ -111,14 +111,14 @@ TEST_CASE("Effect phases and stationary trails match original records", "[effect
 TEST_CASE("Distant particles become dots according to projected pixel size", "[effects]") {
   framework::render::indexed_cockpit_framebuffer sheet;
   sheet.pixels.fill(99);
-  auto const count_pixels{[&](int const depth, double const focal_length) {
+  auto const count_pixels{[&](int const depth, double const focal_length){
     framework::render::indexed_cockpit_framebuffer frame{};
     darker::graphics::draw_particle(frame, sheet, {
       .x{160},
       .y{80},
       .depth{depth},
     }, 0, {}, focal_length);
-    return std::ranges::count_if(frame.pixels, [](auto const pixel) { return pixel != 0; });
+    return std::ranges::count_if(frame.pixels, [](auto const pixel){ return pixel != 0; });
   }};
   CHECK(count_pixels(8190, 256) > 1);
   CHECK(count_pixels(20000, 256) == 1);

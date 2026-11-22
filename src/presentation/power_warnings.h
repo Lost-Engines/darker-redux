@@ -3,8 +3,8 @@
 #include <array>
 #include <string_view>
 #include "game/power_grid.h"
-#include "resources/scenario.h"
 #include "resources/font.h"
+#include "resources/scenario.h"
 
 namespace darker::presentation {
 
@@ -18,7 +18,7 @@ struct power_warning_notice {
 
 constexpr std::string_view power_warning_text(game::power_loss_warning warning, resources::scenario_language language) {
   /// Redux-only radio reactions, ordered from local supply loss to total blackout
-  using namespace std::literals;
+  using std::string_view_literals::operator""sv;
   std::array constexpr messages{
     std::array{
       "Tolly, we're losing beacon power! What are you doing?"sv,

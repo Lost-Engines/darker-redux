@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <bit>
 #include "game/flight_controls.h"
+#include "input/joystick.h"
 #include "reference/flight_controls_samples.h"
 #include "reference/joystick_samples.h"
-#include "input/joystick.h"
 
 TEST_CASE("Keyboard and mouse steering preserve native smoothing and source priority", "[game][controls]") {
   /// Compare persistent targets, mouse history, published references and both timestep-scaled steering drives
@@ -109,7 +109,7 @@ TEST_CASE("Joystick buttons require release after focus, connection and menu cha
 TEST_CASE("Joystick has one configurable centre threshold with unchanged maximum force", "[controls][joystick]") {
   auto const response{[](int16_t position, uint16_t deadzone){
     darker::game::steering_axis_state axis;
-    axis.previous_joystick = position; // Settled input, so smoothing does not alter the test position.
+    axis.previous_joystick = position;                                         // Settled input, so smoothing does not alter the test position.
     axis.joystick(position, 16, deadzone);
     return axis.reference;
   }};

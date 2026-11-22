@@ -3,14 +3,14 @@
 #include <array>
 #include <string>
 #include <vector>
-#include "input/control_preferences.h"
 #include "game/flight_controls.h"
+#include "input/control_preferences.h"
 
 namespace darker::input {
 
-inline constexpr int joystick_automatic{-1};
-inline constexpr int joystick_disabled{-2};
-inline constexpr unsigned int joystick_button_limit{128};
+inline int constexpr joystick_automatic{-1};
+inline int constexpr joystick_disabled{-2};
+inline unsigned int constexpr joystick_button_limit{128};
 
 struct joystick_preferences {
   int device{joystick_automatic};

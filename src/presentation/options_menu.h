@@ -1,13 +1,13 @@
 #pragma once
 
-#include <filesystem>
 #include <cmath>
+#include <filesystem>
 #include <numbers>
+#include <span>
+#include <string>
 #include "graphics/model_lighting.h"
 #include "input/control_preferences.h"
 #include "input/joystick.h"
-#include <span>
-#include <string>
 #include "render/framebuffer.h"
 #include "resources/font.h"
 

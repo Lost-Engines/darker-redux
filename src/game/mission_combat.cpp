@@ -3,6 +3,7 @@
 #include <bit>
 #include <stdexcept>
 #include <utility>
+#include "maths/world_coordinates.h"
 #include "game/actor_activation.h"
 #include "game/actor_update.h"
 #include "game/building_impact.h"
@@ -23,7 +24,6 @@
 #include "game/tunnel_navigation.h"
 #include "game/vehicle_combat.h"
 #include "game/weapon_selection.h"
-#include "maths/world_coordinates.h"
 
 namespace darker::game {
 namespace {
@@ -627,8 +627,7 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
         adjust_objectives(static_cast<uint8_t>(-(victim->attributes & 1)));
         actors.erase(actors.begin() + (victim - actors.data()));
       }
-    }
-    else if(!victim && contact.contact == city_contact::building
+    } else if(!victim && contact.contact == city_contact::building
       && (shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_trigger)]
         || shot->parameters.definition == &original_object_definitions[caero_definition_slot(caero_weapon::diffuser_gas)])) {
       auto const &cell{cells[city_cell_index(contact.column, contact.row)]};
@@ -646,8 +645,7 @@ void mission_combat::advance(player_flight &player, city_map &cells, resources::
         effects.spawn(0x75d4, {static_cast<uint16_t>(contact.column * 256 + type.column_fraction),
           static_cast<uint16_t>(contact.row * 256 + type.row_fraction), impact.height}, clock);
       } else if(result == diffuser_impact::rejected) effects.spawn(0x75a3, impact, clock);
-    }
-    else if(!victim) impact_projectile_world(contact, impact, *shot->parameters.definition, cells, bank, effects, clock, player.tunnel ? 0x7386 : 0x721c, world_damage_counter, damage_mask, player_collateral);
+    } else if(!victim) impact_projectile_world(contact, impact, *shot->parameters.definition, cells, bank, effects, clock, player.tunnel ? 0x7386 : 0x721c, world_damage_counter, damage_mask, player_collateral);
     shot->flags |= 0x28;
     shot->parameters.update_entry = object_update::effect_only;
     shot->deadline = static_cast<uint16_t>(clock + 256);

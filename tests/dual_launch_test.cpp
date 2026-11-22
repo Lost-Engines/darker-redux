@@ -146,7 +146,7 @@ TEST_CASE("Dual Launch follows its remembered capsule despite older or newer pro
   game::launch_emitter const emitter{
     .position{1000, 2000, 3000},
   };
-  auto const launch{[&](unsigned int const slot) {
+  auto const launch{[&](unsigned int const slot){
     return pool.launch({
       .definition{game::original_object_definitions[slot]},
       .emitter{emitter},
@@ -162,7 +162,7 @@ TEST_CASE("Dual Launch follows its remembered capsule despite older or newer pro
     .reserve{65535},
   };
   uint16_t charge{0};
-  auto const fire{[&] {
+  auto const fire{[&]{
     return game::fire_caero_weapon(pool, energy, charge, {
       .emitter{emitter},
       .selection{7},

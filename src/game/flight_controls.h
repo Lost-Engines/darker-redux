@@ -5,8 +5,8 @@
 
 namespace darker::game {
 
-inline constexpr uint16_t joystick_response_scale{4096};
-inline constexpr uint16_t original_joystick_deadzone{256};
+inline uint16_t constexpr joystick_response_scale{4096};
+inline uint16_t constexpr original_joystick_deadzone{256};
 
 struct steering_axis_state {
   uint16_t keyboard_target{0};

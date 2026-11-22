@@ -65,7 +65,7 @@ TEST_CASE("Ground light spill compares displayed brightness after fog", "[graphi
       };
     }
     framework::render::indexed_cockpit_framebuffer opaque{}, lit{};
-    constexpr uint8_t background{2};
+    uint8_t constexpr background{2};
     opaque.pixels.fill(background);
     lit.pixels.fill(background);
     darker::graphics::draw_gouraud_polygon(opaque, std::span{vertices}.first(sample.count), {}, &translation);

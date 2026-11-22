@@ -2,16 +2,16 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <algorithm>
 #include <cmath>
+#include "maths/world_coordinates.h"
 #include "audio/flight_sounds.h"
-#include "resources/archive_set.h"
 #include "audio/world_sounds.h"
 #include "game/object_definitions.h"
-#include "maths/world_coordinates.h"
 #include "reference/object_sound_samples.h"
 #include "reference/sound_pool_samples.h"
 #include "reference/stereo_samples.h"
 #include "reference/voice_allocation_samples.h"
 #include "reference/world_sound_samples.h"
+#include "resources/archive_set.h"
 
 TEST_CASE("World sound admission and Doppler match native arithmetic", "[audio]") {
   /// Check wrapping positions, rejected distances and the original directional speed factors
@@ -420,9 +420,9 @@ TEST_CASE("Playback volume scales effects without restarting synthesis", "[audio
   REQUIRE(reference.publish(frame));
   REQUIRE(adjusted.publish(frame));
   std::array<float, 2048> original{}, quieter{};
-  adjusted.set_volumes(0, 50); // Music mute must not mute flight effects.
+  adjusted.set_volumes(0, 50);                                                 // Music mute must not mute flight effects.
   reference.render(original);
-  adjusted.render(quieter); // Allow the short gain ramp to finish.
+  adjusted.render(quieter);                                                    // Allow the short gain ramp to finish.
   reference.render(original);
   adjusted.render(quieter);
   CHECK(std::ranges::any_of(original, [](float sample){ return sample != 0; }));
@@ -438,7 +438,7 @@ TEST_CASE("Playback volume scales effects without restarting synthesis", "[audio
   adjusted.render(quieter);
   reference.render(original);
   adjusted.render(quieter);
-  CHECK(original == quieter); // Muting did not pause or reset the chip.
+  CHECK(original == quieter);                                                  // Muting did not pause or reset the chip.
 }
 
 TEST_CASE("Music volume is independent of effects and keeps the song advancing", "[audio][volume]") {

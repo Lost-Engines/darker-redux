@@ -4,8 +4,8 @@
 #include <cstdint>
 #include <span>
 #include "vectorstorm/vector/vector2.h"
-#include "graphics/raster_viewport.h"
 #include "graphics/palette_blend.h"
+#include "graphics/raster_viewport.h"
 #include "graphics/render_geometry.h"
 #include "render/indexed_framebuffer.h"
 

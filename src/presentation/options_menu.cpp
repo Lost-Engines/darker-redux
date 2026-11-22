@@ -17,21 +17,21 @@ enum class option_row : unsigned int {
   resolution, field_of_view, draw_distance, fog_start, fade_distance, fog_curve,
   minimum_light_size, background_fade, gouraud, controls, audio, defaults, apply, cancel, back, count
 };
-constexpr unsigned int setting_count{std::to_underlying(option_row::controls)};
-constexpr unsigned int row_count{std::to_underlying(option_row::count)};
-constexpr int first_row{35};
-constexpr int row_height{11};
-constexpr unsigned int visible_rows{15};
-constexpr int scrollbar_left{305};
-constexpr int scrollbar_right{310};
-constexpr unsigned int control_visible_rows{12};
-constexpr int list_bottom{first_row + row_height * static_cast<int>(control_visible_rows)};
-constexpr int footer_top{176};
-constexpr unsigned int mouse_setting_count{5};
-constexpr unsigned int controls_defaults{mouse_setting_count + std::to_underlying(input::control_action::count)};
-constexpr unsigned int joystick_setting_count{7};
-constexpr unsigned int joystick_defaults{joystick_setting_count + std::to_underlying(input::control_action::count)};
-constexpr std::array<std::array<int, 2>, 9> resolutions{{
+unsigned int constexpr setting_count{std::to_underlying(option_row::controls)};
+unsigned int constexpr row_count{std::to_underlying(option_row::count)};
+int constexpr first_row{35};
+int constexpr row_height{11};
+unsigned int constexpr visible_rows{15};
+int constexpr scrollbar_left{305};
+int constexpr scrollbar_right{310};
+unsigned int constexpr control_visible_rows{12};
+int constexpr list_bottom{first_row + row_height * static_cast<int>(control_visible_rows)};
+int constexpr footer_top{176};
+unsigned int constexpr mouse_setting_count{5};
+unsigned int constexpr controls_defaults{mouse_setting_count + std::to_underlying(input::control_action::count)};
+unsigned int constexpr joystick_setting_count{7};
+unsigned int constexpr joystick_defaults{joystick_setting_count + std::to_underlying(input::control_action::count)};
+std::array<std::array<int, 2>, 9> constexpr resolutions{{
   {320, 240}, {640, 480}, {960, 540}, {1280, 720}, {1280, 960},
   {1600, 900}, {1920, 1080}, {2560, 1440}, {3840, 2160}
 }};
@@ -43,7 +43,7 @@ std::string number(double value) {
   if(result.find('.') != std::string::npos && result.back() == '0') result.pop_back();
   return result;
 }
-} // namespace
+} // anonymous namespace
 
 bool preferences::valid() const noexcept {
   return width >= minimum_dimension && width <= maximum_dimension && height >= minimum_dimension && height <= maximum_dimension
@@ -58,7 +58,7 @@ bool preferences::valid() const noexcept {
 std::filesystem::path preferences_path() {
 #ifdef _WIN32
   if(auto const *root{std::getenv("APPDATA")}; root && *root) return std::filesystem::path{root} / "darker-redux/options.cfg";
-#endif
+#endif // _WIN32
   if(auto const *root{std::getenv("XDG_CONFIG_HOME")}; root && *root && std::filesystem::path{root}.is_absolute()) return std::filesystem::path{root} / "darker-redux/options.cfg";
   if(auto const *home{std::getenv("HOME")}; home && *home) return std::filesystem::path{home} / ".config/darker-redux/options.cfg";
   return "darker-redux-options.cfg";
@@ -111,14 +111,12 @@ preferences read_preferences(std::filesystem::path const &path) {
       auto const found{std::ranges::find(descriptions, std::string_view{name}.substr(16), &input::control_description::name)};
       if(found == descriptions.end()) continue;
       value >> result.joystick.buttons[static_cast<unsigned int>(found - descriptions.begin())];
-    }
-    else if(name.starts_with("bind.")) {
+    } else if(name.starts_with("bind.")) {
       auto const descriptions{input::control_descriptions()};
       auto const found{std::ranges::find(descriptions, std::string_view{name}.substr(5), &input::control_description::name)};
       if(found == descriptions.end()) continue;
       value >> result.controls.keys[static_cast<unsigned int>(found - descriptions.begin())];
-    }
-    else continue; // Allow newer versions to add preferences.
+    } else continue;                                                             // Allow newer versions to add preferences.
     if(value.fail() || (value >> std::ws, !value.eof())) throw std::runtime_error{"Invalid preference: " + name};
   }
   // Older preference files only stored fixed dimensions; preserve that choice.
@@ -169,9 +167,15 @@ void options_menu::open() {
   notice.clear();
 }
 
-bool options_menu::binding_list() const noexcept { return controls_page || joystick_page; }
-unsigned int options_menu::binding_defaults() const noexcept { return joystick_page ? joystick_defaults : controls_defaults; }
-bool options_menu::capturing_button() const noexcept { return joystick_page && binding_pending; }
+bool options_menu::binding_list() const noexcept {
+  return controls_page || joystick_page;
+}
+unsigned int options_menu::binding_defaults() const noexcept {
+  return joystick_page ? joystick_defaults : controls_defaults;
+}
+bool options_menu::capturing_button() const noexcept {
+  return joystick_page && binding_pending;
+}
 
 void options_menu::capture_button(int const button) {
   if(!capturing_button() || button < -1 || button >= static_cast<int>(input::joystick_button_limit)) return;
@@ -206,7 +210,7 @@ int options_menu::selection_y() const noexcept {
 }
 
 void options_menu::keep_visible() noexcept {
-  if(selected >= list_rows()) return; // Footer actions never move the list.
+  if(selected >= list_rows()) return;                                          // Footer actions never move the list.
   if(selected < scroll) scroll = selected;
   if(selected >= scroll + page_size()) scroll = selected - page_size() + 1;
 }
@@ -284,7 +288,7 @@ void options_menu::adjust(int const direction) {
       auto &other{selected == 2 ? values.controls.secondary_mouse_button : values.controls.primary_mouse_button};
       int const previous{button};
       button = std::clamp(button + direction, -1, 7);
-      if(button >= 0 && button == other) other = previous; // Swap occupied buttons, retaining both actions.
+      if(button >= 0 && button == other) other = previous;                     // Swap occupied buttons, retaining both actions.
     }
     return;
   }
@@ -370,13 +374,11 @@ void options_menu::key(options_key const key) {
     }
     if(audio_page) {
       if(selected < 2) adjust(1);
-      else if(selected == 2) { values.music_volume = 100; values.effects_volume = 100; }
-      else { audio_page = false; selected = std::to_underlying(option_row::audio); scroll = 0; }
+      else if(selected == 2) { values.music_volume = 100; values.effects_volume = 100; } else { audio_page = false; selected = std::to_underlying(option_row::audio); scroll = 0; }
       break;
     }
     if(controls_page) {
-      if(selected == 4) { controls_page = false; joystick_page = true; selected = 0; scroll = 0; }
-      else if(selected < mouse_setting_count) adjust(1);
+      if(selected == 4) { controls_page = false; joystick_page = true; selected = 0; scroll = 0; } else if(selected < mouse_setting_count) adjust(1);
       else if(selected < controls_defaults) binding_pending = true;
       else if(selected == controls_defaults) values.controls = input::control_preferences{};
       else {
@@ -397,8 +399,7 @@ void options_menu::key(options_key const key) {
       scroll = 0;
     } else if(selected == std::to_underlying(option_row::defaults)) values = preferences{};
     else if(selected == std::to_underlying(option_row::apply)) save_requested = true;
-    else if(selected == std::to_underlying(option_row::cancel)) { values = original; active = false; }
-    else active = false; // Keep the preview for this session, without writing preferences.
+    else if(selected == std::to_underlying(option_row::cancel)) { values = original; active = false; } else active = false;                                                       // Keep the preview for this session, without writing preferences.
     break;
   }
   keep_visible();
@@ -493,14 +494,11 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
     if(controls_page) {
       std::string label;
       std::string value;
-      if(row == 0) { label = "Mouse sensitivity"; value = number(values.controls.mouse_sensitivity) + "x"; }
-      else if(row == 1) { label = "Invert vertical mouse"; value = values.controls.invert_mouse ? "On" : "Off"; }
-      else if(row == 2 || row == 3) {
+      if(row == 0) { label = "Mouse sensitivity"; value = number(values.controls.mouse_sensitivity) + "x"; } else if(row == 1) { label = "Invert vertical mouse"; value = values.controls.invert_mouse ? "On" : "Off"; } else if(row == 2 || row == 3) {
         label = row == 2 ? "Mouse primary fire" : "Mouse secondary fire";
         int const button{row == 2 ? values.controls.primary_mouse_button : values.controls.secondary_mouse_button};
         value = button < 0 ? "Off" : button == 0 ? "Left" : button == 1 ? "Right" : button == 2 ? "Middle" : "Button " + std::to_string(button + 1);
-      }
-      else if(row == 4) label = "Joystick / gamepad...";
+      } else if(row == 4) label = "Joystick / gamepad...";
       else if(row < controls_defaults) {
         auto const action{row - mouse_setting_count};
         label = input::control_descriptions()[action].label;
@@ -568,8 +566,7 @@ void options_menu::draw(std::span<framework::render::rgba_pixel> pixels, int con
       else if(binding_list() && source_x >= scrollbar_left && source_x <= scrollbar_right && source_y >= first_row && source_y < list_bottom) {
         pixel = source_y >= thumb_top && source_y < thumb_top + thumb_height
           ? framework::render::rgba_pixel{174, 170, 186} : framework::render::rgba_pixel{55, 48, 64};
-      }
-      else if(binding_list() && source_y == footer_top - 5 && source_x >= 12 && source_x < 308) pixel = {108, 100, 120};
+      } else if(binding_list() && source_y == footer_top - 5 && source_x >= 12 && source_x < 308) pixel = {108, 100, 120};
       else if(source_x == 7 || source_x == 312 || source_y == 7 || source_y == 233) pixel = {108, 100, 120};
       else pixel = {static_cast<uint8_t>(pixel.r / background_divisor + (highlight ? 44 : 15)), static_cast<uint8_t>(pixel.g / background_divisor + (highlight ? 38 : 14)), static_cast<uint8_t>(pixel.b / background_divisor + (highlight ? 52 : 22))};
     }

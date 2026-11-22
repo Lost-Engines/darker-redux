@@ -1,12 +1,12 @@
 #include "graphics/sky_ground.h"
 #include <algorithm>
 #include <array>
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <stdexcept>
-#include "graphics/screen_layout.h"
 #include "maths/angle.h"
 #include "maths/render_sine.h"
+#include "graphics/screen_layout.h"
 
 namespace darker::graphics {
 

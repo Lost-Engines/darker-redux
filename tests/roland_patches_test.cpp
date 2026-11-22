@@ -1,13 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <array>
-#include <filesystem>
-#include <string_view>
-#include "audio/midi_music.h"
-#include "resources/archive_set.h"
 #include <cstddef>
+#include <filesystem>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
+#include "audio/midi_music.h"
 #include "audio/roland_patches.h"
+#include "resources/archive_set.h"
 
 TEST_CASE("Roland setup MIDI extracts checked DT1 data and rejects damaged banks", "[audio]") {
   std::array<uint8_t, 35> const midi{
@@ -40,7 +40,7 @@ TEST_CASE("Repaired Roland opening keeps its melodic part aligned on repeated lo
   darker::audio::midi_music music{darker::audio::music_variant::lapc1};
   std::vector<unsigned int> fantasy_changes;
   unsigned int clock{0};
-  auto const sink{[&](darker::audio::midi_message const message) {
+  auto const sink{[&](darker::audio::midi_message const message){
     if(message.status == 0xc7 && message.first == 32) fantasy_changes.push_back(clock);
   }};
   music.start(song, sink);
@@ -48,7 +48,7 @@ TEST_CASE("Repaired Roland opening keeps its melodic part aligned on repeated lo
   REQUIRE(fantasy_changes.size() >= 6);
   // 9168 sequence ticks at the original 96-PPQN / 98-BPM tempo: each
   // recurrence must stay within one scheduler call of the common loop.
-  auto const word{[&](unsigned int offset) {
+  auto const word{[&](unsigned int offset){
     return std::to_integer<unsigned int>(song[offset]) | (std::to_integer<unsigned int>(song[offset + 1]) << 8);
   }};
   auto const descriptor{word(word(1))};

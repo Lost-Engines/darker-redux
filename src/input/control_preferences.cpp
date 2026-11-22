@@ -212,7 +212,7 @@ int normalise_key(int const key) noexcept {
 }
 
 bool bindable_key(int const key) noexcept {
-  if(key == GLFW_KEY_UNKNOWN) return true; // Explicitly unbound.
+  if(key == GLFW_KEY_UNKNOWN) return true;                                     // Explicitly unbound.
   if(key == GLFW_KEY_ESCAPE || key == GLFW_KEY_F10 || key == GLFW_KEY_PAUSE
     || key == GLFW_KEY_NUM_LOCK || key == GLFW_KEY_DELETE
     || key == GLFW_KEY_LEFT_SUPER || key == GLFW_KEY_RIGHT_SUPER

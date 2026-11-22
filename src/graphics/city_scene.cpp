@@ -3,14 +3,14 @@
 #include <bit>
 #include <ranges>
 #include <stdexcept>
+#include "maths/angle.h"
+#include "maths/world_coordinates.h"
 #include "game/beacon_light.h"
 #include "graphics/near_clip.h"
-#include "graphics/world_images.h"
 #include "graphics/particles.h"
 #include "graphics/screen_layout.h"
 #include "graphics/tunnel_visibility.h"
-#include "maths/angle.h"
-#include "maths/world_coordinates.h"
+#include "graphics/world_images.h"
 
 namespace darker::graphics {
 
@@ -198,7 +198,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
       }
       visit_world_images(camera_column, camera_row,
         index % game::city_map_size.column, index / game::city_map_size.column, view.radius,
-        [&](world_image const image) {
+        [&](world_image const image){
           if(auto item{place_city_cell(bank, cells[index], index, damage_mask, basis, camera, image, cull_scale)}) items.push_back(*item);
         });
     }
@@ -210,7 +210,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
         if(!phase) continue;
         // 2F35 admits effects through the same wrapping coordinate window as moving objects
         if(!within_object_window(view, emitter.position)) continue;
-        auto const place_emitter{[&](std::optional<world_image> const image) {
+        auto const place_emitter{[&](std::optional<world_image> const image){
           auto const placement{place_model(basis, camera, {
             .column{emitter.position.column},
             .row{emitter.position.row},
@@ -234,7 +234,7 @@ size_t city_renderer::draw(framework::render::indexed_surface target, resources:
   // 2BC1 scans the city, 6BF3 adds particles, then 2BD0/2BEA adds craft and projectiles
   for(auto const &object : objects) {
     if(!within_object_window(view, object.pose.position)) continue;
-    auto const place_object{[&](std::optional<world_image> const image) {
+    auto const place_object{[&](std::optional<world_image> const image){
       if(auto item{place_scene_object(bank, object, basis, camera, view.underground, image, cull_scale, view.focal_length)}) items.push_back(*item);
     }};
     if(view.radius <= scene_limits::native_surface_radius_cells || (view.underground && !view.unrestricted_visibility)) place_object(std::nullopt);

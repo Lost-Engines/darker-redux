@@ -3,10 +3,10 @@
 #include <bit>
 #include <cmath>
 #include <stdexcept>
-#include "graphics/particle_tables.h"
-#include "graphics/near_clip.h"
-#include "graphics/screen_layout.h"
 #include "maths/angle.h"
+#include "graphics/near_clip.h"
+#include "graphics/particle_tables.h"
+#include "graphics/screen_layout.h"
 
 namespace darker::graphics {
 

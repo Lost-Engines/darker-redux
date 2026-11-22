@@ -1,16 +1,16 @@
 #include "graphics/bitmap_hud.h"
 #include <array>
 #include <stdexcept>
+#include "maths/sine_table.h"
 #include "graphics/blit.h"
 #include "graphics/cockpit_tables.h"
-#include "maths/sine_table.h"
 
 namespace darker::graphics {
 namespace {
 
 // The retail mask includes a blue source pixel at (42,42), outside the last
 // bearing symbol. Omit it in Redux; retain the recovered tables unchanged.
-inline constexpr auto right_bearing_rows{[] {
+inline auto constexpr right_bearing_rows{[]{
   auto rows{bearing_rows_6};
   --rows.back().width;
   return rows;
@@ -84,7 +84,7 @@ void update_skimma_bitmaps(framework::render::indexed_cockpit_framebuffer const 
       {destination.x, destination.y + strip.y_offset}, strip.rows);
   }};
   if(previous.bearing != current.bearing) {
-    auto const bearing_strip{[](uint8_t const bearing) -> hud_strip const & {
+    auto const bearing_strip{[](uint8_t const bearing)->hud_strip const & {
       return bearing == bearing_strips.size() ? right_bearing_strip : bearing_strips[bearing - 1];
     }};
     if(previous.bearing != 0) draw_strip(bearing_strip(previous.bearing), bearing_destination, bearing_destination);
